@@ -1,6 +1,12 @@
 package de.pvptrainer;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import de.pvptrainer.analytics.BotArchive;
+import de.pvptrainer.analytics.CalibrationPlan;
+import de.pvptrainer.arena.TrainingArena;
+import de.pvptrainer.drill.Drill;
+import de.pvptrainer.kits.TrainingPreset;
+import de.pvptrainer.kits.TrainingSettings;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;

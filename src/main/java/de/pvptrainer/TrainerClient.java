@@ -1,4 +1,16 @@
 package de.pvptrainer;
+import de.pvptrainer.drill.DrillEvents;
+import de.pvptrainer.drill.DrillOptions;
+import de.pvptrainer.arena.ReadyGate;
+import de.pvptrainer.arena.TrainingArena;
+import de.pvptrainer.combat.TrainingCrystalItem;
+import de.pvptrainer.ui.TrainingInventoryHint;
+import de.pvptrainer.kits.TrainingKit;
+import de.pvptrainer.kits.TrainingProfiles;
+import de.pvptrainer.ui.TrainingScreen;
+import de.pvptrainer.session.TrainingSession;
+import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.session.TrainingStatus;
 
 import com.mojang.logging.LogUtils;
 import java.util.UUID;
@@ -80,77 +92,77 @@ public final class TrainerClient implements ClientModInitializer {
       });
    }
 
-   static TrainingSettings selected() {
+   public static TrainingSettings selected() {
       return profiles.selected();
    }
 
-   static TrainingSettings settings(TrainingSettings.Mode var0) {
+   public static TrainingSettings settings(TrainingSettings.Mode var0) {
       return profiles.get(var0);
    }
 
-   static void save(TrainingSettings var0) {
+   public static void save(TrainingSettings var0) {
       profiles.save(var0);
    }
 
-   static DrillOptions options(TrainingSettings.Mode var0) {
+   public static DrillOptions options(TrainingSettings.Mode var0) {
       return profiles.options(var0);
    }
 
-   static void saveSetup(TrainingSettings var0, DrillOptions var1) {
+   public static void saveSetup(TrainingSettings var0, DrillOptions var1) {
       profiles.saveSetup(var0, var1);
    }
 
-   static void saveOptions(TrainingSettings.Mode var0, DrillOptions var1) {
+   public static void saveOptions(TrainingSettings.Mode var0, DrillOptions var1) {
       profiles.saveOptions(var0, var1);
    }
 
-   static String feedback() {
+   public static String feedback() {
       return feedback;
    }
 
-   static boolean layoutLocked() {
+   public static boolean layoutLocked() {
       return locked;
    }
 
-   static TrainingSession session(MinecraftServer var0) {
+   public static TrainingSession session(MinecraftServer var0) {
       TrainerClient.HostedWorld var1 = world;
       return var1 != null && var1.server() == var0 ? var1.session() : null;
    }
 
-   static boolean available() {
+   public static boolean available() {
       Minecraft var0 = Minecraft.getInstance();
       TrainerClient.HostedWorld var1 = world;
       return var1 != null && var0.player != null && var0.getSingleplayerServer() == var1.server();
    }
 
-   static TrainingStatus status() {
+   public static TrainingStatus status() {
       TrainerClient.HostedWorld var0 = world;
       return var0 == null ? TrainingStatus.idle() : var0.session().status();
    }
 
-   static String seriesKey(TrainingSettings.Mode var0, String var1) {
+   public static String seriesKey(TrainingSettings.Mode var0, String var1) {
       TrainerClient.HostedWorld var2 = world;
       return var2 == null ? "" : var2.session().previewKey(settings(var0), options(var0), var1);
    }
 
-   static void start(TrainingSettings var0) {
+   public static void start(TrainingSettings var0) {
       save(var0);
       request(TrainerClient.Action.START, var0, options(var0.mode()));
    }
 
-   static Component restartKeyLabel() {
+   public static Component restartKeyLabel() {
       return restartKey.getTranslatedKeyMessage();
    }
 
-   static boolean isRestartKey(KeyEvent var0) {
+   public static boolean isRestartKey(KeyEvent var0) {
       return restartKey != null && restartKey.matches(var0);
    }
 
-   static void restart() {
+   public static void restart() {
       request(TrainerClient.Action.RESTART, null, null);
    }
 
-   static void stop() {
+   public static void stop() {
       request(TrainerClient.Action.STOP, null, null);
    }
 

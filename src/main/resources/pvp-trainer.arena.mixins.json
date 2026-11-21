@@ -1,6 +1,6 @@
 {
   "required": true,
-  "package": "de.pvptrainer.hooks",
+  "package": "de.pvptrainer.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "CooldownAccess",

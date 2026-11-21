@@ -1,6 +1,6 @@
 package de.pvptrainer.mixin;
 
-import de.pvptrainer.TrainingKit;
+import de.pvptrainer.kits.TrainingKit;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.server.PlayerAdvancements;
 import net.minecraft.server.level.ServerPlayer;

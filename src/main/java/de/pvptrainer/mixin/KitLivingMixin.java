@@ -2,8 +2,8 @@ package de.pvptrainer.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import de.pvptrainer.DrillEvents;
-import de.pvptrainer.TrainingKit;
+import de.pvptrainer.drill.DrillEvents;
+import de.pvptrainer.kits.TrainingKit;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;

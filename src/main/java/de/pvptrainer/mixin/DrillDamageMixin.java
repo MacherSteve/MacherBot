@@ -1,9 +1,9 @@
 package de.pvptrainer.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import de.pvptrainer.ArenaSignals;
-import de.pvptrainer.DrillEvents;
-import de.pvptrainer.TrainingArena;
+import de.pvptrainer.session.ArenaSignals;
+import de.pvptrainer.drill.DrillEvents;
+import de.pvptrainer.arena.TrainingArena;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Difficulty;

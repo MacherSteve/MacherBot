@@ -10,7 +10,7 @@
   "license": "LicenseRef-MacherBot",
   "environment": "client",
   "entrypoints": {
-    "client": ["de.pvptrainer.TrainerClient", "de.pvptrainer.OutcomeOverlay"]
+    "client": ["de.pvptrainer.TrainerClient", "de.pvptrainer.ui.OutcomeOverlay"]
   },
   "mixins": ["pvp-trainer.tactics.mixins.json", "pvp-trainer.kits.mixins.json", "pvp-trainer.arena.mixins.json"],
   "depends": {

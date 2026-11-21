@@ -1,6 +1,6 @@
 package de.pvptrainer.mixin;
 
-import de.pvptrainer.TrainingKit;
+import de.pvptrainer.kits.TrainingKit;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;

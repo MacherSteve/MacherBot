@@ -1,6 +1,6 @@
 package de.pvptrainer.mixin;
 
-import de.pvptrainer.TrainingCrystal;
+import de.pvptrainer.combat.TrainingCrystal;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;

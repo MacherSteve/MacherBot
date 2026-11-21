@@ -1,6 +1,10 @@
 package de.pvptrainer;
 
 import com.google.gson.JsonParser;
+import de.pvptrainer.drill.Drill;
+import de.pvptrainer.drill.DrillOptions;
+import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.progress.TrainingProgress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
