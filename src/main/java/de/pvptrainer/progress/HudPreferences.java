@@ -9,13 +9,22 @@ import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.LoggerFactory;
 
 public final class HudPreferences {
-    private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("pvptrainer/hud.properties");
+    private static final Path FILE = resolveFile();
     private static volatile boolean showHints = read();
+
+    private static Path resolveFile() {
+        try {
+            var loader = FabricLoader.getInstance();
+            return loader == null ? null : loader.getConfigDir().resolve("pvptrainer/hud.properties");
+        } catch (RuntimeException error) {
+            return null;
+        }
+    }
 
     public static boolean hints() { return showHints; }
 
     private static boolean read() {
-        if (!Files.isRegularFile(FILE)) return true;
+        if (FILE == null || !Files.isRegularFile(FILE)) return true;
         var values = new Properties();
         try (var reader = Files.newBufferedReader(FILE)) {
             values.load(reader);
@@ -27,6 +36,10 @@ public final class HudPreferences {
     }
 
     public static void toggleHints() {
+        if (FILE == null) {
+            showHints = !showHints;
+            return;
+        }
         var temporary = FILE.resolveSibling("hud.properties.tmp");
         try {
             Files.createDirectories(FILE.getParent());

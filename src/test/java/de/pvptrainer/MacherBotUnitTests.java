@@ -5,11 +5,13 @@ import de.pvptrainer.analytics.BotStatistics;
 import de.pvptrainer.analytics.BotTelemetry;
 import de.pvptrainer.analytics.CalibrationPlan;
 import de.pvptrainer.drill.Drill;
+import de.pvptrainer.drill.DrillAttempt;
 import de.pvptrainer.drill.DrillOptions;
 import de.pvptrainer.drill.WindHeight;
 import de.pvptrainer.kits.TrainingProfiles;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.progress.TrainingProgress;
+import de.pvptrainer.session.CobwebFlightTracker;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +31,9 @@ public final class MacherBotUnitTests {
         testBotTelemetryAndStatistics();
         testWindHeightHelpers();
         testDrillsAndTrainingProfilesRoundTrip();
+        testCobwebFlightTrackerLogic();
+        testTotemDefenseStates();
+        testSlamAndDoubleClickWindows();
         System.out.println("PASS " + passed + " Unit-Tests erfolgreich.");
     }
 
@@ -198,6 +203,65 @@ public final class MacherBotUnitTests {
             } finally {
                 deleteRecursive(tempDir);
             }
+        });
+    }
+
+    private static void testCobwebFlightTrackerLogic() throws Exception {
+        run("CobwebFlightTracker: Settle-Ticks nach Ping/Tickrate und Flugstatus", () -> {
+            check(CobwebFlightTracker.settleTicks(0, 20) == 3, "0 ms Ping -> 3 Ticks");
+            check(CobwebFlightTracker.settleTicks(50, 20) == 4, "50 ms Ping @ 20 TPS -> 4 Ticks");
+            check(CobwebFlightTracker.settleTicks(120, 20) == 6, "120 ms Ping @ 20 TPS -> 6 Ticks");
+
+            var tracker = new CobwebFlightTracker();
+            check(!tracker.isChainActive() && !tracker.isFlightJudged(), "Initialzustand sauber");
+            tracker.onScored(true, 10);
+            check(tracker.isChainActive() && tracker.isFlightJudged(), "Gewonnener Smash aktiviert Flugkette");
+            check(!tracker.shouldRecordMissOnLanding(false), "Bereits gewerteter Flug darf keinen Miss ausloesen");
+        });
+    }
+
+    private static void testTotemDefenseStates() throws Exception {
+        run("DrillAttempt/TotemDefenseTracker: RETOTEM und DOUBLE_HAND Positiv- und Gegenfall", () -> {
+            // RETOTEM: 2 Totems nachlegen bis 0 Rest -> Sieg
+            var retotem = new DrillAttempt(DrillOptions.forDrill(Drill.RETOTEM), -1.0, 0);
+            retotem.startRefill(2);
+            check("0/2 Totems verbraucht".equals(retotem.refillProgress()), "Startanzeige 0/2");
+            retotem.playerPop(1);
+            check(!retotem.done() && retotem.playerPops() == 1, "Nach erstem Pop weiter offen");
+            retotem.playerPop(0);
+            check(retotem.done() && retotem.won() && retotem.playerPops() == 2, "Nach letztem Pop gewonnen");
+
+            // DOUBLE_HAND Positivfall: 2 Totems beim ersten Pop, 1 Totem beim Folgekristall -> Sieg
+            var dhWin = new DrillAttempt(DrillOptions.forDrill(Drill.DOUBLE_HAND), -1.0, 0);
+            dhWin.defenseBlast(true, true, true, 12.0F, true, true);
+            check(!dhWin.done(), "Erster Pop mit zwei Haenden oeffnet Folgekristall");
+            dhWin.defenseBlast(false, true, false, 8.0F, true, true);
+            check(dhWin.done() && dhWin.won(), "Folgekristall mit verbliebenem Totem gewonnen");
+
+            // DOUBLE_HAND Gegenprobe: fehlendes Totem in einer Hand beim ersten Pop -> sofortiger Fehlschlag
+            var dhFail = new DrillAttempt(DrillOptions.forDrill(Drill.DOUBLE_HAND), -1.0, 0);
+            dhFail.defenseBlast(false, true, true, 12.0F, true, true);
+            check(dhFail.done() && !dhFail.won(), "Fehlendes zweites Totem beim ersten Pop muss scheitern");
+        });
+    }
+
+    private static void testSlamAndDoubleClickWindows() throws Exception {
+        run("DrillAttempt/SlamWindowTracker: STUN_WEB-Doppelklick und STUN_SLAM-Diagnose", () -> {
+            // STUN_WEB: Einzelklick reicht nicht, erst 2. aufeinanderfolgender Klick mit Axt loest Stun aus
+            var stunWeb = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_WEB), -1.0, 0);
+            check(stunWeb.doubleClickDisable(1L, 0.0F) == 0.0F, "Erster Klick (Schwert) darf nicht stunnen");
+            check(stunWeb.doubleClickDisable(1L, 5.0F) == 0.0F, "Identische Sequenznummer darf nicht doppelt zaehlen");
+            check(stunWeb.doubleClickDisable(2L, 5.0F) == 5.0F, "Direkter Folgeklick mit Axt muss Stun ausloesen");
+            check(stunWeb.doubleClickDisable(3L, 5.0F) == 0.0F, "Nach ausgeloestem Doppelklick wieder neu ansetzen");
+
+            // STUN_SLAM: Mace vor Axt -> Diagnose, nach Axt-Stun -> Schildfenster offen
+            var slam = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            check(!slam.shieldWindowOpen(), "Schildfenster vor Stun geschlossen");
+            slam.maceContact(4.0, false, false);
+            check(slam.timingHint() != null && slam.timingHint().contains("vor dem Axt-Stun"), "Diagnose bei verfruehter Mace");
+            slam.shieldStun(25);
+            check(slam.shieldWindowOpen(), "Schildfenster nach Axt-Stun offen");
+            check(slam.timingHint() == null, "Axt-Stun loescht vorherigen Timing-Hinweis");
         });
     }
 

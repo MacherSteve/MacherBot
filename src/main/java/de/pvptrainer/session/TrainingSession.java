@@ -10,8 +10,6 @@ import de.pvptrainer.combat.DuelFootwork;
 import de.pvptrainer.combat.DuelSkill;
 import de.pvptrainer.kits.KitLibrary;
 import de.pvptrainer.kits.KitLoadout;
-import de.pvptrainer.combat.MaceDuel;
-import de.pvptrainer.arena.MacherAppearance;
 import de.pvptrainer.arena.TrainingArena;
 import de.pvptrainer.combat.TrainingCrystal;
 import de.pvptrainer.kits.TrainingKit;
@@ -19,7 +17,6 @@ import de.pvptrainer.progress.TrainingProgress;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.combat.TrainingTactics;
 import de.pvptrainer.drill.WindHeight;
-import de.pvptrainer.drill.WindPearlCatch;
 
 import java.util.List;
 import java.util.Objects;
@@ -30,57 +27,47 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
-import net.minecraft.network.syncher.SynchedEntityData.DataValue;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.decoration.Mannequin;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.MaceItem;
 import net.minecraft.world.item.component.BlocksAttacks;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.ClipContext.Block;
 import net.minecraft.world.level.ClipContext.Fluid;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.storage.LevelResource;
-import net.minecraft.world.level.storage.ValueOutput;
-import net.minecraft.world.phys.Vec3;
-
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge;
 import net.minecraft.world.phys.HitResult.Type;
+import net.minecraft.world.phys.Vec3;
 import org.slf4j.LoggerFactory;
 
 public final class TrainingSession {
    private volatile TrainingStatus snapshot = TrainingStatus.idle();
-   private UUID ownerId;
-   private ServerPlayer owner;
+   UUID ownerId;
+   ServerPlayer owner;
    private ServerLevel arena;
-   private TrainingSettings settings;
-   private DrillOptions options;
-   private TrainingSession.TrainingBot bot;
-   private BotEquipment equipment;
-   private TrainingTactics tactics;
+   TrainingSettings settings;
+   DrillOptions options;
+   TrainingBot bot;
+   BotEquipment equipment;
+   TrainingTactics tactics;
    private DuelFootwork duelFootwork;
-   private Vec3 maceCenter;
+   Vec3 maceCenter;
    private TrainingSettings movementSettings;
-   private DrillAttempt attempt;
+   DrillAttempt attempt;
    private DrillHistory history;
    private BotTelemetry telemetry;
-   private String historyKey;
+   String historyKey;
    private volatile TrainingSettings lastDuelSettings;
    private String roundBotFingerprint;
    private String roundRules;
@@ -88,28 +75,29 @@ public final class TrainingSession {
    private ServerLevel rulesLevel;
    private List<DrillHistory.Result> recentResults = List.of();
    private int round;
-   private int hits;
-   private int pops;
-   private int roundTick;
+   int hits;
+   int pops;
+   int roundTick;
    private int respawnIn;
-   private int shieldReadyAt;
+   int shieldReadyAt;
    private boolean saved;
    private boolean ownerDefeated;
-   private boolean resetAfterPop;
+   boolean resetAfterPop;
    private float roundStartHealth;
-   private float lastBotDamage;
+   float lastBotDamage;
    private int wins;
    private int attempts;
    private int median;
    private int previousRepetitionAt;
-   private DrillAttempt secondarySlam;
-   private int secondarySlamAt, secondaryPopAt;
-   private float swingCharge;
+   DrillAttempt secondarySlam;
+   private int secondarySlamAt;
+   int secondaryPopAt;
+   float swingCharge;
    private float ownCrystalLoss;
    private boolean targetInAirBeforeBlast;
    private int hurtWindowRemaining;
    private String displayedFault;
-   private boolean waitingForStart;
+   boolean waitingForStart;
    private long roundSequence;
    private long startToken;
    private int waitingTicks;
@@ -118,33 +106,15 @@ public final class TrainingSession {
    private Vec3 suspendedAt;
    private TrainingSession.RoundSelection selection;
    private TrainingSession.RoundSelection lastPlayed;
-   private Vec3 refillRecoverySpot;
-   private int directComboClick = -1;
+   Vec3 refillRecoverySpot;
+   int directComboClick = -1;
    private long ownerAttackSequence;
-   private long webClickOnBot;
+   long webClickOnBot;
    private int popsBeforeCrystal;
-   private WindCharge targetCharge;
-   private final WindPearlCatch windCatch = new WindPearlCatch();
-   private enum WindThrow { LIFT, PEARL, CATCH }
-   private WindThrow windThrow;
-   private static final int WIND_ITEM_SWITCH_TICKS = 2;
-   private static final int MIN_APEX_CATCH_DELAY = 5;
-   private int windEquipAt;
-   private boolean waitingForWindApex, windLiftAirborne;
-   private int nextWindLaunch = 1;
-   private BlockPos windPlatform;
-   private double windBaseY;
    private WindHeight windHeight;
-   private int windThrowAt, windEquipShieldAt, windGuardAt;
    private double obiBestSeconds;
-   private boolean webChainActive, webWindPrimed, webWindAirborne;
-   private boolean webFlightAttempted, webFlightJudged;
-   private int webLaunchTick;
-   private int webLandingTick = -1;
-   private int webLastSmashTick = -1000;
-   private double webLandingY;
-   private boolean airborneAxeStun;
-   private boolean scoredWindFlight;
+   final CobwebFlightTracker cobwebFlight = new CobwebFlightTracker();
+   final WindTargetController windTarget = new WindTargetController();
 
    void rememberStartedRound() {
       this.lastPlayed = this.selection;
@@ -241,12 +211,12 @@ public final class TrainingSession {
             ? settings.withMaceCenterLocked(options.drill() == Drill.LOW_WEB_SMASH || options.windCenter()) : settings;
          Vec3 var2 = TrainingArena.prepareRound(var1, arenaSettings, this.options, this.selection.playerKit());
          maceCenter = arenaSettings.maceCenterLocked() || options.drill() == Drill.WIND_STUN_SLAM && options.slamScene() != DrillOptions.SlamScene.FREE ? var2 : null;
-         windBaseY = var2.y - options.botElevation();
+         windTarget.setBaseY(var2.y - options.botElevation());
          movementSettings = maceCenter == null ? settings : settings.withMovement(TrainingSettings.Movement.STILL);
          var1 = TrainingArena.currentPlayer(var1);
          this.owner = var1;
          this.arena = var1.level();
-         TrainingSession.TrainingBot var3 = new TrainingSession.TrainingBot(this.arena);
+         TrainingBot var3 = new TrainingBot(this, this.arena);
          this.waitingForStart = true;
          this.waitingTicks = 0;
          this.startToken = ++this.roundSequence;
@@ -305,8 +275,7 @@ public final class TrainingSession {
          }
          if (options.drill() == Drill.LOW_WEB_SMASH) TrainingProgress.endAirChain(ownerId, historyKey);
          if (options.drill() == Drill.WIND_STUN_SLAM && options.slamScene() == DrillOptions.SlamScene.AIR_LOCK) {
-            windPlatform = bot.blockPosition().below();
-            arena.setBlockAndUpdate(windPlatform, Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState());
+            windTarget.placeAirLockPlatform(arena, bot.blockPosition().below());
          }
          if (options.drill() == Drill.PERFECT_WIND_CHARGE) windHeight = new WindHeight(var1.getY());
          this.refreshSeries();
@@ -413,7 +382,7 @@ public final class TrainingSession {
                            roundTick++;
                            steer(var4);
                            tickWindTarget();
-                           equipment.tick(bot, roundTick, Math.max(shieldReadyAt, windGuardAt));
+                           equipment.tick(bot, roundTick, Math.max(shieldReadyAt, windTarget.guardReadyAt()));
                         } else this.equipment.tick(this.bot, 0, 0);
                         if (var4.distanceToSqr(this.suspendedAt) > 0.01) {
                            var4.teleportTo(
@@ -457,7 +426,7 @@ public final class TrainingSession {
                         if (!this.attempt.done()) {
                            this.steer(var4);
                            if (options.drill() == Drill.WIND_STUN_SLAM) tickWindTarget();
-                           this.equipment.tick(this.bot, this.roundTick, Math.max(shieldReadyAt, windGuardAt));
+                           this.equipment.tick(this.bot, this.roundTick, Math.max(shieldReadyAt, windTarget.guardReadyAt()));
                            if (!options.drill().centeredMaceDrill() && options.drill() != Drill.PERFECT_WIND_CHARGE && this.options.slamScene() == DrillOptions.SlamScene.FREE) {
                               this.tactics.practiceTick(this.arena, this.bot, var4, movementSettings, this.attempt);
                            }
@@ -592,7 +561,7 @@ public final class TrainingSession {
       }
    }
 
-   private boolean comboWeapon(ServerPlayer var1) {
+   boolean comboWeapon(ServerPlayer var1) {
       ItemStack var2 = var1.getMainHandItem();
       return var2.is(ItemTags.SWORDS) || this.settings.mode() == TrainingSettings.Mode.CRYSTAL && var2.is(Items.TOTEM_OF_UNDYING);
    }
@@ -634,7 +603,7 @@ public final class TrainingSession {
 
    void playerJump(ServerPlayer var1) {
       if (!this.waitingForStart && this.owns(var1)) {
-         if (webLandingTick >= 0) finishWebLanding();
+         if (cobwebFlight.hasPendingLanding()) finishWebLanding();
          this.attempt.jump();
       }
    }
@@ -651,14 +620,11 @@ public final class TrainingSession {
       }
    }
 
-   void playerLaunched(ServerPlayer var1) {
+   public void playerLaunched(ServerPlayer var1) {
       if (!this.waitingForStart && this.owns(var1)) {
          if (windHeight != null) windHeight.launched(var1, roundTick);
          if (options.drill() == Drill.LOW_WEB_SMASH) {
-            if (webLandingTick >= 0) finishWebLanding();
-            webWindPrimed = true;
-            webWindAirborne = !var1.onGround();
-            webLaunchTick = roundTick;
+            cobwebFlight.onPlayerLaunch(roundTick, var1.onGround(), this::finishWebLanding);
          }
          this.attempt.launch();
       }
@@ -766,7 +732,7 @@ public final class TrainingSession {
       this.snapshot = TrainingStatus.idle();
    }
 
-   private boolean airStartLanded() {
+   boolean airStartLanded() {
       return this.suspendedAt != null && !this.waitingForStart
          && this.owner.onGround() && this.owner.getY() < this.suspendedAt.y - 0.5;
    }
@@ -887,7 +853,7 @@ public final class TrainingSession {
       this.median = this.wins == 0 ? -1 : (var2[(this.wins - 1) / 2] + var2[this.wins / 2]) / 2;
    }
 
-   private void recordRepetition() {
+   void recordRepetition() {
       TrainingProgress.recordRound(
          this.history,
          this.historyKey,
@@ -945,35 +911,13 @@ public final class TrainingSession {
       }
    }
 
-   void observeWebGround(boolean grounded) {
+   public void observeWebGround(boolean grounded) {
       if (options == null || options.drill() != Drill.LOW_WEB_SMASH || waitingForStart || owner == null || attempt == null) return;
-      boolean supported = grounded && webFeetSupported();
-      int settleTicks = 3 + (int)Math.ceil(options.playerPing() * options.tickRate() / 1000.0);
-      if (webLandingTick >= 0) {
-         // A near-floor smash can send a ground packet before the Wind Burst motion arrives.
-         if (!supported && webChainActive && webLastSmashTick >= webLandingTick - settleTicks
-               && owner.getY() > webLandingY + .02) webLandingTick = -1;
-         else if (roundTick - webLandingTick >= settleTicks) finishWebLanding();
-      }
-      if (!supported) {
-         if (webWindPrimed) webWindAirborne = true;
-         if (webWindAirborne || owner.fallDistance > 1.5 && owner.getMainHandItem().is(Items.MACE)) webFlightAttempted = true;
-      } else if (webLandingTick < 0 && (webFlightAttempted || webFlightJudged
-            || webWindPrimed && (webWindAirborne || roundTick - webLaunchTick > 8))) {
-         webLandingTick = roundTick;
-         webLandingY = owner.getY();
-      }
-   }
-
-   private boolean webFeetSupported() {
-      var box = owner.getBoundingBox();
-      var feet = new net.minecraft.world.phys.AABB(box.minX + .0001, box.minY - .002, box.minZ + .0001,
-         box.maxX - .0001, box.minY, box.maxZ - .0001);
-      return owner.level().getBlockCollisions(owner, feet).iterator().hasNext();
+      cobwebFlight.observeGround(grounded, roundTick, owner, options, this::finishWebLanding);
    }
 
    private void finishWebLanding() {
-      if (webFlightAttempted && !webFlightJudged && !attempt.done()) {
+      if (cobwebFlight.shouldRecordMissOnLanding(attempt.done())) {
          attempt.finish(false, "Ohne Smash gelandet");
          storeMaceRepetition();
       }
@@ -981,171 +925,42 @@ public final class TrainingSession {
    }
 
    void endWebChain() {
-      webLandingTick = -1;
-      webLastSmashTick = -1000;
-      webWindPrimed = webWindAirborne = webFlightAttempted = webFlightJudged = false;
-      if (!webChainActive) return;
-      TrainingProgress.endAirChain(ownerId, historyKey);
-      webChainActive = false;
+      cobwebFlight.endChain(ownerId, historyKey);
    }
 
-   private void storeMaceRepetition() {
+   void storeMaceRepetition() {
       var result = new DrillHistory.Result(attempt.won(), roundTick - previousRepetitionAt, attempt.control(), attempt.progress(), attempt.timeline());
       TrainingProgress.record(history, historyKey, result, settings, options, ownerId);
       if (options.drill() == Drill.LOW_WEB_SMASH) {
-         webFlightJudged = true;
-         if (result.won()) {
-            webChainActive = true;
-            webLastSmashTick = roundTick;
-            webLandingTick = -1;
-         }
+         cobwebFlight.onScored(result.won(), roundTick);
          owner.sendOverlayMessage(Component.literal(result.won() ? "Geschafft" : "Fehlversuch · " + result.reason())
             .withStyle(result.won() ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED));
       }
       previousRepetitionAt = roundTick;
-      if (options.drill() == Drill.WIND_STUN_SLAM) scoredWindFlight = true;
+      if (options.drill() == Drill.WIND_STUN_SLAM) windTarget.markScoredWindFlight();
       attempt = new DrillAttempt(options, -1, round - 1);
-      airborneAxeStun = false;
+      windTarget.clearAirborneAxeStun();
       refreshSeries();
    }
 
-   private boolean windTargetAirborne() {
-      double base = windPlatform == null ? windBaseY : windPlatform.getY() + 1;
-      return !bot.onGround() && bot.getY() > base + 0.15;
-   }
-
    private void tickWindTarget() {
-      if (!bot.onGround()) nextWindLaunch = roundTick + 12;
-      windCatch.tick();
-      if (waitingForWindApex) {
-         if (!bot.onGround()) {
-            windLiftAirborne = true;
-            // Two ticks to switch items. Throw only once the upward movement actually ends.
-            if (bot.getDeltaMovement().y <= .16) {
-               waitingForWindApex = false;
-               windEquipShieldAt = 0;
-               windThrow = WindThrow.PEARL;
-               equipWindThrow();
-               return;
-            }
-         } else if (windLiftAirborne || roundTick >= nextWindLaunch) {
-            waitingForWindApex = false;
-         }
-      }
-      if (windEquipAt != 0) {
-         if (roundTick >= windEquipAt) {
-            windEquipAt = 0;
-            equipWindThrow();
-         }
-         return;
-      }
-      if (windEquipShieldAt != 0) {
-         if (roundTick >= windEquipShieldAt) {
-            equipment.equipWeapon(bot, Items.SHIELD);
-            // Let equipment tracking reach the client before sending the using-item flag.
-            windGuardAt = roundTick + 3;
-            windEquipShieldAt = 0;
-         }
-         return;
-      }
-      if (windThrowAt != 0) {
-         if (roundTick < windThrowAt) return;
-         windThrowAt = 0;
-         switch (windThrow) {
-            case LIFT -> {
-               if (bot.onGround() && throwWindCharge() && options.windFlight() == DrillOptions.WindFlight.CHARGE_AND_CATCH) {
-                  waitingForWindApex = true;
-                  windLiftAirborne = false;
-               }
-            }
-            case PEARL -> {
-               boolean combined = options.windFlight() == DrillOptions.WindFlight.CHARGE_AND_CATCH;
-               if (combined && !bot.onGround() && bot.getDeltaMovement().y > 0) {
-                  windThrowAt = roundTick + 1;
-                  return;
-               }
-               if ((!combined || !bot.onGround()) && windCatch.throwPearl(arena, bot, equipment)) {
-                  if (!combined) scoredWindFlight = false;
-                  windThrow = WindThrow.CATCH;
-                  int throwDelay = combined ? MIN_APEX_CATCH_DELAY : 4;
-                  windEquipAt = roundTick + throwDelay - WIND_ITEM_SWITCH_TICKS;
-                  return;
-               }
-            }
-            case CATCH -> {
-               if (!windCatch.throwCharge(arena, bot, equipment, options.windFlight() == DrillOptions.WindFlight.CHARGE_AND_CATCH)) {
-                  windThrowAt = roundTick + 1;
-                  return;
-               }
-            }
-         }
-         windEquipShieldAt = roundTick + 3;
-         return;
-      }
-      if (!bot.onGround() || windCatch.inFlight() || waitingForWindApex) return;
-      if (airborneAxeStun) {
-         attempt.finish(false, "Der Bot ist nach deinem Axt-Stun vor dem Smash gelandet.");
-         storeMaceRepetition();
-      }
-      if (!waitingForStart && options.slamScene() == DrillOptions.SlamScene.FREE && settings.counterAttacks()
-            && roundTick == nextWindLaunch - 5 && TrainingTactics.withinReach(bot, owner) && equipment.has(bot, Items.MACE)) {
-         bot.stopUsingItem();
-         equipment.equipWeapon(bot, Items.MACE);
-         TrainingTactics.strike(arena, bot, owner, bot.damageSources().mobAttack(bot), 0);
-         windEquipShieldAt = roundTick + 2;
-         return;
-      }
-      if (roundTick < nextWindLaunch) return;
-      nextWindLaunch = roundTick + 12;
-      if (!equipment.has(bot, Items.WIND_CHARGE) || !equipment.has(bot, Items.SHIELD)) {
-         attempt.defenseUnavailable("Bot-Kit aufgebraucht · Windladung und Schild werden benötigt.");
-         return;
-      }
-      windThrow = options.windFlight() == DrillOptions.WindFlight.CATCH ? WindThrow.PEARL : WindThrow.LIFT;
-      equipWindThrow();
+      windTarget.tick(roundTick, waitingForStart, arena, bot, owner, equipment, options, settings, attempt, this::storeMaceRepetition);
    }
 
-   private void equipWindThrow() {
-      var item = windThrow == WindThrow.PEARL ? Items.ENDER_PEARL : Items.WIND_CHARGE;
-      bot.stopUsingItem();
-      if (equipment.equipWeapon(bot, item)) windThrowAt = roundTick + WIND_ITEM_SWITCH_TICKS;
-      else {
-         attempt.defenseUnavailable("Bot-Kit aufgebraucht · " + (item == Items.ENDER_PEARL ? "Enderperle fehlt." : "Windladung fehlt."));
-         windEquipShieldAt = roundTick + 1;
-      }
-   }
-
-   private boolean throwWindCharge() {
-      var charge = new WindCharge(arena, bot.getX(), bot.getY() + 0.5, bot.getZ(), new Vec3(0, -1, 0));
-      charge.setOwner(bot);
-      charge.shoot(0, -1, 0, 1.5F, 0);
-      if (arena.addFreshEntity(charge)) {
-         targetCharge = charge;
-         // A new flight resets scoring. The shield still observes its vanilla axe cooldown.
-         scoredWindFlight = false;
-         bot.jumpFromGround();
-         bot.swing(InteractionHand.MAIN_HAND, true);
-         BotTelemetry.action(arena, bot, "WIND");
-         equipment.takeOne(bot, Items.WIND_CHARGE);
-         return true;
-      }
-      return false;
-   }
-
-   private void armSecondarySlam(int window) {
+   void armSecondarySlam(int window) {
       secondarySlam = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1, 0);
       secondarySlamAt = roundTick;
       secondarySlam.observeSecondarySlam(roundTick, owner);
       secondarySlam.shieldStun(window);
    }
 
-   private void finishSecondarySlam() {
+   void finishSecondarySlam() {
       TrainingProgress.technique(historyKey, settings, options, ownerId, Drill.STUN_SLAM,
          secondarySlam.won(), roundTick - secondarySlamAt, secondarySlam.progress());
       secondarySlam = null;
    }
 
-   private void saveResult() {
+   void saveResult() {
       if (!this.saved && this.attempt != null && this.attempt.done() && !this.attempt.unscored() && this.options.drill().series()) {
          this.saved = true;
          TrainingProgress.recordRound(
@@ -1222,19 +1037,9 @@ public final class TrainingSession {
          BlockPos web = BlockPos.containing(maceCenter).above();
          if (arena.getBlockState(web).is(Blocks.COBWEB)) arena.removeBlock(web, false);
       }
-      if (targetCharge != null) targetCharge.discard();
-      targetCharge = null;
-      windCatch.clear();
-      windEquipAt = 0;
-      waitingForWindApex = windLiftAirborne = false;
-      nextWindLaunch = 1;
+      windTarget.clear(arena);
       windHeight = null;
-      if (windPlatform != null && arena != null && arena.getBlockState(windPlatform).is(Blocks.POLISHED_BLACKSTONE_BRICKS)) arena.removeBlock(windPlatform, false);
-      windPlatform = null;
-      windThrowAt = windEquipShieldAt = windGuardAt = 0;
       endWebChain();
-      airborneAxeStun = false;
-      scoredWindFlight = false;
       maceCenter = null;
       movementSettings = null;
 
@@ -1295,400 +1100,6 @@ public final class TrainingSession {
    private record Rules(String difficulty, boolean regeneration) {
       String key(TrainingSettings.Mode var1) {
          return this.difficulty + "|natregen=" + (var1 != TrainingSettings.Mode.UHC && this.regeneration);
-      }
-   }
-
-   private final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTactics.MeleeReach {
-      private int reconsiderReachAt = -1;
-      private double chosenReach;
-      public double meleeReach() {
-         int tick = TrainingSession.this.roundTick;
-         if (tick >= reconsiderReachAt) {
-            double cap = TrainingSession.this.options.botReach();
-            // Commit to one distance for several ticks instead of rerolling every range check.
-            chosenReach = cap - getRandom().nextDouble() * Math.min(.32, cap * .12);
-            reconsiderReachAt = tick + 7 + getRandom().nextInt(6);
-         }
-         return chosenReach;
-      }
-
-      public boolean launchGlide() {
-         if (onGround() || !canGlide()) return false;
-         setSharedFlag(FLAG_FALL_FLYING, true);
-         return true;
-      }
-      private float damageThisHit;
-      private int immediateGuardUntil = -1;
-      private int stunImpulseAt = -1;
-      private long pendingWebClick;
-      private int pendingWebTick, pendingWebDuration;
-
-      private void expireWebBreak() {
-         if (pendingWebClick != 0 && roundTick - pendingWebTick > 4) {
-            pendingWebClick = 0;
-            attempt.finish(false, "Schild ohne Doppelklick gebrochen");
-         }
-      }
-      private DamageSource blockedMelee;
-      private int blockedMeleeTick = -1;
-
-      TrainingBot(ServerLevel var2) {
-         super(var2);
-         this.applyImplicitComponent(DataComponents.PROFILE, MacherAppearance.PROFILE);
-         this.setCustomName(MacherAppearance.NAME);
-         this.setCustomNameVisible(true);
-      }
-
-      public void startSeenByPlayer(ServerPlayer var1) {
-         super.startSeenByPlayer(var1);
-         if (this.isUsingItem() && this.getUseItem().has(DataComponents.BLOCKS_ATTACKS)) {
-            byte var2 = (Byte)this.getEntityData().get(DATA_LIVING_ENTITY_FLAGS);
-            this.sendUseFlags(var1, (byte)(var2 & -2));
-            this.sendUseFlags(var1, var2);
-         }
-      }
-
-      private void sendUseFlags(ServerPlayer var1, byte var2) {
-         var1.connection.send(new ClientboundSetEntityDataPacket(this.getId(), List.of(DataValue.create(DATA_LIVING_ENTITY_FLAGS, var2))));
-      }
-
-      private Vec3 constrainedMotion(Vec3 var1) {
-         if (options != null && options.drill() == Drill.WIND_STUN_SLAM) return maceCenter == null ? var1 : new Vec3(0, var1.y, 0);
-         if (TrainingSession.this.waitingForStart || maceCenter != null && options.slamScene() != DrillOptions.SlamScene.PAIRED_FALL) {
-            return Vec3.ZERO;
-         } else if (TrainingSession.this.options == null || TrainingSession.this.options.slamScene() == DrillOptions.SlamScene.FREE) {
-            return var1;
-         } else {
-            return TrainingSession.this.options.slamScene() == DrillOptions.SlamScene.PAIRED_FALL && !TrainingSession.this.waitingForStart
-               ? new Vec3(0.0, Math.min(0.0, var1.y), 0.0)
-               : Vec3.ZERO;
-         }
-      }
-
-      public void move(MoverType var1, Vec3 var2) {
-         super.move(var1, this.constrainedMotion(var2));
-         if (maceCenter != null && options.drill() != Drill.WIND_STUN_SLAM && options.slamScene() != DrillOptions.SlamScene.PAIRED_FALL) {
-            // A fixed bot never descends into the floor, so ordinary movement cannot detect the ground contact.
-            setOnGround(!level().noBlockCollision(this, getBoundingBox().move(0, -.01, 0)));
-         }
-      }
-
-      public void setDeltaMovement(Vec3 var1) {
-         super.setDeltaMovement(this.constrainedMotion(var1));
-      }
-
-      @Override
-      public void knockback(double strength, double x, double z, DamageSource source, float damage, boolean force) {
-         boolean webMelee = TrainingSession.this.options != null && TrainingSession.this.options.drill() == Drill.STUN_WEB
-            && source != null && source.is(DamageTypes.PLAYER_ATTACK) && source.getDirectEntity() == TrainingSession.this.owner;
-         if (webMelee && this.stunImpulseAt == TrainingSession.this.roundTick) return;
-         boolean blocked = source != null && source == this.blockedMelee && this.blockedMeleeTick == TrainingSession.this.roundTick;
-         boolean keepGrounded = (blocked || webMelee) && this.onGround();
-         double previousY = this.getDeltaMovement().y;
-         super.knockback(strength, x, z, source, damage, force);
-         if (keepGrounded) {
-            Vec3 after = this.getDeltaMovement();
-            this.setDeltaMovement(new Vec3(after.x, Math.min(previousY, after.y), after.z));
-         }
-      }
-
-      private boolean refillTarget() {
-         return TrainingSession.this.options != null && TrainingSession.this.options.drill().totemDefense() && TrainingSession.this.refillRecoverySpot != null;
-      }
-
-      private void recoverRefillTarget() {
-         this.snapTo(TrainingSession.this.refillRecoverySpot, this.getYRot(), 0.0F);
-         this.setDeltaMovement(Vec3.ZERO);
-         this.resetFallDistance();
-         this.clearFire();
-         this.setHealth(this.getMaxHealth());
-         this.hurtMarked = true;
-      }
-
-      protected void onBelowWorld() {
-         if (this.refillTarget()) {
-            this.recoverRefillTarget();
-         } else {
-            super.onBelowWorld();
-         }
-      }
-
-      public boolean hurtServer(ServerLevel var1, DamageSource var2, float var3) {
-         if (TrainingSession.this.waitingForStart) {
-            return false;
-         }
-
-         TrainingSession.this.equipment.protectPassiveTarget(this);
-         ItemStack var4 = this.getMainHandItem();
-         ItemStack var5 = this.getOffhandItem();
-         int var6 = var4.getCount();
-         int var7 = var5.getCount();
-         boolean var8 = var4.has(DataComponents.DEATH_PROTECTION);
-         boolean var9 = var5.has(DataComponents.DEATH_PROTECTION);
-         boolean var10 = this.isBlocking();
-         BlocksAttacks var11 = (BlocksAttacks)this.getUseItem().get(DataComponents.BLOCKS_ATTACKS);
-         int var12 = this.isUsingItem() && var11 != null ? var11.blockDelayTicks() - this.getTicksUsingItem() : 0;
-         boolean var13 = !this.onGround() || this.getDeltaMovement().y > 0.02;
-         boolean var14 = this.invulnerableTime <= 10;
-         boolean confirmWeb = pendingWebClick != 0 && roundTick - pendingWebTick <= 4
-               && var2.is(DamageTypes.PLAYER_ATTACK) && var2.getDirectEntity() == owner
-               && owner.getMainHandItem().is(ItemTags.AXES) && webClickOnBot == pendingWebClick + 1;
-         boolean drillSmash = options.drill().centeredMaceDrill() && var2.is(DamageTypes.MACE_SMASH)
-               && var2.getDirectEntity() == owner && owner.getMainHandItem().is(Items.MACE);
-         boolean validSmash = drillSmash && (options.drill() == Drill.LOW_WEB_SMASH
-               || windTargetAirborne() && airborneAxeStun && attempt.shieldWindowOpen() && !var10);
-         boolean webContact = options.drill() == Drill.LOW_WEB_SMASH && var2.getDirectEntity() == owner
-               && owner.getMainHandItem().is(Items.MACE) && (drillSmash || var2.is(DamageTypes.PLAYER_ATTACK));
-         // Test before damage, totem handling or Wind Burst changes the attacker's fall state.
-         boolean webSmash = webContact && (drillSmash || MaceItem.canSmashAttack(owner));
-         if (webSmash && invulnerableTime > 10) invulnerableTime = 10;
-         boolean var15 = super.hurtServer(var1, var2, var3);
-         if (webContact) {
-            if (webSmash || !webFlightJudged) {
-               attempt.finish(webSmash, webSmash ? "Smash unter der Netzkante gelandet!" : "Zu wenig Fallhöhe");
-               storeMaceRepetition();
-            }
-         } else if (drillSmash && var15 && !attempt.done() && !scoredWindFlight) {
-            attempt.finish(validSmash, validSmash ? "Axt-Stun und Smash im selben Flug!" : "Brich das Schild in der Luft und triff den Bot vor seiner Landung.");
-            storeMaceRepetition();
-         }
-         if (confirmWeb && !attempt.done()) {
-            pendingWebClick = 0;
-            attempt.shieldStun(Math.max(1,pendingWebDuration - (roundTick - pendingWebTick)));
-            armSecondarySlam(Math.max(1,pendingWebDuration - (roundTick - pendingWebTick)));
-            stunImpulseAt = roundTick;
-            if (onGround()) super.knockback(.4, owner.getX()-getX(),owner.getZ()-getZ(),var2,var3,false);
-         }
-         if (TrainingSession.this.attempt != null && TrainingSession.this.owner != null) {
-            if (TrainingSession.this.options.drill() == Drill.STUN_SLAM && var2.getEntity() == TrainingSession.this.owner) {
-               if (TrainingSession.this.owner.getMainHandItem().is(ItemTags.AXES)) {
-                  TrainingSession.this.attempt.axeContact(var10, var12);
-               }
-
-               if (TrainingSession.this.owner.getMainHandItem().is(Items.MACE)
-                  && (!var15 || !var2.is(DamageTypes.MACE_SMASH))) {
-                  TrainingSession.this.attempt
-                     .maceContact(
-                        TrainingSession.this.owner.fallDistance,
-                        TrainingSession.this.owner.onGround(),
-                        var2.is(DamageTypes.MACE_SMASH)
-                     );
-               }
-            }
-
-            if (var15 && var2.getEntity() == TrainingSession.this.owner) {
-               TrainingSession.this.hits++;
-               if (secondarySlam != null && var2.is(DamageTypes.MACE_SMASH) && owner.getMainHandItem().is(Items.MACE)) {
-                  secondarySlam.smash(owner, var10);
-                  if (secondarySlam.won()) finishSecondarySlam();
-               }
-               boolean stunSlam = TrainingSession.this.options.drill() == Drill.STUN_SLAM;
-               if (!drillSmash && var2.is(DamageTypes.MACE_SMASH) && (stunSlam ? TrainingSession.this.owner.getMainHandItem().is(Items.MACE)
-                     : !TrainingSession.this.airStartLanded())) {
-                  TrainingSession.this.attempt.smash(TrainingSession.this.owner, var10);
-                  if (stunSlam && TrainingSession.this.attempt.won()) TrainingSession.this.saveResult();
-               }
-            }
-
-            if (var2.is(DamageTypes.PLAYER_ATTACK)
-               && var2.getDirectEntity() == TrainingSession.this.owner
-               && TrainingSession.this.comboWeapon(TrainingSession.this.owner)
-               && (
-                  var15
-                     || TrainingSession.this.directComboClick == TrainingSession.this.roundTick
-                        && !var14
-                        && !var10
-                        && var3 > 0.0F
-                        && TrainingSession.this.attempt.needsAirSword()
-               )) {
-               TrainingSession.this.attempt
-                  .swordContact(TrainingSession.this.owner, this, var15 ? this.damageThisHit : 0.0F, TrainingSession.this.swingCharge, var13, var15, var14);
-               TrainingSession.this.directComboClick = -1;
-            }
-
-            InteractionHand var16 = var8 && var4.getCount() < var6
-               ? InteractionHand.MAIN_HAND
-               : (var9 && var5.getCount() < var7 ? InteractionHand.OFF_HAND : null);
-            if (var16 != null && this.isAlive()) {
-               TrainingSession.this.pops++;
-               TrainingSession.this.attempt.botPop();
-               if (TrainingSession.this.options.drill() == Drill.TOTEM_POPS) {
-                  TrainingSession.this.recordRepetition();
-               } else {
-                  TrainingProgress.technique(historyKey, settings, options, ownerId, Drill.TOTEM_POPS, true,
-                     roundTick - secondaryPopAt, "Bot-Totem ausgelöst");
-                  secondaryPopAt = roundTick;
-               }
-
-               TrainingSession.this.equipment.popped(this, var16, TrainingSession.this.roundTick);
-               TrainingSession.this.resetAfterPop = TrainingSession.this.options.resetOnPop();
-            }
-
-            return var15;
-         } else {
-            return var15;
-         }
-      }
-
-      public void startUsingItem(InteractionHand var1) {
-         if (TrainingSession.this.roundTick >= TrainingSession.this.shieldReadyAt || !this.getItemInHand(var1).has(DataComponents.BLOCKS_ATTACKS)) {
-            super.startUsingItem(var1);
-         }
-      }
-
-      private void pauseShield(int ticks, BlocksAttacks shield, boolean exactWindow) {
-         int readyAt = TrainingSession.this.roundTick + ticks;
-         TrainingSession.this.shieldReadyAt = readyAt;
-         if (exactWindow) {
-            // Count until coverage resumes, including the usual shield-raise animation.
-            this.immediateGuardUntil = readyAt + shield.blockDelayTicks();
-            if (ticks == 0) this.startUsingItem(TrainingSession.this.equipment.shieldHand);
-         }
-      }
-
-      public ItemStack getItemBlockingWith() {
-         return TrainingSession.this.options != null
-               && TrainingSession.this.roundTick <= this.immediateGuardUntil
-               && this.isUsingItem()
-               && this.getUseItem().has(DataComponents.BLOCKS_ATTACKS)
-            ? this.getUseItem()
-            : super.getItemBlockingWith();
-      }
-
-      protected void actuallyHurt(ServerLevel var1, DamageSource var2, float var3) {
-         float var4 = DrillAttempt.health(this);
-         super.actuallyHurt(var1, var2, var3);
-         this.damageThisHit = Math.max(0.0F, var4 - DrillAttempt.health(this));
-         // Keep the training target available even in kits without death protection.
-         if (options.drill().centeredMaceDrill() && getHealth() <= 0
-               && !getMainHandItem().has(DataComponents.DEATH_PROTECTION) && !getOffhandItem().has(DataComponents.DEATH_PROTECTION)) {
-            setHealth(getMaxHealth());
-         }
-         if (damageThisHit > 0 && TrainingSession.this.options.drill() == Drill.DUEL
-               && TrainingSession.this.settings.mode() == TrainingSettings.Mode.SWORD
-               && var2.is(DamageTypes.PLAYER_ATTACK) && var2.getDirectEntity() == TrainingSession.this.owner) {
-            TrainingSession.this.tactics.swordDuel.incomingMelee(TrainingSession.this.roundTick);
-         }
-         if (var2.getDirectEntity() instanceof TrainingCrystal) {
-            TrainingSession.this.lastBotDamage = TrainingSession.this.lastBotDamage + this.damageThisHit;
-         }
-
-         if (TrainingSession.this.attempt != null && var2.is(DamageTypes.BAD_RESPAWN_POINT)) {
-            TrainingSession.this.attempt.anchorHit(this.damageThisHit);
-         }
-      }
-
-      public float applyItemBlocking(ServerLevel var1, DamageSource var2, float var3) {
-         InteractionHand var4 = this.getUsedItemHand();
-         ItemStack var5 = this.getItemBlockingWith();
-         BlocksAttacks var6 = var5 == null ? null : (BlocksAttacks)var5.get(DataComponents.BLOCKS_ATTACKS);
-         float var7 = super.applyItemBlocking(var1, var2, var3);
-         if (var6 != null && !(var7 <= 0.0F) && TrainingSession.this.attempt != null && TrainingSession.this.equipment != null) {
-            int var8 = var5.getDamageValue();
-            var5.hurtAndBreak(var6.itemDamage().apply(var7), this, var4);
-            boolean var9 = var5.isEmpty();
-            if (var2.getEntity() == TrainingSession.this.owner) {
-               TrainingSession.this.attempt.shieldBlocked(var7);
-               if (TrainingSession.this.options.drill() == Drill.SHIELD) {
-                  TrainingSession.this.recordRepetition();
-               }
-
-               if (var9) {
-                  TrainingSession.this.attempt.shieldBreak();
-                  if (TrainingSession.this.options.drill() == Drill.STUN_WEB && this.stunImpulseAt != TrainingSession.this.roundTick)
-                     TrainingSession.this.attempt.finish(false, "Schild ohne gültigen Stun verbraucht");
-               } else if (var5.getDamageValue() > var8) {
-                  TrainingSession.this.attempt.event("Schild âˆ’" + (var5.getDamageValue() - var8) + " Haltbarkeit");
-               }
-            }
-
-            if (var9) {
-               this.stopUsingItem();
-               TrainingSession.this.equipment.broken(this);
-               int pause = TrainingSession.this.options.shieldBreakTicks(TrainingSession.this.settings.mode());
-               BlocksAttacks replacement = this.getItemInHand(TrainingSession.this.equipment.shieldHand).get(DataComponents.BLOCKS_ATTACKS);
-               if (pause >= 0 && replacement != null) this.pauseShield(pause, replacement, true);
-            }
-
-            return var7;
-         } else {
-            return var7;
-         }
-      }
-
-      protected void blockUsingItem(ServerLevel var1, LivingEntity var2, DamageSource var3, float var4) {
-         // The callback precedes the recoil of a successfully blocked impact. An attack from behind
-         // skips it even while the shield is raised. The stun drill applies its own validated lift below.
-         if (var3.getDirectEntity() == var2 && var2 == TrainingSession.this.owner && var3.is(DamageTypes.PLAYER_ATTACK)) {
-            this.blockedMelee = var3;
-            this.blockedMeleeTick = TrainingSession.this.roundTick;
-         }
-         super.blockUsingItem(var1, var2, var3, var4);
-         ItemStack var5 = this.getItemBlockingWith();
-         BlocksAttacks var6 = var5 == null ? null : (BlocksAttacks)var5.get(DataComponents.BLOCKS_ATTACKS);
-         if (var6 != null && TrainingSession.this.attempt != null) {
-            float var7 = var2.getSecondsToDisableBlocking();
-            if (TrainingSession.this.options.drill() == Drill.STUN_WEB) {
-               if (var2 != TrainingSession.this.owner || var3.getDirectEntity() != var2 || !var3.is(DamageTypes.PLAYER_ATTACK)
-                     || !(var2.getMainHandItem().is(ItemTags.AXES) || var2.getMainHandItem().is(ItemTags.SWORDS))) {
-                  return;
-               }
-               float validStun = TrainingSession.this.attempt.doubleClickDisable(TrainingSession.this.webClickOnBot,
-                  var2.getMainHandItem().is(ItemTags.AXES) ? var7 : 0);
-               if (var7 > 0 && validStun == 0) {
-                  var6.disable(var1, this, var7, var5);
-                  this.pauseShield(Math.round(20 * var7 * var6.disableCooldownScale()), var6, false);
-                  this.pendingWebClick = TrainingSession.this.webClickOnBot;
-                  this.pendingWebTick = TrainingSession.this.roundTick;
-                  this.pendingWebDuration = Math.round(20 * var7 * var6.disableCooldownScale());
-                  return;
-               }
-               var7 = validStun;
-            }
-            int var8 = Math.round(20.0F * var7 * var6.disableCooldownScale());
-            if (var8 > 0) {
-               var6.disable(var1, this, var7, var5);
-               DrillOptions options = TrainingSession.this.options;
-               int configured = options.shieldBreakTicks(TrainingSession.this.settings.mode());
-               int pause = configured >= 0 ? configured : (options.instantReblock() ? 0 : var8);
-               this.pauseShield(pause, var6, configured >= 0 || options.instantReblock() && options.holdShield());
-
-               if (var2 == TrainingSession.this.owner) {
-                  int raiseTicks = options.drill() == Drill.STUN_SLAM && configured < 0 && !options.instantReblock()
-                     ? var6.blockDelayTicks() : 0;
-                  TrainingSession.this.attempt.shieldStun(pause + raiseTicks);
-                  if (options.drill() == Drill.WIND_STUN_SLAM && !scoredWindFlight && windTargetAirborne() && pause > 0
-                        && var2.getMainHandItem().is(ItemTags.AXES) && var3.getDirectEntity() == owner) airborneAxeStun = true;
-                  if (options.drill() != Drill.STUN_SLAM && options.drill() != Drill.STUN_WEB && options.drill() != Drill.WIND_STUN_SLAM
-                        && var2.getMainHandItem().is(ItemTags.AXES) && var3.getDirectEntity() == owner && pause > 0) {
-                     armSecondarySlam(pause);
-                  }
-                  if (TrainingSession.this.options.drill() == Drill.STUN_WEB && this.onGround()) {
-                     this.stunImpulseAt = TrainingSession.this.roundTick;
-                     super.knockback(0.4, var2.getX() - this.getX(), var2.getZ() - this.getZ(), var3, var4, false);
-                  }
-               }
-            }
-         }
-      }
-
-      public void hurtArmor(DamageSource var1, float var2) {
-         this.doHurtEquipment(var1, var2, new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET});
-      }
-
-      public boolean shouldBeSaved() {
-         return false;
-      }
-
-      public boolean saveAsPassenger(ValueOutput var1) {
-         return false;
-      }
-
-      public boolean canUsePortal(boolean var1) {
-         return false;
-      }
-
-      protected void dropAllDeathLoot(ServerLevel var1, DamageSource var2) {
       }
    }
 }
