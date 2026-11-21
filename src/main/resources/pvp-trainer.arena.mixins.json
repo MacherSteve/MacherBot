@@ -1,0 +1,38 @@
+{
+  "required": true,
+  "package": "de.pvptrainer.hooks",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "CooldownAccess",
+    "CooldownAccess$Timer",
+    "ReadyEffectsMixin",
+    "ReadyFoodMixin",
+    "PlayerActionMixin",
+    "MealMixin",
+    "BucketMixin",
+    "AnchorMixin",
+    "WebPlacementMixin",
+    "ArenaPortalMixin",
+    "UhcFoodMixin",
+    "ArenaMobMixin",
+    "ArenaCrystalTerrainMixin",
+    "RestoredPlayerAccess",
+    "LevelStorageAccess",
+    "ArenaPingMixin",
+    "TrainerMoveMixin",
+    "GravityAccess",
+    "ResourceStackMixin",
+    "ResourceLivingMixin",
+    "ResourceAmmoMixin",
+    "ResourceContainerMixin",
+    "PearlMixin",
+    "WindLaunchMixin"
+  ],
+  "client": [
+    "ForgeAtmosphereMixin",
+    "ReadyKeyboardMixin",
+    "ReadyClickMixin",
+    "ArenaCrosshairMixin"
+  ],
+  "injectors": {"defaultRequire": 1}
+}

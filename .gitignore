@@ -1,0 +1,17 @@
+# Lokale Offline-Bibliotheken (gehoeren zur lokalen Build-Umgebung, nicht ins Git-Repo)
+Bibliotheken/
+
+# Build- und Testausgaben
+build/
+*.jar
+__pycache__/
+*.pyc
+tests/ingame/runs*/
+tests/ingame/work/
+
+# IDE- und Betriebssystemdateien
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

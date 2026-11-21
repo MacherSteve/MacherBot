@@ -1,0 +1,21 @@
+MacherBot – Nutzungsbedingungen
+
+Herausgegeben von MacherBot. Anfragen zur Nutzung bitte an kontakt@macher.gg.
+
+Du darfst die Mod kostenlos für den persönlichen Gebrauch auf deinen Geräten
+installieren, zum Üben verwenden und dafür Sicherungskopien anlegen. Du darfst
+dein Training streamen und Spielaufnahmen veröffentlichen.
+
+Teile mit anderen bitte den Downloadlink des Herausgebers. Das Weiterverbreiten
+der JAR oder von bearbeiteten Fassungen, eigene Downloadangebote, der Verkauf
+und die Übernahme von Mod-Code in andere Veröffentlichungen bedürfen der
+ausdrücklichen Erlaubnis des jeweiligen Rechteinhabers.
+
+Diese Bedingungen gelten für die eigenen Bestandteile von MacherBot.
+Rechte Dritter und gesetzlich zwingende Nutzungsbefugnisse bleiben unberührt.
+Die Standardkits orientieren sich an den veröffentlichten Inventaren von
+PvPPrac (https://pvpprac.net/api/kits).
+
+MacherBot ist ein unabhängiges Community-Projekt. Kein offizielles
+Minecraft-Produkt. Weder von Mojang noch von Microsoft genehmigt oder mit
+ihnen verbunden.

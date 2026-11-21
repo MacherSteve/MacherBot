@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "de.pvptrainer.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": ["KitInventoryMixin", "KitUseMixin", "KitLivingMixin", "KitAdvancementMixin"],
+  "injectors": {"defaultRequire": 1}
+}

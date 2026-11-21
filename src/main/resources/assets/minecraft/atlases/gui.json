@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "minecraft:block/fire_0",
+      "sprite": "pvptrainer:hud/record_fire"
+    }
+  ]
+}

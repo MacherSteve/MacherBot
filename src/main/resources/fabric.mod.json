@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "macherbot",
+  "provides": ["pvptrainer"],
+  "version": "1.11.9",
+  "name": "MacherBot",
+  "description": "PvP-Training für Crystal, Mace, Sword und UHC in deiner Einzelspielerwelt. Unabhängige Community-Mod ohne Verbindung zu Mojang oder Microsoft.",
+  "authors": ["MacherBot"],
+  "contact": {"email": "kontakt@macher.gg"},
+  "license": "LicenseRef-MacherBot",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["de.pvptrainer.TrainerClient", "de.pvptrainer.OutcomeOverlay"]
+  },
+  "mixins": ["pvp-trainer.tactics.mixins.json", "pvp-trainer.kits.mixins.json", "pvp-trainer.arena.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "26.2",
+    "java": ">=25",
+    "fabric-api": ">=0.161.0"
+  }
+}
