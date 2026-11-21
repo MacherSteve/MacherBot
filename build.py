@@ -120,6 +120,7 @@ def run_unit_tests(javac: Path, java: Path, main_classes: Path, libs: list[str])
         run_cp = os.pathsep.join([test_classes.as_posix(), *cp])
         proc = subprocess.run(
             [str(java), "-ea", "-cp", run_cp, "de.pvptrainer.MacherBotUnitTests"],
+            cwd=work,
             capture_output=True,
         )
         stdout = proc.stdout.decode("utf-8", errors="replace")

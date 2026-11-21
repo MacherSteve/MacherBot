@@ -7,14 +7,14 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
-final class ObsidianEnclosure {
+public final class ObsidianEnclosure {
     private static final double HALF_WIDTH = .3;
     private static final double CRAWL_HEIGHT = .6;
     private static final double CROUCH_HEIGHT = 1.5;
     private static final double JUMP_RISE = 1.252;
     private static final double EPS = 1e-6;
 
-    static boolean closed(Level level, BlockPos feet) {
+    public static boolean closed(Level level, BlockPos feet) {
         List<AABB> floor = new ArrayList<>();
         addShape(level, feet.below(), floor);
         List<AABB> roof = new ArrayList<>();

@@ -17,7 +17,7 @@ Eigenständiges Git-Repository für die Fabric-Mod **MacherBot** (Minecraft Java
   - `mixin/` – Vereinheitlichtes Mixin-Paket (alle 33 Mixins, gruppiert in `pvp-trainer.{arena,kits,tactics}.mixins.json`)
 - `src/main/resources/` – `fabric.mod.json` (Single Source of Truth für die Version), Mixin-Konfigurationen, Standardkits (`assets/pvptrainer/kits.json`), Sprache, Texturen, Arena-Dimension
 - `src/test/java/de/pvptrainer/` – schnelle Offline-Unit-Tests ohne Minecraft-Start (`MacherBotUnitTests`)
-- `tests/ingame/` – zentrale In-Game-Regressionssuite (`run_ingame.py`, `SmokeProbe.java`, `CobwebProbe.java`) für isolierte und Modpack-Profile
+- `tests/ingame/` – zentrale In-Game-Regressionssuite (`run_ingame.py`, `SmokeProbe.java`, `CobwebProbe.java`, `ObiProbe.java`, `RecoveryProbe.java`) für isolierte und Modpack-Profile
 - `build.py` – reproduzierbarer Offline-Build (feste ZIP-Zeitstempel, automatische JDK-25-Suche, Mixin-/Entrypoint-Prüfung, bündelt `../../Analysen/HT1-Testplan-1.7.html`)
 - `Bibliotheken/` – lokale Offline-Bibliotheken (via `.gitignore` bewusst außerhalb von Git)
 
