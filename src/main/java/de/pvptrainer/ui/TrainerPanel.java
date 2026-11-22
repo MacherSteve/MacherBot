@@ -94,6 +94,10 @@ abstract class TrainerPanel extends Screen {
       return true;
    }
 
+   int headerRightMargin() {
+      return 24;
+   }
+
    int accent() {
       return -31624;
    }
@@ -164,8 +168,9 @@ abstract class TrainerPanel extends Screen {
 
       var1.text(this.font, var6, var7, var5, -593428, false);
       int var8 = var7 + this.font.width(var6) + 10;
-      if (this.right - 24 - var8 > 28) {
-         this.line(var1, this.subtitle, var8, var5, this.right - 24 - var8, -3819081);
+      int rightLimit = this.right - this.headerRightMargin();
+      if (rightLimit - var8 > 28) {
+         this.line(var1, this.subtitle, var8, var5, rightLimit - var8, -3819081);
       }
 
       this.content(var1);

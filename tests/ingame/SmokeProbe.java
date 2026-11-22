@@ -7,6 +7,9 @@ import de.pvptrainer.arena.TrainingArena;
 import de.pvptrainer.drill.Drill;
 import de.pvptrainer.kits.TrainingPreset;
 import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.progress.UpdateChecker;
+import de.pvptrainer.ui.TrainingScreen;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -131,6 +134,37 @@ public class SmokeProbe implements ClientModInitializer {
                         String content = Files.readString(updated, StandardCharsets.UTF_8);
                         check(!content.contains("VERALTET") && content.contains("HT1"), "CalibrationPlan did not replace stale file");
                         log("PASS CalibrationPlan replaced stale HT1-Testplan with bundled version");
+
+                        // Verify UpdateChecker offline safety + TrainingScreen header badge rendering
+                        check(UpdateChecker.available() == null, "unexpected update available in offline sandbox");
+                        var mockUpdate = new UpdateChecker.UpdateInfo(
+                            expectedVersion,
+                            "99.0.0",
+                            URI.create("https://github.com/MacherSteve/MacherBot/releases/tag/v99.0.0"),
+                            "Test-Release-Hinweis"
+                        );
+                        UpdateChecker.setForTesting(mockUpdate);
+                        var uiCheck = new java.util.concurrent.CompletableFuture<Boolean>();
+                        Minecraft.getInstance().execute(() -> {
+                            try {
+                                var mc = Minecraft.getInstance();
+                                var screen = new TrainingScreen();
+                                mc.gui.setScreen(screen);
+                                boolean foundBadge = screen.children().stream().anyMatch(
+                                    child -> child instanceof net.minecraft.client.gui.components.AbstractWidget w
+                                        && w.getMessage().getString().contains("Update 99.0.0")
+                                );
+                                mc.gui.setScreen(null);
+                                UpdateChecker.clear();
+                                uiCheck.complete(foundBadge);
+                            } catch (Throwable err) {
+                                UpdateChecker.clear();
+                                uiCheck.completeExceptionally(err);
+                            }
+                        });
+                        check(Boolean.TRUE.equals(uiCheck.get(5, java.util.concurrent.TimeUnit.SECONDS)),
+                            "TrainingScreen did not render Update 99.0.0 header badge");
+                        log("PASS UpdateChecker offline-safe and TrainingScreen update badge verified");
                     }
                     int i = scene / 2;
                     var d = DRILLS[i];

@@ -7,6 +7,7 @@ import de.pvptrainer.kits.KitLoadout;
 import de.pvptrainer.TrainerClient;
 import de.pvptrainer.kits.TrainingPreset;
 import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.TrainingStatus;
 
 import java.util.LinkedHashMap;
@@ -19,6 +20,7 @@ import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModMetadata;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
@@ -33,6 +35,8 @@ public final class TrainingScreen extends TrainerPanel {
    private int statusY;
    private boolean showStatus;
    private DrillHistory.Result shownFailure;
+   private UpdateChecker.UpdateInfo shownUpdate;
+   private int updateButtonWidth;
 
    public TrainingScreen() {
       super(null, releaseTitle(), TrainerClient.selected().mode());
@@ -49,6 +53,11 @@ public final class TrainingScreen extends TrainerPanel {
       } else {
          return super.keyPressed(var1);
       }
+   }
+
+   @Override
+   int headerRightMargin() {
+      return this.updateButtonWidth > 0 ? 24 + this.updateButtonWidth + this.gap : 24;
    }
 
    @Override
@@ -77,6 +86,30 @@ public final class TrainingScreen extends TrainerPanel {
       this.showStatus = hasStatus() && this.panelHeight >= (wind ? 228 : 192);
       this.shownFailure = this.latestFailure(var1);
       this.subtitle = !this.available ? "Vorschau" : (this.running ? (var1.waitingForStart() ? "Startbereit" : "Training aktiv") : "");
+      this.shownUpdate = UpdateChecker.available();
+      if (this.shownUpdate != null) {
+         UpdateChecker.UpdateInfo update = this.shownUpdate;
+         String label = "Update " + update.latestVersion() + " ↗";
+         int btnWidth = Math.min(132, Math.max(76, this.font.width(label) + 12));
+         this.updateButtonWidth = btnWidth;
+         TrainerPanel.Action updateAction = this.action(
+            this.right - 19 - this.gap - btnWidth,
+            this.top + 5,
+            btnWidth,
+            16,
+            label,
+            TrainerPanel.Style.SELECTED,
+            () -> ConfirmLinkScreen.confirmLinkNow(this, update.downloadUri(), true)
+         );
+         String tip = "Neue MacherBot-Version " + update.latestVersion() + " verfügbar (installiert: " + update.currentVersion() + ")";
+         if (!update.summary().isEmpty()) {
+            tip += "\n" + update.summary();
+         }
+         tip += "\nKlicken zum Öffnen der Download-Seite.";
+         updateAction.tip(tip);
+      } else {
+         this.updateButtonWidth = 0;
+      }
       int var2 = this.panelHeight < 175 ? 18 : 22;
       TrainingSettings.Mode[] var6;
       int var5 = (var6 = TrainingSettings.Mode.values()).length;
@@ -314,6 +347,7 @@ public final class TrainingScreen extends TrainerPanel {
          || this.waiting != TrainerClient.status().waitingForStart()
          || this.available != TrainerClient.available()
          || !Objects.equals(this.shownFailure, this.latestFailure(TrainerClient.status()))
+         || !Objects.equals(this.shownUpdate, UpdateChecker.available())
          || this.showStatus != (hasStatus() && this.panelHeight >= 192)) {
          this.refresh();
       }

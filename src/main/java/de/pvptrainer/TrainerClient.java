@@ -10,6 +10,7 @@ import de.pvptrainer.kits.TrainingProfiles;
 import de.pvptrainer.ui.TrainingScreen;
 import de.pvptrainer.session.TrainingSession;
 import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.TrainingStatus;
 
 import com.mojang.logging.LogUtils;
@@ -53,6 +54,7 @@ public final class TrainerClient implements ClientModInitializer {
       TrainingArena.register();
       DrillEvents.register();
       TrainingCrystalItem.register();
+      UpdateChecker.checkAsync();
       ServerLifecycleEvents.SERVER_STARTED.register((ServerStarted)var0 -> world = new TrainerClient.HostedWorld(var0, new TrainingSession()));
       ServerTickEvents.END_SERVER_TICK.register((EndTick)var0 -> {
          TrainerClient.HostedWorld var1x = world;
@@ -77,6 +79,10 @@ public final class TrainerClient implements ClientModInitializer {
          }
       });
       ClientTickEvents.END_CLIENT_TICK.register((net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.EndTick)var1x -> {
+         if (var1x.player != null) {
+            UpdateChecker.announceIfReady(var1x.player);
+         }
+
          while (restartKey.consumeClick()) {
             if (var1x.player != null && var1x.gui.screen() == null) {
                restart();

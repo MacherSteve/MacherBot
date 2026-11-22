@@ -1,5 +1,6 @@
 package de.pvptrainer;
 
+import com.sun.net.httpserver.HttpServer;
 import de.pvptrainer.analytics.BotArchive;
 import de.pvptrainer.analytics.BotStatistics;
 import de.pvptrainer.analytics.BotTelemetry;
@@ -11,7 +12,10 @@ import de.pvptrainer.drill.WindHeight;
 import de.pvptrainer.kits.TrainingProfiles;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.progress.TrainingProgress;
+import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.CobwebFlightTracker;
+import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +38,8 @@ public final class MacherBotUnitTests {
         testCobwebFlightTrackerLogic();
         testTotemDefenseStates();
         testSlamAndDoubleClickWindows();
+        testUpdateCheckerParsingAndSecurity();
+        testUpdateCheckerLocalHttpRoundTrip();
         System.out.println("PASS " + passed + " Unit-Tests erfolgreich.");
     }
 
@@ -262,6 +268,97 @@ public final class MacherBotUnitTests {
             slam.shieldStun(25);
             check(slam.shieldWindowOpen(), "Schildfenster nach Axt-Stun offen");
             check(slam.timingHint() == null, "Axt-Stun loescht vorherigen Timing-Hinweis");
+        });
+    }
+
+    private static void testUpdateCheckerParsingAndSecurity() throws Exception {
+        run("UpdateChecker: SemVer, GitHub/latest.json/Modrinth-Formate und URI-Schutz", () -> {
+            check(UpdateChecker.isNewer("1.12.1", "1.12.0"), "Patch-Bump muss neuer sein");
+            check(UpdateChecker.isNewer("1.12.10", "1.12.2"), "Numerischer Vergleich 10 > 2");
+            check(UpdateChecker.isNewer("v1.13.0+26.2", "1.12.0"), "v-Praefix und +mc-Suffix");
+            check(UpdateChecker.isNewer("1.12.1", "1.12.1-beta.1"), "Release neuer als Beta");
+            check(!UpdateChecker.isNewer("1.12.0", "1.12.0"), "Gleiche Version nicht neuer");
+            check(!UpdateChecker.isNewer("1.11.9", "1.12.0"), "Aeltere Version nicht neuer");
+            check(!UpdateChecker.isNewer("1.13.0", "unknown"), "Unbekannte lokale Version loest keinen Alarm aus");
+
+            // GitHub Releases API
+            String ghJson = """
+                {"tag_name":"v1.13.0","name":"MacherBot 1.13.0","html_url":"https://github.com/MacherSteve/MacherBot/releases/tag/v1.13.0",
+                 "body":"## Änderungen\\n- Neuer Update-Hinweis im Hauptmenü\\n- Zweite Zeile","draft":false,"prerelease":false}
+                """;
+            var gh = UpdateChecker.parseResponse(ghJson, "1.12.0", false);
+            check(gh != null && "1.13.0".equals(gh.latestVersion()), "GitHub-Release erkannt");
+            check("Neuer Update-Hinweis im Hauptmenü".equals(gh.summary()), "Erste Patchnote-Zeile extrahiert: " + gh.summary());
+
+            // Draft / Prerelease ignorieren
+            String ghPre = """
+                {"tag_name":"v1.14.0","html_url":"https://github.com/MacherSteve/MacherBot/releases/tag/v1.14.0","draft":false,"prerelease":true}
+                """;
+            check(UpdateChecker.parseResponse(ghPre, "1.12.0", false) == null, "Prerelease ignorieren");
+
+            // Einfaches latest.json + Minecraft-Versionsfilter
+            String simpleOk = """
+                {"version":"1.12.5","minecraft":"26.2","url":"https://example.com/macherbot","notes":"Stabilitaetsupdate"}
+                """;
+            var simple = UpdateChecker.parseResponse(simpleOk, "1.12.0", false);
+            check(simple != null && "1.12.5".equals(simple.latestVersion()) && "Stabilitaetsupdate".equals(simple.summary()), "latest.json erkannt");
+            String simpleWrongMc = """
+                {"version":"2.0.0","minecraft":"27.0","url":"https://example.com/macherbot"}
+                """;
+            check(UpdateChecker.parseResponse(simpleWrongMc, "1.12.0", false) == null, "Falsche MC-Version ignorieren");
+
+            // Modrinth Versions API Array
+            String modrinth = """
+                [
+                  {"id":"b1","project_id":"macherbot","version_number":"1.14.0-beta.1","version_type":"beta","game_versions":["26.2"]},
+                  {"id":"ver42","project_id":"macherbot","version_number":"1.13.1+26.2","version_type":"release","game_versions":["26.2"],"changelog":"- Modrinth Release"}
+                ]
+                """;
+            var mr = UpdateChecker.parseResponse(modrinth, "1.12.0", false);
+            check(mr != null && "1.13.1".equals(mr.latestVersion()), "Modrinth-Release erkannt");
+            check("https://modrinth.com/mod/macherbot/version/ver42".equals(mr.downloadUri().toString()), "Modrinth-URL gebaut");
+
+            // Sicherheitspruefung gegen unsichere URI-Schemas
+            check(UpdateChecker.parseSafeUri("file:///C:/Windows/System32/cmd.exe", false) == null, "file:// blockiert");
+            check(UpdateChecker.parseSafeUri("javascript:alert(1)", false) == null, "javascript: blockiert");
+            check(UpdateChecker.parseSafeUri("http://example.com/dl.jar", false) == null, "Remote http:// blockiert");
+            check(UpdateChecker.parseSafeUri("http://127.0.0.1:8080/latest", true) != null, "Lokaler Test-Loopback erlaubt");
+            String evilUrl = """
+                {"tag_name":"v9.9.9","html_url":"file:///C:/Windows/cmd.exe","draft":false,"prerelease":false}
+                """;
+            check(UpdateChecker.parseResponse(evilUrl, "1.12.0", false) == null, "Unsichere html_url muss verworfen werden");
+        });
+    }
+
+    private static void testUpdateCheckerLocalHttpRoundTrip() throws Exception {
+        run("UpdateChecker: Lokaler HTTP-Roundtrip (200 OK und 404)", () -> {
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            try {
+                byte[] payload = """
+                    {"tag_name":"v1.13.0","html_url":"https://github.com/MacherSteve/MacherBot/releases/tag/v1.13.0","body":"- Live HTTP Test","draft":false,"prerelease":false}
+                    """.getBytes(StandardCharsets.UTF_8);
+                server.createContext("/releases/latest", ex -> {
+                    ex.getResponseHeaders().set("Content-Type", "application/json");
+                    ex.sendResponseHeaders(200, payload.length);
+                    try (var out = ex.getResponseBody()) {
+                        out.write(payload);
+                    }
+                });
+                server.createContext("/missing", ex -> {
+                    ex.sendResponseHeaders(404, -1);
+                    ex.close();
+                });
+                server.start();
+
+                int port = server.getAddress().getPort();
+                var ok = UpdateChecker.fetchFrom(URI.create("http://127.0.0.1:" + port + "/releases/latest"), "1.12.0", true);
+                check(ok != null && "1.13.0".equals(ok.latestVersion()) && "Live HTTP Test".equals(ok.summary()), "HTTP 200 Roundtrip erfolgreich");
+
+                var missing = UpdateChecker.fetchFrom(URI.create("http://127.0.0.1:" + port + "/missing"), "1.12.0", true);
+                check(missing == null, "HTTP 404 liefert null ohne Fehler");
+            } finally {
+                server.stop(0);
+            }
         });
     }
 

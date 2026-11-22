@@ -4,6 +4,7 @@ import de.pvptrainer.drill.DrillOptions;
 import de.pvptrainer.progress.HudPreferences;
 import de.pvptrainer.TrainerClient;
 import de.pvptrainer.progress.TrainingProgress;
+import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.kits.TrainingSettings;
 
 import java.util.ArrayList;
@@ -65,6 +66,12 @@ final class TrainingOptionsScreen extends TrainerPanel {
          var15.add(new Option("Hinweise (global)", on(HudPreferences.hints()), () -> {
             HudPreferences.toggleHints();
             if (!HudPreferences.hints()) TrainingProgress.hideResultToast();
+            this.refresh();
+         }));
+         var15.add(new Option("Update-Hinweise", on(HudPreferences.updateCheck()), () -> {
+            HudPreferences.toggleUpdateCheck();
+            if (HudPreferences.updateCheck()) UpdateChecker.checkAsync();
+            else UpdateChecker.clear();
             this.refresh();
          }));
       }
@@ -160,6 +167,8 @@ final class TrainingOptionsScreen extends TrainerPanel {
          );
          if (var12.label().equals("Hinweise (global)")) {
             tile.tip("Übungstipps und Einblendungen oben rechts für alle Modi und Welten dieses Profils.");
+         } else if (var12.label().equals("Update-Hinweise")) {
+            tile.tip("Prüft beim Spielstart einmalig auf neue MacherBot-Releases (ohne automatischen Download).");
          } else if (var12.label().equals(DrillOptions.Field.PEARL_CATCH_ONLY.label())) {
             tile.tip("Nur eine in der Luft mit deiner eigenen Windladung gefangene Perle teleportiert dich.");
          } else if (var12.label().equals(DrillOptions.Field.TOTEMS.label())) {

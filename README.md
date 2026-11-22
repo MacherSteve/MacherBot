@@ -11,7 +11,7 @@ Eigenständiges Git-Repository für die Fabric-Mod **MacherBot** (Minecraft Java
   - `drill/` – 32 Übungen, Optionen & zerlegte Wertungs-Tracker (`Drill`, `DrillOptions`, `DrillAttempt`, `TotemDefenseTracker`, `UhcUtilityTracker`, `SlamWindowTracker`, `DrillEvents`, `ObsidianEnclosure`, `WebAim`, `WindHeight`, `WindPearlCatch`)
   - `combat/` – Kampf-KI, Taktik, Ausrüstung und Crystal-Entitäten (`TrainingTactics`, `BotEquipment`, `SwordDuel`, `MaceDuel`, `Crystal*`, `Uhc*`, `Duel*`, `TrainingCrystal*`)
   - `kits/` – Kit-Bibliothek, Spielerinventar-Backup & Profile (`KitLibrary`, `TrainingKit`, `KitLoadout`, `MacherItems`, `TrainingSettings`, `TrainingPreset`, `TrainingProfiles`)
-  - `progress/` – Spieler-Fortschritt (`pvptrainer-progress/*.jsonl`), Serien & HUD-Einstellungen (`TrainingProgress`, `DrillHistory`, `HudPreferences`)
+  - `progress/` – Spieler-Fortschritt (`pvptrainer-progress/*.jsonl`), Serien, HUD-Einstellungen & In-Game-Update-Hinweis (`TrainingProgress`, `DrillHistory`, `HudPreferences`, `UpdateChecker`)
   - `analytics/` – Bot-Telemetrie (`pvptrainer-bot/*.jsonl`), Statistik, CSV-Export & Testplan (`BotTelemetry`, `BotArchive`, `BotStatistics`, `CalibrationPlan`)
   - `ui/` – Menüs, Kit-Editor, Statistik-Ansichten und HUD-Overlays (`TrainingScreen`, `ProgressScreen`, `BotAnalysisScreen`, `StreakHud`, `OutcomeOverlay`, …)
   - `mixin/` – Vereinheitlichtes Mixin-Paket (alle 33 Mixins, gruppiert in `pvp-trainer.{arena,kits,tactics}.mixins.json`)

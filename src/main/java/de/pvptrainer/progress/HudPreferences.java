@@ -1,6 +1,7 @@
 package de.pvptrainer.progress;
 
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -10,7 +11,13 @@ import org.slf4j.LoggerFactory;
 
 public final class HudPreferences {
     private static final Path FILE = resolveFile();
-    private static volatile boolean showHints = read();
+    private static volatile boolean showHints = true;
+    private static volatile boolean checkUpdates = true;
+    private static volatile String updateFeedUrl = "";
+
+    static {
+        load(FILE);
+    }
 
     private static Path resolveFile() {
         try {
@@ -21,33 +28,76 @@ public final class HudPreferences {
         }
     }
 
-    public static boolean hints() { return showHints; }
+    public static boolean hints() {
+        return showHints;
+    }
 
-    private static boolean read() {
-        if (FILE == null || !Files.isRegularFile(FILE)) return true;
+    public static boolean updateCheck() {
+        return checkUpdates;
+    }
+
+    public static String updateFeedUrl() {
+        return updateFeedUrl;
+    }
+
+    static synchronized void load(Path path) {
+        showHints = true;
+        checkUpdates = true;
+        updateFeedUrl = "";
+        if (path == null || !Files.isRegularFile(path)) {
+            return;
+        }
         var values = new Properties();
-        try (var reader = Files.newBufferedReader(FILE)) {
+        try (var reader = Files.newBufferedReader(path)) {
             values.load(reader);
-            return !"false".equalsIgnoreCase(values.getProperty("showHints", values.getProperty("showResultToasts")));
+            showHints = !"false".equalsIgnoreCase(values.getProperty("showHints", values.getProperty("showResultToasts")));
+            checkUpdates = !"false".equalsIgnoreCase(values.getProperty("checkUpdates"));
+            updateFeedUrl = values.getProperty("updateFeedUrl", "").trim();
         } catch (IOException | IllegalArgumentException error) {
             LoggerFactory.getLogger("pvptrainer").warn("HUD-Einstellungen konnten nicht gelesen werden", error);
-            return true;
         }
     }
 
-    public static void toggleHints() {
-        if (FILE == null) {
-            showHints = !showHints;
-            return;
+    public static synchronized void toggleHints() {
+        boolean nextHints = !showHints;
+        if (persist(FILE, nextHints, checkUpdates, updateFeedUrl)) {
+            showHints = nextHints;
         }
-        var temporary = FILE.resolveSibling("hud.properties.tmp");
+    }
+
+    public static synchronized void toggleUpdateCheck() {
+        boolean nextUpdates = !checkUpdates;
+        if (persist(FILE, showHints, nextUpdates, updateFeedUrl)) {
+            checkUpdates = nextUpdates;
+        }
+    }
+
+    static boolean persist(Path path, boolean hints, boolean updates, String feedUrl) {
+        if (path == null) {
+            return true;
+        }
+        var values = new Properties();
+        values.setProperty("showHints", Boolean.toString(hints));
+        values.setProperty("checkUpdates", Boolean.toString(updates));
+        if (feedUrl != null && !feedUrl.isBlank()) {
+            values.setProperty("updateFeedUrl", feedUrl.trim());
+        }
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
         try {
-            Files.createDirectories(FILE.getParent());
-            Files.writeString(temporary, "showHints=" + !showHints + "\n");
-            Files.move(temporary, FILE, StandardCopyOption.REPLACE_EXISTING);
-            showHints = !showHints;
+            Files.createDirectories(path.getParent());
+            try (Writer writer = Files.newBufferedWriter(temporary)) {
+                values.store(writer, null);
+            }
+            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+            return true;
         } catch (IOException error) {
             LoggerFactory.getLogger("pvptrainer").warn("HUD-Einstellungen konnten nicht gespeichert werden", error);
+            return false;
+        } finally {
+            try {
+                Files.deleteIfExists(temporary);
+            } catch (IOException ignored) {
+            }
         }
     }
 }
