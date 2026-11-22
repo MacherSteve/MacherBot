@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "macherbot",
   "provides": ["pvptrainer"],
-  "version": "1.12.0",
+  "version": "1.12.1",
   "name": "MacherBot",
   "description": "PvP-Training für Crystal, Mace, Sword und UHC in deiner Einzelspielerwelt. Unabhängige Community-Mod ohne Verbindung zu Mojang oder Microsoft.",
   "authors": ["MacherBot"],
