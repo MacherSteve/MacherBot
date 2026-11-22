@@ -97,7 +97,7 @@ public final class DuelFootwork {
         if (settings.mode() == TrainingSettings.Mode.UHC && previous != null)
             uhcDistance = tactics.uhcSpacing(bot, player, distance);
         double spacing = switch (settings.mode()) {
-            case CRYSTAL -> 2.65;
+            case CRYSTAL, HUGOSMP -> 2.65;
             case UHC -> uhcDistance;
             default -> 2.0;
         };

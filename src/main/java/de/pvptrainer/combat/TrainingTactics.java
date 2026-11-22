@@ -79,7 +79,7 @@ public final class TrainingTactics {
    public TrainingTactics(BotEquipment var1, DrillOptions var2) {
       this.equipment = var1;
       this.options = var2;
-      this.nextAttack = var2.reactionTicks();
+      this.nextAttack = (var2.drill() == Drill.JUMP_RESET || var2.drill() == Drill.HIT_SELECT) ? 0 : var2.reactionTicks();
       this.pressure = var2.drill().totemDefense() ? new CrystalPressure(var1, var2) : null;
    }
 
@@ -131,13 +131,20 @@ public final class TrainingTactics {
          if (this.options.drill().needsSwordAttack()) {
             boolean var8 = withinReach(var2, var3)
                && (var4.mode() != TrainingSettings.Mode.UHC || uhcDefense.obstructingWeb(var1, var2, var3) == null);
-            if (!var8) {
+            boolean jumpReset = this.options.drill() == Drill.JUMP_RESET;
+            double cueRange = meleeReach(var2) + 0.95;
+            boolean nearCue = jumpReset
+               ? withinReach(var2, var3, cueRange)
+               : var8;
+            if (!nearCue) {
                this.swingAnnounced = false;
             }
 
-            if (this.options.usesJumpCountdown() && var8 && !this.swingAnnounced && var5.time() >= this.nextAttack - 3) {
+            if (this.options.usesJumpCountdown() && nearCue && !this.swingAnnounced && var5.time() >= this.nextAttack - 3) {
                this.swingAnnounced = true;
-               this.nextAttack = var5.time() + 3;
+               if (!jumpReset) {
+                  this.nextAttack = var5.time() + 3;
+               }
                if (this.options.hints()) {
                   var5.announceSwing();
                   var3.sendOverlayMessage(Component.literal("Schlag in 3 Ticks"));
@@ -165,7 +172,7 @@ public final class TrainingTactics {
          // The fighter can see a wall going up before they are ready to act.
          boolean acquired = reads.acquired(skill);
          if (var4.mode() == TrainingSettings.Mode.UHC && acquired) uhcUtility.observe(var3,var5);
-         if (var4.mode() == TrainingSettings.Mode.CRYSTAL) {
+         if (var4.mode() == TrainingSettings.Mode.CRYSTAL || var4.mode() == TrainingSettings.Mode.HUGOSMP) {
             crystalPursuit.observe(var2, var3, var2.hasLineOfSight(var3) && uhcDefense.facing(var2,var3));
             if (acquired) crystalCover.observe(var3);
          }
@@ -175,7 +182,7 @@ public final class TrainingTactics {
             if (!options.holdShield()) {
                boolean shot = reads.bow(skill);
                switch (var4.mode()) {
-                  case CRYSTAL -> crystalGuard.tick(var1,var2,var3,equipment,shot);
+                  case CRYSTAL, HUGOSMP -> crystalGuard.tick(var1,var2,var3,equipment,shot);
                   case MACE -> maceDuel.rangedGuard(var1,var2,var3,equipment,shot);
                   case UHC -> {
                      if (shot && var2.distanceToSqr(var3) <= 324 && !withinReach(var2,var3)) uhcDefense.guard(var2,equipment);
@@ -196,7 +203,7 @@ public final class TrainingTactics {
          case HARD -> 14;
       };
       switch (var4.mode()) {
-         case CRYSTAL:
+         case CRYSTAL, HUGOSMP:
             if (this.options.drill()==Drill.DUEL && var5>=options.reactionTicks() && !options.holdShield()
                   && maceDuel.air(var1,var2,var3,equipment,var5,var4,options,skill,reads,duelWeapon)) break;
             this.crystal(var1, var2, var3, var6, var5, skill);
@@ -219,7 +226,7 @@ public final class TrainingTactics {
 
    public interface MeleeReach { double meleeReach(); }
 
-   static double meleeReach(LivingEntity actor) {
+   public static double meleeReach(LivingEntity actor) {
       return actor instanceof MeleeReach policy ? policy.meleeReach() : 3.0;
    }
 

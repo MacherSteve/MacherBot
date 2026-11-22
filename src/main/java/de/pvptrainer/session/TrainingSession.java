@@ -1,5 +1,6 @@
 package de.pvptrainer.session;
 import de.pvptrainer.arena.ArenaRound;
+import de.pvptrainer.arena.ForgeArena;
 import de.pvptrainer.combat.BotEquipment;
 import de.pvptrainer.analytics.BotTelemetry;
 import de.pvptrainer.drill.Drill;
@@ -17,6 +18,7 @@ import de.pvptrainer.progress.TrainingProgress;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.combat.TrainingTactics;
 import de.pvptrainer.drill.WindHeight;
+import de.pvptrainer.mixin.AttackStrengthAccess;
 
 import java.util.List;
 import java.util.Objects;
@@ -115,6 +117,7 @@ public final class TrainingSession {
    private double obiBestSeconds;
    final CobwebFlightTracker cobwebFlight = new CobwebFlightTracker();
    final WindTargetController windTarget = new WindTargetController();
+   final MaceCounterController maceCounter = new MaceCounterController();
 
    void rememberStartedRound() {
       this.lastPlayed = this.selection;
@@ -224,7 +227,10 @@ public final class TrainingSession {
          this.refillRecoverySpot = this.options.drill().totemDefense() ? var2 : null;
          var3.snapTo(var2, var1.getYRot() + 180.0F, 0.0F);
          var3.setNoGravity(options.drill() != Drill.WIND_STUN_SLAM);
-         var3.setOnGround(this.options.slamScene() == DrillOptions.SlamScene.GROUND_LOCK || maceCenter != null && options.botElevation() == 0);
+         boolean botGrounded = this.options.slamScene() == DrillOptions.SlamScene.GROUND_LOCK
+            || maceCenter != null && options.botElevation() == 0
+            || !this.arena.noBlockCollision(var3, var3.getBoundingBox().move(0.0, -0.05, 0.0));
+         var3.setOnGround(botGrounded);
          var3.lookAt(Anchor.EYES, var1.getEyePosition());
          var3.setYHeadRot(var3.getYRot());
          var3.setYBodyRot(var3.getYRot());
@@ -248,9 +254,14 @@ public final class TrainingSession {
          ArenaRound.staged(var1, this.bot, this.settings);
          this.keepBotLoaded();
          TrainingResources.begin(var1, var3, this.options, this.settings.mode());
-         if (this.options.drill() == Drill.STUN_SLAM) {
+         if (this.options.drill() == Drill.STUN_SLAM
+            || this.options.drill() == Drill.CORNER_WEB_DTAP
+            || this.options.drill() == Drill.SHIELD_DRAIN) {
             BlocksAttacks shield = var3.getItemInHand(this.equipment.shieldHand).get(DataComponents.BLOCKS_ATTACKS);
             if (shield != null) var3.pauseShield(0, shield, true);
+         }
+         if (this.options.drill() == Drill.MACE_COUNTER_DTAP) {
+            this.maceCounter.reset(this.options);
          }
          this.roundStartHealth = var1.getHealth();
          this.round++;
@@ -270,7 +281,7 @@ public final class TrainingSession {
          }
 
          this.attempt = new DrillAttempt(this.options, var5, this.round - 1);
-         if (options.drill() == Drill.OBI_TRAP) {
+         if (options.drill().isObiTrap()) {
             obiBestSeconds = TrainingProgress.bestTrapTime(ownerId, historyKey, history.get(historyKey), options.tickRate());
          }
          if (options.drill() == Drill.LOW_WEB_SMASH) TrainingProgress.endAirChain(ownerId, historyKey);
@@ -367,7 +378,8 @@ public final class TrainingSession {
                if (this.refillRecoverySpot != null
                   && this.bot != null
                   && !this.bot.isRemoved()
-                  && (this.bot.getY() < 60.0 || this.bot.distanceToSqr(this.refillRecoverySpot) > 3600.0)) {
+                  && (this.bot.getY() < ForgeArena.minFloor(this.options.largeArena())
+                     || this.bot.distanceToSqr(this.refillRecoverySpot) > (this.options.largeArena() ? 14400.0 : 3600.0))) {
                   this.bot.recoverRefillTarget();
                }
 
@@ -392,6 +404,7 @@ public final class TrainingSession {
                         }
 
                         var4.setDeltaMovement(Vec3.ZERO);
+                        ((AttackStrengthAccess) var4).pvptrainer$setAttackStrengthTicker(200);
                         if (++this.waitingTicks % 60 == 0) {
                            startPrompt(var4);
                         }
@@ -426,8 +439,12 @@ public final class TrainingSession {
                         if (!this.attempt.done()) {
                            this.steer(var4);
                            if (options.drill() == Drill.WIND_STUN_SLAM) tickWindTarget();
+                           if (options.drill() == Drill.MACE_COUNTER_DTAP) {
+                              maceCounter.tick(roundTick, arena, bot, var4, equipment, attempt);
+                           }
                            this.equipment.tick(this.bot, this.roundTick, Math.max(shieldReadyAt, windTarget.guardReadyAt()));
-                           if (!options.drill().centeredMaceDrill() && options.drill() != Drill.PERFECT_WIND_CHARGE && this.options.slamScene() == DrillOptions.SlamScene.FREE) {
+                           if (!options.drill().centeredMaceDrill() && options.drill() != Drill.PERFECT_WIND_CHARGE
+                              && options.drill() != Drill.MACE_COUNTER_DTAP && this.options.slamScene() == DrillOptions.SlamScene.FREE) {
                               this.tactics.practiceTick(this.arena, this.bot, var4, movementSettings, this.attempt);
                            }
                         }
@@ -563,7 +580,13 @@ public final class TrainingSession {
 
    boolean comboWeapon(ServerPlayer var1) {
       ItemStack var2 = var1.getMainHandItem();
-      return var2.is(ItemTags.SWORDS) || this.settings.mode() == TrainingSettings.Mode.CRYSTAL && var2.is(Items.TOTEM_OF_UNDYING);
+      if (var2.is(ItemTags.SWORDS)) return true;
+      if ((this.settings.mode() == TrainingSettings.Mode.CRYSTAL || this.settings.mode() == TrainingSettings.Mode.HUGOSMP)
+            && var2.is(Items.TOTEM_OF_UNDYING)) {
+         return true;
+      }
+      return this.options != null && this.options.drill() == Drill.MACE_COUNTER_DTAP
+         && (var2.is(ItemTags.AXES) || var2.is(Items.MACE));
    }
 
    public void attackCharge(ServerPlayer var1, Entity var2, float var3) {
@@ -648,8 +671,8 @@ public final class TrainingSession {
 
    public void sawPlayerObsidian(ServerPlayer player, BlockPos pos) {
       if (waitingForStart || !owns(player)) return;
-      if (options.drill() == Drill.OBI_TRAP) attempt.trapBlockPlaced(pos);
-      if (options.drill()==Drill.DUEL && settings.mode()==TrainingSettings.Mode.CRYSTAL)
+      if (options.drill().isObiTrap()) attempt.trapBlockPlaced(pos);
+      if (options.drill()==Drill.DUEL && (settings.mode()==TrainingSettings.Mode.CRYSTAL || settings.mode()==TrainingSettings.Mode.HUGOSMP))
          tactics.crystalCover.added(pos,bot);
    }
 
@@ -693,7 +716,7 @@ public final class TrainingSession {
       if (this.bot != null && this.attempt != null && var1.belongsTo(this.owner, this.bot)) {
          this.lastBotDamage = this.ownCrystalLoss = 0.0F;
          this.popsBeforeCrystal = this.pops;
-         this.targetInAirBeforeBlast = !this.bot.onGround() || !this.options.drill().requiresPopChain() && this.bot.getDeltaMovement().y > 0.02;
+         this.targetInAirBeforeBlast = !this.bot.onGround() || !this.options.drill().requiresAirPopChain() && this.bot.getDeltaMovement().y > 0.02;
          this.hurtWindowRemaining = Math.max(0, this.bot.invulnerableTime - 10);
          return this.hurtWindowRemaining == 0;
       } else {
@@ -765,6 +788,7 @@ public final class TrainingSession {
          var1.setNoGravity(false);
          var1.setDeltaMovement(Vec3.ZERO);
          var1.resetFallDistance();
+         ((AttackStrengthAccess) var1).pvptrainer$setAttackStrengthTicker(200);
          if (this.suspendedAt != null) {
             var1.setOnGround(false);
          }
@@ -780,6 +804,9 @@ public final class TrainingSession {
          this.bot.resetFallDistance();
          if (var4 == DrillOptions.SlamScene.PAIRED_FALL && options.drill() != Drill.WIND_STUN_SLAM) {
             this.bot.setOnGround(false);
+         } else if (options.drill() != Drill.WIND_STUN_SLAM) {
+            boolean botGrounded = !this.arena.noBlockCollision(this.bot, this.bot.getBoundingBox().move(0.0, -0.05, 0.0));
+            this.bot.setOnGround(botGrounded);
          }
 
          if (options.drill() == Drill.WIND_STUN_SLAM) previousRepetitionAt = secondaryPopAt = roundTick;
@@ -819,13 +846,17 @@ public final class TrainingSession {
 
       this.bot.setYHeadRot(this.bot.getYRot());
       this.bot.setYBodyRot(this.bot.getYRot());
+      if (this.options.drill() == Drill.MACE_COUNTER_DTAP && this.maceCounter.controlsMovement()) {
+         return;
+      }
       Vec3 var4 = this.options.drill().totemDefense() ? this.tactics.pursuitPoint(var1) : RoundPing.position(var1);
       Vec3 var5 = var4.subtract(this.bot.position());
       double var6 = var5.horizontalDistance();
+      boolean swordTimingDrill = this.options.drill() == Drill.JUMP_RESET || this.options.drill() == Drill.HIT_SELECT;
       double var8 = this.options.drill().totemDefense()
          ? 1.3
-         : 2.1;
-      var8 = Math.min(var8, options.botReach() - .2);
+         : (swordTimingDrill ? 2.72 : 2.1);
+      var8 = Math.min(var8, options.botReach() - (swordTimingDrill ? .12 : .2));
       double var10 = var6 > var8 + 0.25 ? 1 : 0;
       double var12 = 0.0;
       if (this.settings.movement() == TrainingSettings.Movement.STRAFE && var6 < var8 + 3.0) {
@@ -840,8 +871,11 @@ public final class TrainingSession {
          && (this.settings.movement() != TrainingSettings.Movement.STILL || this.options.drill().totemDefense());
       this.bot.zza = var16 ? (float)(var10 * Math.cos(var14) + var12 * Math.sin(var14)) : 0.0F;
       this.bot.xxa = var16 ? (float)(-var10 * Math.sin(var14) + var12 * Math.cos(var14)) : 0.0F;
-      if (this.options.drill().totemDefense()) this.bot.setSprinting(var16 && var10 > 0 && !this.bot.isUsingItem());
-      this.bot.setJumping(var16 && this.bot.horizontalCollision && Math.abs(this.bot.zza) + Math.abs(this.bot.xxa) > 0.1);
+      if (this.options.drill().totemDefense() || swordTimingDrill) {
+         this.bot.setSprinting(var16 && var10 > 0 && (!swordTimingDrill || var6 > options.botReach() + 0.45) && !this.bot.isUsingItem());
+      }
+      boolean continuousJump = this.options.botJump() && !DrillAttempt.inWeb(this.bot);
+      this.bot.setJumping(continuousJump || (var16 && this.bot.horizontalCollision && Math.abs(this.bot.zza) + Math.abs(this.bot.xxa) > 0.1));
    }
 
    private void refreshSeries() {
@@ -902,7 +936,7 @@ public final class TrainingSession {
 
    private void recordInterruption(String var1) {
       if (this.attempt != null && !this.saved) {
-         if (!waitingForStart && bot != null && options.drill() == Drill.OBI_TRAP && !attempt.done())
+         if (!waitingForStart && bot != null && options.drill().isObiTrap() && !attempt.done())
             attempt.checkObsidianTrap(bot.level(), bot.blockPosition());
          if (this.attempt.done()) {
             this.saveResult();
@@ -996,7 +1030,7 @@ public final class TrainingSession {
          this.options == null ? null : this.options.drill(),
          this.historyKey == null ? "" : this.historyKey,
          this.waitingForStart ? this.startToken : 0L,
-         ownerId != null && options != null && options.drill() == Drill.OBI_TRAP && attempt != null
+         ownerId != null && options != null && options.drill().isObiTrap() && attempt != null
             ? new TrainingStatus.ObiTimer(attempt.time(), options.tickRate(), obiBestSeconds,
                !waitingForStart && (!attempt.done() || attempt.won())) : null,
          windHeight == null ? 0 : windHeight.meters()
@@ -1038,6 +1072,7 @@ public final class TrainingSession {
          if (arena.getBlockState(web).is(Blocks.COBWEB)) arena.removeBlock(web, false);
       }
       windTarget.clear(arena);
+      maceCounter.clear();
       windHeight = null;
       endWebChain();
       maceCenter = null;

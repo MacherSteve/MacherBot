@@ -62,7 +62,7 @@ public final class TrainingScreen extends TrainerPanel {
 
    @Override
    int preferredWidth() {
-      return 446;
+      return 530;
    }
 
    @Override
@@ -113,14 +113,15 @@ public final class TrainingScreen extends TrainerPanel {
       int var2 = this.panelHeight < 175 ? 18 : 22;
       TrainingSettings.Mode[] var6;
       int var5 = (var6 = TrainingSettings.Mode.values()).length;
+      int topCols = var5 + 1;
 
       for (int var4 = 0; var4 < var5; var4++) {
          TrainingSettings.Mode var3 = var6[var4];
          int var7 = var3.ordinal();
          this.tile(
-               this.col(var7, 5),
+               this.col(var7, topCols),
                this.y,
-               this.cw(var7, 5),
+               this.cw(var7, topCols),
                var2,
                var3.label(),
                "",
@@ -135,7 +136,7 @@ public final class TrainingScreen extends TrainerPanel {
             .tip(var3.label() + (var3 == this.mode ? " ist ausgewählt" : " wählen"));
       }
 
-      TrainerPanel.Action kits = this.action(this.col(4, 5), this.y, this.cw(4, 5), var2,
+      TrainerPanel.Action kits = this.action(this.col(var5, topCols), this.y, this.cw(var5, topCols), var2,
          "Eigene Kits", TrainerPanel.Style.NORMAL, () -> this.open(new KitShelfScreen(this, this.mode, false)));
       kits.active = this.minecraft.level != null;
       kits.tip("Eigene Kits für alle Modi erstellen, bearbeiten und ausrüsten.");
@@ -148,7 +149,7 @@ public final class TrainingScreen extends TrainerPanel {
       int var8 = this.panelHeight < 190 ? 16 : 20;
       int var9 = var21 - var8 - this.gap;
       int var10 = this.y + var2 + this.gap;
-      boolean showPresets = var12 != Drill.LOW_WEB_SMASH && var12 != Drill.PERFECT_WIND_CHARGE;
+      boolean showPresets = !var12.hidesPresets();
       int firstRow = wind ? var9 - var8 - this.gap : var9;
       this.addRenderableWidget(new TrainingScreen.DrillCard(var10, (showPresets ? firstRow : var21) - var10 - this.gap, var12));
       if (showPresets) this.addProfiles(var11, firstRow, var8);

@@ -203,7 +203,8 @@ final class UhcUtility {
    }
 
    private static boolean allowed(BlockPos p) {
-      return Math.abs(p.getX())<=19 && Math.abs(p.getZ())<=19 && p.getY()>ForgeArena.FLOOR && p.getY()<ForgeArena.TOP;
+      int radius = ForgeArena.playRadius();
+      return Math.abs(p.getX()) <= radius && Math.abs(p.getZ()) <= radius && p.getY() > ForgeArena.minFloor() && p.getY() < ForgeArena.TOP;
    }
    private static boolean reachable(ServerLevel level, LivingEntity bot, BlockPos p, Vec3 point) {
       if (!allowed(p) || point.distanceToSqr(bot.getEyePosition())>4.5*4.5) return false;

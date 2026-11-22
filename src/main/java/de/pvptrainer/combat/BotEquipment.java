@@ -26,6 +26,7 @@ public final class BotEquipment {
    private final boolean practiceTotem;
    public final InteractionHand shieldHand;
    private ItemStack replacementShield = ItemStack.EMPTY;
+   private boolean postPopShieldActive;
    private final int[] refillAt = new int[InteractionHand.values().length];
    private int tick;
 
@@ -39,9 +40,16 @@ public final class BotEquipment {
          items.replaceAll(stack -> stack.is(Items.TOTEM_OF_UNDYING) ? ItemStack.EMPTY : stack);
       var totems = items.stream().filter(stack -> TrainingKit.usableTotems(stack) > 0).toList();
       practiceTotem = !totems.isEmpty() && var3.drill() != Drill.DUEL && var3.totems() == DrillOptions.Totems.UNLIMITED;
-      shieldHand = mode == TrainingSettings.Mode.MACE ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
+      shieldHand = mode == TrainingSettings.Mode.MACE
+         || mode == TrainingSettings.Mode.HUGOSMP
+         || var3.drill() == Drill.SHIELD_TRIPLE_TAP
+         ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
       totemTemplate = totems.isEmpty() ? ItemStack.EMPTY : totems.getFirst().copyWithCount(1);
-      doubleHand = mode == TrainingSettings.Mode.CRYSTAL && totems.stream().mapToInt(ItemStack::getCount).sum() >= 2;
+      doubleHand = (mode == TrainingSettings.Mode.CRYSTAL || mode == TrainingSettings.Mode.HUGOSMP)
+         && !var3.holdShield()
+         && var3.drill() != Drill.SHIELD_TRIPLE_TAP
+         && var3.drill() != Drill.MACE_COUNTER_DTAP
+         && totems.stream().mapToInt(ItemStack::getCount).sum() >= 2;
 
       for (int var4 = 0; var4 < 36; var4++) {
          this.stock.add(MacherItems.name(items.get(var4)));
@@ -98,15 +106,22 @@ public final class BotEquipment {
 
    public static String missingRequirement(KitLoadout kit, DrillOptions options) {
       var slots = kit.slots();
-      if (options.drill() == Drill.WIND_STUN_SLAM && slots.stream().noneMatch(stack -> stack.is(Items.WIND_CHARGE))) {
-         return "Für den Wind-Stun-Slam braucht dein Bot-Kit Windladungen.";
+      if ((options.drill() == Drill.WIND_STUN_SLAM || options.drill() == Drill.MACE_COUNTER_DTAP)
+            && slots.stream().noneMatch(stack -> stack.is(Items.WIND_CHARGE))) {
+         return "Für diese Übung braucht dein Bot-Kit Windladungen.";
+      }
+      if (options.drill() == Drill.MACE_COUNTER_DTAP && slots.stream().noneMatch(stack -> stack.is(Items.MACE))) {
+         return "Für den Mace-Konter braucht dein Bot-Kit eine Mace.";
       }
       if (options.drill() == Drill.WIND_STUN_SLAM && options.windFlight() != DrillOptions.WindFlight.CHARGE
             && slots.stream().noneMatch(stack -> stack.is(Items.ENDER_PEARL))) {
          return "Für den Pearl Catch braucht dein Bot-Kit Enderperlen.";
       }
-      if (options.holdShield() && slots.stream().noneMatch(stack -> stack.is(Items.SHIELD))) {
-         return "Für dauerhaftes Blocken braucht dein Bot-Kit einen Schild.";
+      if ((options.holdShield() || options.drill() == Drill.SHIELD_TRIPLE_TAP)
+            && slots.stream().noneMatch(stack -> stack.is(Items.SHIELD))) {
+         return options.drill() == Drill.SHIELD_TRIPLE_TAP
+            ? "Für Shield-Triple-Tap braucht dein Bot-Kit einen Schild."
+            : "Für dauerhaftes Blocken braucht dein Bot-Kit einen Schild.";
       }
       if ((options.drill().requiresPopChain() || options.drill() == Drill.TOTEM_POPS)
             && slots.stream().noneMatch(stack -> TrainingKit.usableTotems(stack) > 0)) {
@@ -197,10 +212,32 @@ public final class BotEquipment {
       bot.setItemInHand(hand, reserveTotem());
    }
 
+   public boolean isPostPopShieldActive() {
+      return this.postPopShieldActive;
+   }
+
+   public boolean activatePostPopShield(LivingEntity bot) {
+      this.postPopShieldActive = true;
+      if (!bot.getItemInHand(shieldHand).is(Items.SHIELD)) {
+         ItemStack shield = this.take(bot, Items.SHIELD);
+         if (!shield.isEmpty()) {
+            this.stash(bot.getItemInHand(shieldHand));
+            bot.setItemInHand(shieldHand, shield);
+         }
+      }
+      ItemStack held = bot.getItemInHand(shieldHand);
+      if (held.is(Items.SHIELD)) {
+         this.replacementShield = held.copy();
+         this.replacementShield.setDamageValue(0);
+         return true;
+      }
+      return false;
+   }
+
    public void tick(LivingEntity var1, int var2, int var3) {
       tick = var2;
       guard(var1);
-      if (this.options.holdShield() && var2 >= var3 && !var1.isUsingItem()) {
+      if ((this.options.holdShield() || this.postPopShieldActive) && var2 >= var3 && !var1.isUsingItem()) {
          if (var1.getItemInHand(shieldHand).is(Items.SHIELD)) {
             var1.startUsingItem(shieldHand);
          }

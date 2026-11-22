@@ -17,6 +17,21 @@ final class SlamWindowTracker {
     private int supportedTicks;
     private int wallImpactAt = NEVER;
     private double previousSlamY = Double.NaN;
+    private double recentPeakFall;
+    private int recentFallTick = NEVER;
+
+    void observeFall(int tick, double fallDistance) {
+        if (fallDistance > 1.5) {
+            if (tick != recentFallTick || fallDistance > recentPeakFall) {
+                recentPeakFall = fallDistance;
+            }
+            recentFallTick = tick;
+        }
+    }
+
+    boolean recentlyFell(int tick) {
+        return tick - recentFallTick <= 3 && recentPeakFall > 1.5;
+    }
 
     float doubleClickDisable(Drill drill, boolean done, int tick, long sequence, float axeSeconds) {
         if (drill != Drill.STUN_WEB || done || sequence <= 0) return 0;
@@ -46,7 +61,7 @@ final class SlamWindowTracker {
         stunUntil = tick + durationTicks;
         axeStunAt = tick;
         stunTargetLifted = false;
-        if (drill == Drill.STUN_SLAM) {
+        if (drill == Drill.STUN_SLAM || drill == Drill.CORNER_WEB_DTAP || drill == Drill.SHIELD_TRIPLE_TAP) {
             attempt.clearTimingFault();
         }
         attempt.step("Schild deaktiviert für " + durationTicks + " Ticks");
@@ -92,6 +107,7 @@ final class SlamWindowTracker {
 
     void observeSlamLanding(DrillAttempt attempt, int tick, ServerPlayer player) {
         if (attempt.done()) return;
+        observeFall(tick, player.fallDistance);
         AABB body = player.getBoundingBox();
         AABB feet = new AABB(body.minX, body.minY - 0.002, body.minZ, body.maxX, body.minY, body.maxZ);
         boolean supported = player.level().getBlockCollisions(player, feet).iterator().hasNext();
@@ -102,10 +118,13 @@ final class SlamWindowTracker {
         if (rising) wallImpactAt = NEVER;
         boolean settled = supported && (player.onGround() || player.verticalCollisionBelow) && !rising;
         supportedTicks = settled && slamWasAirborne ? supportedTicks + 1 : 0;
-        // Movement, the attack and the Wind Burst impulse can arrive on adjacent ticks.
-        if (supportedTicks >= 3) {
+        // Give a short grace window after an axe stun so landing on the follow-up tick (e.g. from fast/odd fall heights)
+        // never cancels the attempt before the mace packet lands.
+        boolean inFreshStunGrace = axeStunAt != NEVER && tick < stunUntil && tick - axeStunAt <= 6;
+        int settleThreshold = axeStunAt != NEVER ? 5 : 3;
+        if (!inFreshStunGrace && supportedTicks >= settleThreshold) {
             slamLanded(attempt, tick);
-        } else if (wallImpactAt != NEVER && tick - wallImpactAt >= 3) {
+        } else if (!inFreshStunGrace && wallImpactAt != NEVER && tick - wallImpactAt >= 3) {
             attempt.finish(false, "Stun Slam: Aufprall ohne Auftrieb");
         }
     }

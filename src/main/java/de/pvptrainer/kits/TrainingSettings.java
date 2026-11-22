@@ -56,14 +56,16 @@ public record TrainingSettings(
       boolean var2 = var1 == Drill.DUEL || var1.needsSwordAttack() || var1 == Drill.RETOTEM || var1 == Drill.DOUBLE_HAND;
       TrainingSettings.Movement var3 = TrainingSettings.Movement.STILL;
       if (var1 == Drill.DUEL) {
-         var3 = this.mode != TrainingSettings.Mode.SWORD && this.mode != TrainingSettings.Mode.CRYSTAL
+         var3 = this.mode != TrainingSettings.Mode.SWORD && this.mode != TrainingSettings.Mode.CRYSTAL && this.mode != TrainingSettings.Mode.HUGOSMP
             ? TrainingSettings.Movement.FOLLOW
             : TrainingSettings.Movement.STRAFE;
       } else if (var1.needsSwordAttack() || var1.totemDefense()) {
          var3 = TrainingSettings.Movement.FOLLOW;
       }
 
-      int health = var1.requiresPopChain() && this.maxHealth == 40 ? 20 : this.maxHealth;
+      int health = (var1 == Drill.DOUBLE_ANCHOR || var1 == Drill.CORNER_WEB_DTAP || var1 == Drill.MACE_COUNTER_DTAP) && this.maxHealth >= 20
+         ? 10
+         : (var1.requiresPopChain() && this.maxHealth == 40 ? 20 : this.maxHealth);
       return new TrainingSettings(mode, difficulty, var3, health, var2, autoRespawn, duelTier, duelBand, maceCenterLocked);
    }
 
@@ -150,7 +152,8 @@ public record TrainingSettings(
       CRYSTAL("Crystal"),
       MACE("Mace"),
       SWORD("Sword"),
-      UHC("UHC");
+      UHC("UHC"),
+      HUGOSMP("HugoSMP");
 
       private final String label;
 
@@ -159,7 +162,7 @@ public record TrainingSettings(
       }
 
       public boolean allowsBotTotems() {
-         return this == CRYSTAL || this == MACE;
+         return this == CRYSTAL || this == MACE || this == HUGOSMP;
       }
 
       public String label() {

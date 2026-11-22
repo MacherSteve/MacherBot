@@ -17,7 +17,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
             (var2, var3x) -> {
                if (var2 != null && var3x != null && var3x >= 0 && var3x < var2.size()) {
                   if (var2 == Field.HINTS && drill != Drill.JUMP_RESET) return;
-                  if (drill == Drill.LOW_WEB_SMASH && var2 == Field.SHIELD) return;
+                  if ((drill == Drill.LOW_WEB_SMASH || drill == Drill.SHIELD_TRIPLE_TAP || drill == Drill.MACE_COUNTER_DTAP) && var2 == Field.SHIELD) return;
                   if (drill.requiresPopChain() && (var2 == Field.CRYSTAL_AIR || var2 == Field.RESET_POP || var2 == Field.TOTEMS && var3x == 0)) {
                      return;
                   }
@@ -72,7 +72,11 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
    }
 
    private static boolean requiresStunWindow(Drill var0) {
-      return var0 == Drill.STUN_SLAM || var0 == Drill.WIND_STUN_SLAM || var0 == Drill.STUN_WEB;
+      return var0 == Drill.STUN_SLAM
+         || var0 == Drill.WIND_STUN_SLAM
+         || var0 == Drill.STUN_WEB
+         || var0 == Drill.CORNER_WEB_DTAP
+         || var0 == Drill.SHIELD_TRIPLE_TAP;
    }
 
    private static int initial(Drill var0, DrillOptions.Field var1) {
@@ -86,11 +90,13 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
          case PEARL_CATCH_ONLY -> var0.maceTechnique() ? 1 : 0;
          default -> 0;
          case SHIELD -> var0.needsShield() ? 1 : 0;
+         case BASE -> var0 == Drill.CORNER_WEB_DTAP ? 1 : 0;
          case REPLACE, HINTS, WIND_CENTER -> 1;
          case DURABILITY -> var0 == Drill.SHIELD_DRAIN ? 2 : 0;
          case DISTANCE -> switch (var0) {
-            case HEAL -> 4;
-            case HEAD_WEB, OBI_TRAP -> 1;
+            case HEAL, JUMP_RESET, HIT_SELECT -> 4;
+            case MACE_COUNTER_DTAP -> 3;
+            case HEAD_WEB, OBI_TRAP, CORNER_OBI_TRAP, CORNER_WEB_DTAP -> 1;
             case ELYTRA_SMASH, PERFECT_WIND_CHARGE -> 5;
             default -> 2;
          };
@@ -186,7 +192,10 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
    }
 
    public boolean consumeTotems(TrainingSettings.Mode mode) {
-      return mode == TrainingSettings.Mode.MACE || mode == TrainingSettings.Mode.CRYSTAL || itemConsumption(mode);
+      return mode == TrainingSettings.Mode.MACE
+         || mode == TrainingSettings.Mode.CRYSTAL
+         || mode == TrainingSettings.Mode.HUGOSMP
+         || itemConsumption(mode);
    }
 
    public String value(Field field, TrainingSettings.Mode mode) {
@@ -213,9 +222,19 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
    }
 
    public int shieldBreakTicks(TrainingSettings.Mode mode) {
-      if (mode != TrainingSettings.Mode.MACE || !holdShield()) return -1;
+      boolean supported = (mode == TrainingSettings.Mode.MACE || mode == TrainingSettings.Mode.HUGOSMP) && holdShield()
+         || drill == Drill.SHIELD_TRIPLE_TAP;
+      if (!supported) return -1;
       int ticks = number(Field.SHIELD_BREAK_TICKS);
       return drill == Drill.WIND_STUN_SLAM && ticks < 0 ? 8 : ticks;
+   }
+
+   public boolean largeArena() {
+      return index(Field.ARENA_SIZE) == 1;
+   }
+
+   public boolean botJump() {
+      return drill == Drill.STUN_WEB && index(Field.BOT_JUMP) == 1;
    }
 
    public DrillOptions.SlamScene slamScene() {
@@ -285,7 +304,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
    }
 
    boolean airborneFollowups() {
-      return this.drill.requiresPopChain() || DrillOptions.Field.CRYSTAL_AIR.visible(this) && this.index(DrillOptions.Field.CRYSTAL_AIR) == 1;
+      return this.drill.requiresAirPopChain() || DrillOptions.Field.CRYSTAL_AIR.visible(this) && this.index(DrillOptions.Field.CRYSTAL_AIR) == 1;
    }
 
    int comboLength() {
@@ -406,7 +425,9 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       BOT_PING("Bot-Ping", java.util.stream.IntStream.rangeClosed(0, 60).map(i -> i * 5).toArray()),
       WIND_CENTER("Arenamitte fixieren", "Aus", "Ein"),
       WIND_FLIGHT("Bot-Aufstieg", "Nur Wind Charge", "Wind Charge + Pearl Catch", "Nur Pearl Catch"),
-      PEARL_CATCH_ONLY("Nur Pearl-Catches", "Aus", "Ein");
+      PEARL_CATCH_ONLY("Nur Pearl-Catches", "Aus", "Ein"),
+      ARENA_SIZE("Arena", "Standard", "Groß"),
+      BOT_JUMP("Dauerhaft springen", "Aus", "Ein");
 
       private final String label;
       private final String[] names;
@@ -469,8 +490,13 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
 
       public boolean visible(DrillOptions options, TrainingSettings.Mode mode) {
          if (!mode.allowsBotTotems() && (this == TOTEMS || this == REFILL || this == RESET_POP)) return false;
-         if (this == SHIELD_BREAK_TICKS) return mode == TrainingSettings.Mode.MACE && options.holdShield();
-         if (this == REBLOCK && mode == TrainingSettings.Mode.MACE) return false;
+         if (this == SHIELD_BREAK_TICKS) {
+            return (mode == TrainingSettings.Mode.MACE || mode == TrainingSettings.Mode.HUGOSMP) && options.holdShield()
+               || options.drill() == Drill.SHIELD_TRIPLE_TAP;
+         }
+         if (this == REBLOCK && (mode == TrainingSettings.Mode.MACE || mode == TrainingSettings.Mode.HUGOSMP || options.drill() == Drill.SHIELD_TRIPLE_TAP)) {
+            return false;
+         }
          return visible(options);
       }
 
@@ -479,8 +505,13 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
             case TURN_RATE -> var1.gaze() == DrillOptions.Gaze.TRACK;
             default -> true;
             case REFILL -> var1.totems() != DrillOptions.Totems.OFF;
-            case SHIELD -> var1.drill() != Drill.LOW_WEB_SMASH && !var1.drill().needsShield() && !var1.drill().totemDefense();
+            case SHIELD -> var1.drill() != Drill.LOW_WEB_SMASH
+               && var1.drill() != Drill.SHIELD_TRIPLE_TAP
+               && var1.drill() != Drill.MACE_COUNTER_DTAP
+               && !var1.drill().needsShield()
+               && !var1.drill().totemDefense();
             case WIND_CENTER, WIND_FLIGHT -> var1.drill() == Drill.WIND_STUN_SLAM;
+            case BOT_JUMP -> var1.drill() == Drill.STUN_WEB;
             case HINTS -> false;
             case REPLACE -> var1.holdShield();
             case DURABILITY -> var1.holdShield();
@@ -489,8 +520,11 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
             case BASE -> var1.drill() == Drill.HIT_CRYSTAL
                || var1.drill() == Drill.D_TAP
                || var1.drill() == Drill.TRIPLE_TAP
+               || var1.drill() == Drill.SHIELD_TRIPLE_TAP
                || var1.drill() == Drill.LEDGE_DASH
                || var1.drill() == Drill.TAP_ANCHOR
+               || var1.drill() == Drill.MACE_COUNTER_DTAP
+               || var1.drill() == Drill.CORNER_WEB_DTAP
                || var1.drill() == Drill.DUEL;
             case LEDGE -> var1.drill() == Drill.LEDGE_DASH;
             case START_HEIGHT -> var1.drill() == Drill.LOW_WEB_SMASH || var1.drill().slamOptions() && !var1.hasAirTarget() || var1.maceApproachDrill();
@@ -498,9 +532,11 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
             case TERRAIN -> var1.drill() == Drill.HIT_CRYSTAL
                || var1.drill() == Drill.D_TAP
                || var1.drill() == Drill.TRIPLE_TAP
+               || var1.drill() == Drill.SHIELD_TRIPLE_TAP
                || var1.drill() == Drill.SAFE_ANCHOR
-               || var1.drill() == Drill.TAP_ANCHOR;
-            case PING_PONG -> var1.drill() == Drill.TRIPLE_TAP;
+               || var1.drill() == Drill.TAP_ANCHOR
+               || var1.drill() == Drill.DOUBLE_ANCHOR;
+            case PING_PONG -> var1.drill() == Drill.TRIPLE_TAP || var1.drill() == Drill.SHIELD_TRIPLE_TAP;
             case SLAM_SCENE -> var1.drill().slamOptions();
             case TARGET_HEIGHT -> var1.slamScene() == DrillOptions.SlamScene.AIR_LOCK || var1.slamScene() == DrillOptions.SlamScene.PAIRED_FALL;
             case COMBO_LENGTH -> var1.drill() == Drill.SPACING;

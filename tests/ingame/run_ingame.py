@@ -28,6 +28,7 @@ SUITES = {
     "cobweb": ("CobwebProbe.java", "de.pvptrainer.CobwebProbe"),
     "obi": ("ObiProbe.java", "de.pvptrainer.ObiProbe"),
     "recovery": ("RecoveryProbe.java", "de.pvptrainer.RecoveryProbe"),
+    "features": ("FeaturesProbe.java", "de.pvptrainer.FeaturesProbe"),
 }
 
 
@@ -253,7 +254,7 @@ def main() -> None:
     default_jar = TRAINER_ROOT / "build" / f"MacherBot-{meta['version']}+26.2.jar"
 
     parser = argparse.ArgumentParser(description="Fuehrt MacherBot In-Game-Regressionstests in einem isolierten Spielprofil aus.")
-    parser.add_argument("--suite", choices=["smoke", "cobweb", "obi", "recovery", "all"], default="all")
+    parser.add_argument("--suite", choices=["smoke", "cobweb", "obi", "recovery", "features", "all"], default="all")
     parser.add_argument("--profile", choices=["isolated", "modpack"], default="isolated")
     parser.add_argument("--jar", type=Path, default=default_jar)
     parser.add_argument("--expected-version", default=meta["version"])

@@ -34,11 +34,12 @@ public final class ReadyGate {
       ClientTickEvents.START_CLIENT_TICK.register(ReadyGate::readJump);
       AttackEntityCallback.EVENT.register((AttackEntityCallback)(player, level, hand, target, hit) -> {
          if (TrainingTarget.matches(target)) {
-            if (level.isClientSide() && TrainerClient.status().drill() == Drill.OBI_TRAP) return InteractionResult.PASS;
+            if (level.isClientSide() && TrainerClient.status().waitingForStart()) return InteractionResult.PASS;
             if (player instanceof ServerPlayer owner) {
                var session = TrainerClient.session(owner.level().getServer());
-               if (session != null && session.owns(owner) && session.status().drill() == Drill.OBI_TRAP
-                     && session.status().waitingForStart() && owner.isWithinAttackRange(owner.getMainHandItem(), target.getBoundingBox(), 0)) {
+               if (session != null && session.owns(owner)
+                     && session.status().waitingForStart()
+                     && owner.isWithinAttackRange(owner.getMainHandItem(), target.getBoundingBox(), 0)) {
                   session.releaseStart(owner, session.status().startToken());
                }
             }

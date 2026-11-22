@@ -112,6 +112,7 @@ abstract class TrainerPanel extends Screen {
          case MACE -> Items.MACE;
          case SWORD -> Items.DIAMOND_SWORD;
          case UHC -> Items.GOLDEN_APPLE;
+         case HUGOSMP -> Items.WIND_CHARGE;
       });
    }
 

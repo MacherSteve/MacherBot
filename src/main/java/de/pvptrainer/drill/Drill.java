@@ -38,7 +38,24 @@ public enum Drill {
    OBI_TRAP(TrainingSettings.Mode.UHC, "Obi Trap", "Ummauere den Bot ohne Fluchtweg und schließe Kopf und Füße in Obsidian ein."),
    LOW_WEB_SMASH(TrainingSettings.Mode.MACE, "Cobweb-Smash", "Triff im Fallen die freien Beine des Bots unter dem Kopfnetz."),
    WIND_STUN_SLAM(TrainingSettings.Mode.MACE, "Wind-Stun-Slam", "Brich das Schild des fliegenden Bots mit der Axt und lande im selben Flug einen Smash."),
-   PERFECT_WIND_CHARGE(TrainingSettings.Mode.MACE, "Perfect Wind Charge", "Erreiche mit einem Sprung und einer eigenen Windladung die maximale Höhe.");
+   PERFECT_WIND_CHARGE(TrainingSettings.Mode.MACE, "Perfect Wind Charge", "Erreiche mit einem Sprung und einer eigenen Windladung die maximale Höhe."),
+   DOUBLE_ANCHOR(TrainingSettings.Mode.CRYSTAL, "Double Anchor", "Zünde zwei geladene Anker in Folge. Jeder Anker muss ein Bot-Totem auslösen."),
+   SHIELD_TRIPLE_TAP(
+      TrainingSettings.Mode.CRYSTAL,
+      "Shield-Triple-Tap",
+      "Nach dem ersten Pop hebt der Bot sein Schild. Brich es in der Luft mit der Axt und lande zwei Folgekristalle."
+   ),
+   CORNER_OBI_TRAP(TrainingSettings.Mode.UHC, "Corner Obi Trap", "Schließe Kopf und Füße des Bots in der Ecke in Obsidian ein, ohne Fluchtweg."),
+   MACE_COUNTER_DTAP(
+      TrainingSettings.Mode.HUGOSMP,
+      "Mace-Konter · D-Tap",
+      "Blocke den Wind-Charge-Mace-Sprung des Bots mit dem Schild und lande danach einen D-Tap."
+   ),
+   CORNER_WEB_DTAP(
+      TrainingSettings.Mode.HUGOSMP,
+      "Corner Web · D-Tap",
+      "Webbe den Bot in der Ecke ein, brich sein Schild mit der Axt und lande einen D-Tap."
+   );
 
    private final TrainingSettings.Mode mode;
    private final String label;
@@ -70,6 +87,8 @@ public enum Drill {
                   yield "Mit dem Schwert (1) auf Reichweite gehen. Nach dem ersten Treffer Abstand für den Anschluss halten.";
                case UHC:
                   yield "Schwert (1) im Nahkampf, Armbrust (7) auf Distanz. Mit Deckung Zeit für den Goldapfel (3) gewinnen.";
+               case HUGOSMP:
+                  yield "Schild (1), Mace (2) mit Windladung (4) sowie Obsidian (5) und Kristalle (6) verbinden.";
                default:
                   throw new MatchException(null, null);
             }
@@ -84,6 +103,8 @@ public enum Drill {
                   yield "Mit dem Schwert (1) treffen. Wiederhole den Schlag aus verschiedenen Abständen.";
                case UHC:
                   yield "Wechsle am Ziel zwischen Schwert (1), Netz (8) und Eimer (6 oder 9).";
+               case HUGOSMP:
+                  yield "Übe Mace (2), Axt (8), Windladung (4), Cobweb und Kristalle (6) auf Obsidian (5).";
                default:
                   throw new MatchException(null, null);
             }
@@ -94,6 +115,8 @@ public enum Drill {
                   yield "Totem (3) zum Nahkampftreffer, Obsidian (6), Kristall (5). Löse ein Totem des Bots aus.";
                case MACE:
                   yield "Mit Windladungen (6) und Mace (8) angreifen, bis das Totem des Bots auslöst.";
+               case HUGOSMP:
+                  yield "Obsidian (5), Kristall (6) oder Mace (2) nutzen, bis das Totem des Bots auslöst.";
                case SWORD:
                case UHC:
                   yield "Mit dem Schwert (1) am Bot bleiben und nachsetzen, bis sein Totem auslöst.";
@@ -124,7 +147,7 @@ public enum Drill {
                : "Mit Windladung (6) aufsteigen. Axt (4) aufs Schild → Mace (8 oder 9) im Fallen treffen.";
          }
          case BACKSTAB -> "Seitlich hinter den Bot gelangen. Mit der Mace (8) im Fallen an seinem gehobenen Schild vorbeischlagen.";
-         case SHIELD_DRAIN -> "Mit dem Schwert (1) frontal auf das Schild schlagen, bis seine Haltbarkeit verbraucht ist.";
+         case SHIELD_DRAIN -> "Schlage frontal mit Schwert (1), Axt (4) oder Mace (8/9) auf das gehobene Schild, bis es durch Verschleiß zerbricht.";
          case PEARL_CATCH -> "Perle (7) hochwerfen, Windladung (6) hinterher. Nach dem Luft-Teleport mit der Mace (8) treffen.";
          case ELYTRA_SMASH -> "Die Elytra ist angelegt. Starte den Gleitflug und wechsle vor dem Bot zur Brustplatte. Triff im Fallen mit der Mace.";
          case SPACING -> "Mit dem Schwert (1) zuerst treffen. Abstand halten und " + var2.comboLength() + " Treffer in Folge vor dem Gegentreffer landen.";
@@ -133,10 +156,15 @@ public enum Drill {
          case JUMP_RESET -> "Im Moment des gegnerischen Schwerttreffers mit " + var3 + " springen. Vergleiche den Rückstoß mit einem Versuch ohne Sprung.";
          case HEAD_WEB -> "Dränge den Bot an die Wand. Ziele neben seinem Kopf auf die Wandfläche und setze das Netz in seinen Kopfblock.";
          case OBI_TRAP -> "Schließe Kopf und Füße in deinem Obsidian ein. Nutze die Arenawand und verbaue alle Wege zum Kriechen oder Herausspringen.";
+         case CORNER_OBI_TRAP -> "Nutze die Ecke aus zwei Wänden und schließe Kopf und Füße des Bots ohne Fluchtweg in deinem Obsidian ein.";
          case STUN_WEB -> "Triff das gehobene Schild zweimal schnell. Der zweite Treffer muss mit der Axt das Schild deaktivieren. Setze das Netz vor der Landung.";
          case WEB_DRAIN -> "Wassereimer (6) seitlich leeren. Mit dem leeren Eimer die Rettungsquelle des Bots abschöpfen, solange er im Netz steckt.";
          case RE_LAVA -> "Lava (9) an die Füße setzen. Nach dem Löschen die zweite Lava aus dem Inventar holen und den Bot erneut erfassen.";
          case HEAL -> "Mit Brettern (5) oder Netz (8) Platz schaffen. Den Goldapfel (3) oder Golden Head (2) vollständig essen.";
+         case DOUBLE_ANCHOR -> "Anker (8) setzen, mit Glowstone (9) laden und zünden. Sofort den zweiten Anker setzen, laden und zünden – zwei Pops in Folge.";
+         case SHIELD_TRIPLE_TAP -> "Eröffnung → Obsidian (6) → Kristall 1 (5) → Bot hebt Schild → Axt in der Luft aufs Schild → zwei Folgekristalle vor der Landung.";
+         case MACE_COUNTER_DTAP -> "Der Bot springt mit Windladung und Mace auf dich. Blocke den Smash mit dem Schild (1) und D-Tappe ihn mit Obsidian (5) und zwei Kristallen (6).";
+         case CORNER_WEB_DTAP -> "Webbe den Bot in der Ecke ein, brich sein Schild mit der Axt (8) und D-Tappe ihn mit zwei Kristallen (6) auf Obsidian (5).";
       };
    }
 
@@ -148,11 +176,28 @@ public enum Drill {
 
    public boolean supports(TrainingSettings.Mode var1) {
       if (this == TOTEM_POPS) return var1.allowsBotTotems();
-      return this != DOUBLE_HAND && this != SMASH && this != WIND_CHAIN && this != SHIELD_DRAIN && (this.mode == null || this.mode == var1);
+      return this != DOUBLE_HAND && this != SMASH && this != WIND_CHAIN && (this.mode == null || this.mode == var1);
    }
 
    public boolean requiresPopChain() {
-      return this == D_TAP || this == TRIPLE_TAP;
+      return this == D_TAP || this == TRIPLE_TAP || this == SHIELD_TRIPLE_TAP
+         || this == DOUBLE_ANCHOR || this == MACE_COUNTER_DTAP || this == CORNER_WEB_DTAP;
+   }
+
+   public boolean requiresAirPopChain() {
+      return this == D_TAP || this == TRIPLE_TAP || this == SHIELD_TRIPLE_TAP || this == MACE_COUNTER_DTAP;
+   }
+
+   public boolean isObiTrap() {
+      return this == OBI_TRAP || this == CORNER_OBI_TRAP;
+   }
+
+   public boolean needsCornerWalls() {
+      return this == CORNER_OBI_TRAP || this == CORNER_WEB_DTAP;
+   }
+
+   public boolean hidesPresets() {
+      return this == LOW_WEB_SMASH || this == PERFECT_WIND_CHARGE || this == D_TAP;
    }
 
    public static List<Drill> forMode(TrainingSettings.Mode var0) {
@@ -170,7 +215,8 @@ public enum Drill {
    }
 
    boolean needsShield() {
-      return this == SHIELD || this == STUN_SLAM || this == WIND_STUN_SLAM || this == BACKSTAB || this == SHIELD_DRAIN || this == STUN_WEB;
+      return this == SHIELD || this == STUN_SLAM || this == WIND_STUN_SLAM || this == BACKSTAB
+         || this == SHIELD_DRAIN || this == STUN_WEB || this == CORNER_WEB_DTAP;
    }
 
    public boolean needsSwordAttack() {

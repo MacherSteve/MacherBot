@@ -9,6 +9,7 @@ import de.pvptrainer.kits.TrainingSettings;
 
 import com.mojang.logging.LogUtils;
 import com.google.gson.JsonParser;
+import de.pvptrainer.mixin.AttackStrengthAccess;
 import de.pvptrainer.mixin.GravityAccess;
 import java.io.IOException;
 import java.io.Reader;
@@ -158,6 +159,38 @@ public final class ArenaRound {
             }
             return center;
         }
+        if (options.drill().needsCornerWalls()) {
+            double dx = target.x - player.getX(), dz = target.z - player.getZ();
+            Direction back = Math.abs(dx) > Math.abs(dz)
+                ? (dx < 0 ? Direction.WEST : Direction.EAST)
+                : (dz < 0 ? Direction.NORTH : Direction.SOUTH);
+            Direction side = back.getClockWise();
+            BlockPos feet = BlockPos.containing(target);
+            BlockPos backWall = feet.relative(back);
+            BlockPos sideWall = feet.relative(side);
+            // Build two perpendicular Forge walls meeting cleanly at (back + side) to form a 90° corner.
+            for (int along = -4; along <= 1; along++) {
+                for (int height = 0; height < 5; height++) {
+                    var block = cornerWallBlock(along, height);
+                    player.level().setBlockAndUpdate(backWall.relative(side, along).above(height), block.defaultBlockState());
+                }
+            }
+            for (int depth = -4; depth <= 0; depth++) {
+                for (int height = 0; height < 5; height++) {
+                    var block = cornerWallBlock(depth, height);
+                    player.level().setBlockAndUpdate(sideWall.relative(back, depth).above(height), block.defaultBlockState());
+                }
+            }
+            if (options.drill() == Drill.CORNER_WEB_DTAP && options.preparedBase()) {
+                player.level().setBlockAndUpdate(feet.below().relative(back.getOpposite()), Blocks.OBSIDIAN.defaultBlockState());
+                player.level().setBlockAndUpdate(feet.below().relative(side.getOpposite()), Blocks.OBSIDIAN.defaultBlockState());
+            }
+            return Vec3.atBottomCenterOf(feet).add(
+                back.getStepX() * 0.14 + side.getStepX() * 0.14,
+                0,
+                back.getStepZ() * 0.14 + side.getStepZ() * 0.14
+            );
+        }
         if (options.drill() != Drill.HEAD_WEB && options.drill() != Drill.OBI_TRAP) return target;
 
         // Use the wall face behind the bot even when the approach angle or distance was customized.
@@ -181,6 +214,14 @@ public final class ArenaRound {
             }
         }
         return Vec3.atBottomCenterOf(feet).add(back.getStepX() * 0.18, 0, back.getStepZ() * 0.18);
+    }
+
+    private static net.minecraft.world.level.block.Block cornerWallBlock(int span, int height) {
+        if (height == 0 || height == 4) return Blocks.POLISHED_BLACKSTONE;
+        if (height == 3) return Math.abs(span) == 4 || span == 1 ? Blocks.CHISELED_POLISHED_BLACKSTONE : Blocks.RED_NETHER_BRICKS;
+        if (Math.abs(span) == 4 || span == 1) return Blocks.POLISHED_BASALT;
+        if ((span == -2 && height == 2) || (span == -1 && height == 1)) return Blocks.CRACKED_POLISHED_BLACKSTONE_BRICKS;
+        return Blocks.POLISHED_BLACKSTONE_BRICKS;
     }
 
     private static void equipElytra(ServerPlayer player) {
@@ -257,6 +298,7 @@ public final class ArenaRound {
                 slot=findStartSlot(player,saved,mode,slot);
                 player.getInventory().setSelectedSlot(slot);
                 player.connection.send(new ClientboundSetHeldSlotPacket(slot));
+                ((AttackStrengthAccess) player).pvptrainer$setAttackStrengthTicker(200);
             }
         } catch (IOException|IllegalArgumentException e) { LOG.warn("Hotbar-Auswahl konnte nicht geladen werden",e); }
     }

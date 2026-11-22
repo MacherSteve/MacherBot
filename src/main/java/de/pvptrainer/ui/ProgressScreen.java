@@ -71,9 +71,10 @@ final class ProgressScreen extends TrainerPanel {
             last.mode().equals(row.mode()) && last.drill().equals(row.drill()) && last.difficulty().equals(row.difficulty())).count();
         if(variants>1) setupLabel += "  ·  "+setup.substring(0,Math.min(6,setup.length()));
         var owner = minecraft.player != null ? minecraft.player.getUUID() : minecraft.getUser().getProfileId();
-        if (last.drill().equals(Drill.OBI_TRAP.name()) && !setup.contains("/") && !setup.endsWith(DrillHistory.ENCLOSED_TRAP)) {
+        boolean obiTrap = last.drill().equals(Drill.OBI_TRAP.name()) || last.drill().equals(Drill.CORNER_OBI_TRAP.name());
+        if (obiTrap && !setup.contains("/") && !setup.endsWith(DrillHistory.ENCLOSED_TRAP)) {
             subtitle = "Archiv · frühere Trap-Regeln";
-        } else if (last.drill().equals(Drill.OBI_TRAP.name()) && !setup.contains("/")) {
+        } else if (obiTrap && !setup.contains("/")) {
             var best = runs.stream().filter(TrainingProgress.Run::won).mapToDouble(TrainingProgress.Run::seconds).min();
             subtitle = best.isPresent() ? "Bestzeit " + TrainingStatus.ObiTimer.format(best.getAsDouble()) : "Noch keine Bestzeit";
         } else subtitle = TrainingProgress.streak(owner, setup).label();

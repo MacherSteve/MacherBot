@@ -950,5 +950,245 @@
         "amount": 10
       }
     ]
+  },
+  "hugosmp": {
+    "helmet": {
+      "material": "netherite_helmet",
+      "amount": 1,
+      "enchants": [
+        { "id": "aqua_affinity", "level": 1 },
+        { "id": "mending", "level": 1 },
+        { "id": "protection", "level": 4 },
+        { "id": "respiration", "level": 3 },
+        { "id": "unbreaking", "level": 3 }
+      ]
+    },
+    "chestplate": {
+      "material": "netherite_chestplate",
+      "amount": 1,
+      "enchants": [
+        { "id": "mending", "level": 1 },
+        { "id": "protection", "level": 4 },
+        { "id": "unbreaking", "level": 3 }
+      ]
+    },
+    "leggings": {
+      "material": "netherite_leggings",
+      "amount": 1,
+      "enchants": [
+        { "id": "mending", "level": 1 },
+        { "id": "protection", "level": 4 },
+        { "id": "swift_sneak", "level": 3 },
+        { "id": "unbreaking", "level": 3 }
+      ]
+    },
+    "boots": {
+      "material": "netherite_boots",
+      "amount": 1,
+      "enchants": [
+        { "id": "depth_strider", "level": 3 },
+        { "id": "feather_falling", "level": 4 },
+        { "id": "mending", "level": 1 },
+        { "id": "protection", "level": 4 },
+        { "id": "unbreaking", "level": 3 }
+      ]
+    },
+    "offhand": {
+      "material": "totem_of_undying",
+      "amount": 1
+    },
+    "inventory": [
+      {
+        "material": "shield",
+        "amount": 1,
+        "enchants": [
+          { "id": "mending", "level": 1 },
+          { "id": "unbreaking", "level": 3 }
+        ]
+      },
+      {
+        "material": "mace",
+        "amount": 1,
+        "enchants": [
+          { "id": "density", "level": 5 },
+          { "id": "mending", "level": 1 },
+          { "id": "unbreaking", "level": 3 },
+          { "id": "wind_burst", "level": 2 }
+        ]
+      },
+      {
+        "material": "golden_apple",
+        "amount": 64
+      },
+      {
+        "material": "wind_charge",
+        "amount": 64
+      },
+      {
+        "material": "obsidian",
+        "amount": 64
+      },
+      {
+        "material": "end_crystal",
+        "amount": 64
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "netherite_axe",
+        "amount": 1,
+        "enchants": [
+          { "id": "efficiency", "level": 5 },
+          { "id": "mending", "level": 1 },
+          { "id": "sharpness", "level": 5 },
+          { "id": "unbreaking", "level": 3 }
+        ]
+      },
+      {
+        "material": "ender_pearl",
+        "amount": 16
+      },
+      {
+        "material": "experience_bottle",
+        "amount": 64
+      },
+      {
+        "material": "tnt",
+        "amount": 64
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "firework_rocket",
+        "amount": 64
+      },
+      {
+        "material": "splash_potion",
+        "amount": 1,
+        "potion": "swiftness"
+      },
+      {
+        "material": "experience_bottle",
+        "amount": 64
+      },
+      {
+        "material": "tnt",
+        "amount": 64
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "totem_of_undying",
+        "amount": 1
+      },
+      {
+        "material": "netherite_pickaxe",
+        "amount": 1,
+        "enchants": [
+          { "id": "efficiency", "level": 5 },
+          { "id": "fortune", "level": 3 },
+          { "id": "mending", "level": 1 },
+          { "id": "unbreaking", "level": 3 }
+        ]
+      },
+      {
+        "material": "ender_pearl",
+        "amount": 16
+      },
+      {
+        "material": "water_bucket",
+        "amount": 1
+      },
+      {
+        "material": "netherite_sword",
+        "amount": 1,
+        "enchants": [
+          { "id": "knockback", "level": 1 },
+          { "id": "mending", "level": 1 },
+          { "id": "sharpness", "level": 5 },
+          { "id": "unbreaking", "level": 3 }
+        ]
+      },
+      {
+        "material": "enchanted_golden_apple",
+        "amount": 16
+      },
+      {
+        "material": "netherite_shovel",
+        "amount": 1,
+        "enchants": [
+          { "id": "efficiency", "level": 5 },
+          { "id": "mending", "level": 1 },
+          { "id": "unbreaking", "level": 3 }
+        ]
+      },
+      {
+        "material": "obsidian",
+        "amount": 64
+      },
+      {
+        "material": "netherite_leggings",
+        "amount": 1,
+        "enchants": [
+          { "id": "blast_protection", "level": 4 },
+          { "id": "mending", "level": 1 },
+          { "id": "swift_sneak", "level": 3 },
+          { "id": "unbreaking", "level": 3 }
+        ]
+      },
+      {
+        "material": "netherite_boots",
+        "amount": 1,
+        "enchants": [
+          { "id": "depth_strider", "level": 3 },
+          { "id": "feather_falling", "level": 4 },
+          { "id": "mending", "level": 1 },
+          { "id": "protection", "level": 4 },
+          { "id": "unbreaking", "level": 3 }
+        ]
+      },
+      {
+        "material": "cobweb",
+        "amount": 64
+      },
+      {
+        "material": "ender_pearl",
+        "amount": 16
+      }
+    ]
   }
 }

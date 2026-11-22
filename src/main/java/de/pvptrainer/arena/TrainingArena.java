@@ -6,6 +6,7 @@ import de.pvptrainer.drill.DrillOptions;
 import de.pvptrainer.kits.KitLoadout;
 import de.pvptrainer.kits.TrainingKit;
 import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.mixin.AttackStrengthAccess;
 import de.pvptrainer.mixin.CooldownAccess;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -184,13 +185,14 @@ public final class TrainingArena {
 
         double approachRad = Math.toRadians(options.approachAngle());
         int startZ = START_Z;
-        Vec3 botTarget = new Vec3(
-            0.5 + options.sideOffset() + Math.sin(approachRad) * options.startDistance(),
-            FLOOR + 1.0,
-            0.5 + startZ + Math.cos(approachRad) * options.startDistance()
-        );
+        double botX = 0.5 + options.sideOffset() + Math.sin(approachRad) * options.startDistance();
+        double botZ = 0.5 + startZ + Math.cos(approachRad) * options.startDistance();
         boolean isLedgeDash = options.drill() == Drill.LEDGE_DASH;
-        reset(arena, ArenaRound.layoutOptions(options, settings), BlockPos.containing(botTarget), startZ);
+        int botHill = options.largeArena() && !settings.maceCenterLocked() && !isLedgeDash
+            ? ForgeArena.largeHillOffset((int) Math.floor(botX), (int) Math.floor(botZ))
+            : 0;
+        Vec3 botTarget = new Vec3(botX, FLOOR + 1.0 + botHill, botZ);
+        reset(arena, ArenaRound.layoutOptions(options, settings), options.largeArena(), BlockPos.containing(botTarget), startZ);
         uhc = settings.mode() == TrainingSettings.Mode.UHC;
         TrainingKit.begin(player, settings.mode(), loadout);
         player.setGameMode(GameType.SURVIVAL);
@@ -234,16 +236,18 @@ public final class TrainingArena {
         player.setDeltaMovement(Vec3.ZERO);
         player.resetFallDistance();
         player.resetCurrentImpulseContext();
-        player.resetAttackStrengthTicker();
+        ((AttackStrengthAccess) player).pvptrainer$setAttackStrengthTicker(200);
         ItemCooldowns cooldowns = player.getCooldowns();
         for (Identifier group : List.copyOf(((CooldownAccess) cooldowns).pvptrainer$groups().keySet())) {
             cooldowns.removeCooldown(group);
         }
     }
 
-    private static void reset(ServerLevel arena, DrillOptions options, BlockPos botPos, int startZ) {
-        for (int chunkX = -2; chunkX <= 1; chunkX++) {
-            for (int chunkZ = -2; chunkZ <= 1; chunkZ++) {
+    private static void reset(ServerLevel arena, DrillOptions options, boolean largeArena, BlockPos botPos, int startZ) {
+        int minChunk = largeArena ? -4 : -2;
+        int maxChunk = largeArena ? 3 : 1;
+        for (int chunkX = minChunk; chunkX <= maxChunk; chunkX++) {
+            for (int chunkZ = minChunk; chunkZ <= maxChunk; chunkZ++) {
                 arena.getChunk(chunkX, chunkZ);
             }
         }
@@ -255,7 +259,7 @@ public final class TrainingArena {
             }
         });
         nonPlayers.forEach(Entity::discard);
-        ForgeArena.restore(arena);
+        ForgeArena.restore(arena, largeArena);
 
         if (options.drill() == Drill.LEDGE_DASH) {
             for (int x = -1; x <= Math.max(1, botPos.getX() + 1); x++) {

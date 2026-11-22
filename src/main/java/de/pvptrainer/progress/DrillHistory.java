@@ -73,11 +73,21 @@ public final class DrillHistory {
          }
       }
 
-      if (var1.drill() == Drill.D_TAP || var1.drill() == Drill.TRIPLE_TAP || var1.drill() == Drill.TAP_ANCHOR) {
+      if (var1.drill() == Drill.D_TAP
+         || var1.drill() == Drill.TRIPLE_TAP
+         || var1.drill() == Drill.SHIELD_TRIPLE_TAP
+         || var1.drill() == Drill.TAP_ANCHOR
+         || var1.drill() == Drill.MACE_COUNTER_DTAP
+         || var1.drill() == Drill.CORNER_WEB_DTAP) {
          var3.append("|crystal-windows-v2");
       }
 
-      if (var1.drill() == Drill.HIT_CRYSTAL || var1.drill() == Drill.D_TAP || var1.drill() == Drill.TRIPLE_TAP || var1.drill() == Drill.TAP_ANCHOR) {
+      if (var1.drill() == Drill.HIT_CRYSTAL
+         || var1.drill() == Drill.D_TAP
+         || var1.drill() == Drill.TRIPLE_TAP
+         || var1.drill() == Drill.SHIELD_TRIPLE_TAP
+         || var1.drill() == Drill.TAP_ANCHOR
+         || var1.drill() == Drill.MACE_COUNTER_DTAP) {
          var3.append("|melee-with-held-totem");
       }
 
@@ -88,11 +98,12 @@ public final class DrillHistory {
          var3.append("|axe-stun-before-lift-v2");
       }
       if (var1.drill() == Drill.HEAD_WEB || var1.drill() == Drill.OBI_TRAP) var3.append("|wall-start");
+      if (var1.drill().needsCornerWalls()) var3.append("|corner-start");
 
       if (var1.drill() == Drill.ELYTRA_SMASH) var3.append("|equipped-glider");
       if (var1.drill() == Drill.LOW_WEB_SMASH) var3.append("|airborne-wind-smash");
       if (var0.maceCenterLocked()) var3.append("|mace-center");
-      if (var1.drill() == Drill.TRIPLE_TAP) {
+      if (var1.drill() == Drill.TRIPLE_TAP || var1.drill() == Drill.SHIELD_TRIPLE_TAP) {
          var3.append("|air-contact-after-first-crystal");
       }
 
@@ -133,7 +144,7 @@ public final class DrillHistory {
 
       try {
          String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(var3.toString().getBytes(StandardCharsets.UTF_8)));
-         return var1.drill() == Drill.OBI_TRAP ? hash + ENCLOSED_TRAP : hash;
+         return var1.drill().isObiTrap() ? hash + ENCLOSED_TRAP : hash;
       } catch (NoSuchAlgorithmException var8) {
          throw new IllegalStateException(var8);
       }

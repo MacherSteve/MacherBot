@@ -155,7 +155,7 @@ final class KitEditorScreen extends TrainerPanel {
          this.replace(this.selected, this.original.get(this.selected).copy());
          this.refresh();
       });
-      if (this.bot && this.mode == TrainingSettings.Mode.CRYSTAL) {
+      if (this.bot && (this.mode == TrainingSettings.Mode.CRYSTAL || this.mode == TrainingSettings.Mode.HUGOSMP)) {
          this.action(
             this.sideX,
             var4 + 4 * (var3 + this.gap),

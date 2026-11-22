@@ -1,19 +1,25 @@
 package de.pvptrainer;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpServer;
 import de.pvptrainer.analytics.BotArchive;
 import de.pvptrainer.analytics.BotStatistics;
 import de.pvptrainer.analytics.BotTelemetry;
 import de.pvptrainer.analytics.CalibrationPlan;
+import de.pvptrainer.arena.ForgeArena;
 import de.pvptrainer.drill.Drill;
 import de.pvptrainer.drill.DrillAttempt;
 import de.pvptrainer.drill.DrillOptions;
 import de.pvptrainer.drill.WindHeight;
+import de.pvptrainer.kits.TrainingPreset;
 import de.pvptrainer.kits.TrainingProfiles;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.progress.TrainingProgress;
 import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.CobwebFlightTracker;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +28,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.List;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 
 /** Schnelle Offline-Unit-Tests ohne Minecraft-Client (Aufruf via build.py --test). */
 public final class MacherBotUnitTests {
@@ -40,6 +48,11 @@ public final class MacherBotUnitTests {
         testSlamAndDoubleClickWindows();
         testUpdateCheckerParsingAndSecurity();
         testUpdateCheckerLocalHttpRoundTrip();
+        testHugoSmpKitJsonSchema();
+        testNewDrillsAndOptions();
+        testLargeArenaGeometry();
+        testStunSlamAlwaysCountsInOpenWindow();
+        testNewDrillAttemptStateMachines();
         System.out.println("PASS " + passed + " Unit-Tests erfolgreich.");
     }
 
@@ -359,6 +372,290 @@ public final class MacherBotUnitTests {
             } finally {
                 server.stop(0);
             }
+        });
+    }
+
+    private static void testHugoSmpKitJsonSchema() throws Exception {
+        run("kits.json: HugoSMP Standardkit vollstaendig und exakt", () -> {
+            var stream = MacherBotUnitTests.class.getResourceAsStream("/assets/pvptrainer/kits.json");
+            check(stream != null, "kits.json nicht im Klassenpfad gefunden");
+            JsonObject root;
+            try (var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                root = JsonParser.parseReader(reader).getAsJsonObject();
+            }
+            check(root.has("hugosmp"), "hugosmp Kit fehlt in kits.json");
+            JsonObject hugo = root.getAsJsonObject("hugosmp");
+
+            // Ausgeruestete Netherite-Ruestung: alle 4 Teile mit Protection 4
+            for (String piece : List.of("helmet", "chestplate", "leggings", "boots")) {
+                JsonObject armor = hugo.getAsJsonObject(piece);
+                check(armor != null && armor.get("material").getAsString().equals("netherite_" + piece), "Ruestungsteil " + piece);
+                check(hasEnchant(armor, "protection", 4), piece + " braucht Protection 4");
+                check(hasEnchant(armor, "unbreaking", 3) && hasEnchant(armor, "mending", 1), piece + " braucht Unb 3 + Mend 1");
+            }
+            check("totem_of_undying".equals(hugo.getAsJsonObject("offhand").get("material").getAsString()), "Offhand Totem");
+
+            JsonArray inv = hugo.getAsJsonArray("inventory");
+            check(inv.size() == 36, "Inventar muss exakt 36 Slots haben: " + inv.size());
+
+            // Hotbar (0..8)
+            checkSlot(inv, 0, "shield", 1);
+            checkSlot(inv, 1, "mace", 1);
+            JsonObject mace = inv.get(1).getAsJsonObject();
+            check(hasEnchant(mace, "density", 5) && hasEnchant(mace, "wind_burst", 2), "Mace braucht Density 5 + Wind Burst 2");
+            checkSlot(inv, 2, "golden_apple", 64);
+            checkSlot(inv, 3, "wind_charge", 64);
+            checkSlot(inv, 4, "obsidian", 64);
+            checkSlot(inv, 5, "end_crystal", 64);
+            checkSlot(inv, 6, "totem_of_undying", 1);
+            checkSlot(inv, 7, "netherite_axe", 1);
+            checkSlot(inv, 8, "ender_pearl", 16);
+
+            // Inventarzeilen (9..35)
+            checkSlot(inv, 9, "experience_bottle", 64);
+            checkSlot(inv, 10, "tnt", 64);
+            checkSlot(inv, 16, "firework_rocket", 64);
+            checkSlot(inv, 17, "splash_potion", 1);
+            check("swiftness".equals(inv.get(17).getAsJsonObject().get("potion").getAsString()), "Slot 17 Swiftness I");
+            checkSlot(inv, 18, "experience_bottle", 64);
+            checkSlot(inv, 19, "tnt", 64);
+            checkSlot(inv, 25, "netherite_pickaxe", 1);
+            checkSlot(inv, 26, "ender_pearl", 16);
+            checkSlot(inv, 27, "water_bucket", 1);
+            checkSlot(inv, 28, "netherite_sword", 1);
+            checkSlot(inv, 29, "enchanted_golden_apple", 16);
+            checkSlot(inv, 30, "netherite_shovel", 1);
+            checkSlot(inv, 31, "obsidian", 64);
+            checkSlot(inv, 32, "netherite_leggings", 1);
+            check(hasEnchant(inv.get(32).getAsJsonObject(), "blast_protection", 4), "Ersatzhose braucht Blast Protection 4");
+            checkSlot(inv, 33, "netherite_boots", 1);
+            checkSlot(inv, 34, "cobweb", 64);
+            checkSlot(inv, 35, "ender_pearl", 16);
+
+            int totemCount = 0;
+            for (int i = 0; i < 36; i++) {
+                if ("totem_of_undying".equals(inv.get(i).getAsJsonObject().get("material").getAsString())) totemCount++;
+            }
+            check(totemCount == 11, "Erwartet 11 Inventar-Totems (+ 1 Offhand), gefunden: " + totemCount);
+        });
+    }
+
+    private static void checkSlot(JsonArray inv, int slot, String material, int amount) {
+        JsonObject item = inv.get(slot).getAsJsonObject();
+        check(material.equals(item.get("material").getAsString()) && item.get("amount").getAsInt() == amount,
+            "Slot " + slot + " erwartet " + amount + "x " + material + ", war " + item);
+    }
+
+    private static boolean hasEnchant(JsonObject item, String id, int level) {
+        if (!item.has("enchants")) return false;
+        for (var el : item.getAsJsonArray("enchants")) {
+            JsonObject e = el.getAsJsonObject();
+            if (id.equals(e.get("id").getAsString()) && e.get("level").getAsInt() == level) return true;
+        }
+        return false;
+    }
+
+    private static void testNewDrillsAndOptions() throws Exception {
+        run("Drills, DrillOptions & Presets: HugoSMP, Crystal, Mace, UHC, Sword, Arena-Groesse & D-Tap", () -> {
+            // Neue Modi & Moduszuordnung
+            check(TrainingSettings.Mode.HUGOSMP.allowsBotTotems(), "HugoSMP erlaubt Bot-Totems");
+            check(Drill.MACE_COUNTER_DTAP.supports(TrainingSettings.Mode.HUGOSMP), "MACE_COUNTER_DTAP in HugoSMP");
+            check(!Drill.MACE_COUNTER_DTAP.supports(TrainingSettings.Mode.CRYSTAL), "MACE_COUNTER_DTAP nicht in Crystal");
+            check(Drill.CORNER_WEB_DTAP.supports(TrainingSettings.Mode.HUGOSMP), "CORNER_WEB_DTAP in HugoSMP");
+            check(Drill.CORNER_WEB_DTAP.needsCornerWalls(), "CORNER_WEB_DTAP braucht Eckenwaende");
+            check(Drill.CORNER_OBI_TRAP.supports(TrainingSettings.Mode.UHC) && Drill.CORNER_OBI_TRAP.isObiTrap() && Drill.CORNER_OBI_TRAP.needsCornerWalls(),
+                "CORNER_OBI_TRAP in UHC mit Eckenwaenden");
+            check(Drill.SHIELD_DRAIN.supports(TrainingSettings.Mode.MACE), "SHIELD_DRAIN in Mace aktiviert");
+            check(Drill.DOUBLE_ANCHOR.supports(TrainingSettings.Mode.CRYSTAL), "DOUBLE_ANCHOR in Crystal");
+            check(Drill.SHIELD_TRIPLE_TAP.supports(TrainingSettings.Mode.CRYSTAL), "SHIELD_TRIPLE_TAP in Crystal");
+
+            // D-Tap entfernt die 3 Preset-Optionen, andere Drills behalten sie
+            check(Drill.D_TAP.hidesPresets(), "D_TAP blendet Preset-Leiste aus");
+            check(!Drill.TRIPLE_TAP.hidesPresets() && !Drill.SHIELD_TRIPLE_TAP.hidesPresets(), "Triple Tap zeigt Presets");
+
+            // Jump Reset & Hit Select: groesserer Startabstand (>= 7 Bloecke)
+            check(DrillOptions.forDrill(Drill.JUMP_RESET).startDistance() >= 7, "JUMP_RESET startet bei >= 7 Bl.");
+            check(DrillOptions.forDrill(Drill.HIT_SELECT).startDistance() >= 7, "HIT_SELECT startet bei >= 7 Bl.");
+            for (TrainingPreset preset : TrainingPreset.values()) {
+                var sw = TrainingSettings.defaults(TrainingSettings.Mode.SWORD);
+                check(preset.setup(sw, Drill.JUMP_RESET).options().startDistance() >= 7, "JUMP_RESET Preset " + preset + " >= 7 Bl.");
+                check(preset.setup(sw, Drill.HIT_SELECT).options().startDistance() >= 7, "HIT_SELECT Preset " + preset + " >= 7 Bl.");
+            }
+
+            // STUN_WEB: BOT_JUMP Option nur bei STUN_WEB sichtbar
+            var stunWeb = DrillOptions.forDrill(Drill.STUN_WEB);
+            check(DrillOptions.Field.BOT_JUMP.visible(stunWeb, TrainingSettings.Mode.UHC), "BOT_JUMP bei STUN_WEB sichtbar");
+            check(!stunWeb.botJump(), "BOT_JUMP standardmaessig Aus");
+            check(stunWeb.withIndex(DrillOptions.Field.BOT_JUMP, 1).botJump(), "BOT_JUMP auf Ein umstellbar");
+            check(!DrillOptions.Field.BOT_JUMP.visible(DrillOptions.forDrill(Drill.OBI_TRAP), TrainingSettings.Mode.UHC),
+                "BOT_JUMP bei OBI_TRAP ausgeblendet");
+
+            // Arena-Groesse Option ueberall verfuegbar und in TrainingProfiles persistierbar
+            var opts = DrillOptions.forDrill(Drill.DUEL);
+            check(!opts.largeArena(), "Arena standardmaessig Standard");
+            var largeOpts = opts.withIndex(DrillOptions.Field.ARENA_SIZE, 1);
+            check(largeOpts.largeArena(), "Arena auf Gross umstellbar");
+            Path tempDir = Files.createTempDirectory("macher-large-arena-profile-");
+            try {
+                Path file = tempDir.resolve("pvptrainer.json");
+                var profiles = new TrainingProfiles(file);
+                profiles.saveSetup(TrainingSettings.defaults(TrainingSettings.Mode.HUGOSMP), largeOpts);
+                var reloaded = new TrainingProfiles(file);
+                check(reloaded.selected().mode() == TrainingSettings.Mode.HUGOSMP, "HugoSMP-Modus gespeichert");
+                check(reloaded.options(TrainingSettings.Mode.HUGOSMP).largeArena(), "ARENA_SIZE=Gross persistiert");
+            } finally {
+                deleteRecursive(tempDir);
+            }
+
+            // Standard-HP fuer DOUBLE_ANCHOR, CORNER_WEB_DTAP und MACE_COUNTER_DTAP (damit 1. Pop sicher ausloest)
+            check(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.DOUBLE_ANCHOR).maxHealth() == 10,
+                "DOUBLE_ANCHOR startet mit 10 Bot-LP");
+            check(TrainingSettings.defaults(TrainingSettings.Mode.HUGOSMP).forDrill(Drill.CORNER_WEB_DTAP).maxHealth() == 10,
+                "CORNER_WEB_DTAP startet mit 10 Bot-LP");
+            check(TrainingSettings.defaults(TrainingSettings.Mode.HUGOSMP).forDrill(Drill.MACE_COUNTER_DTAP).maxHealth() == 10,
+                "MACE_COUNTER_DTAP startet mit 10 Bot-LP");
+        });
+    }
+
+    private static void testLargeArenaGeometry() throws Exception {
+        run("ForgeArena: Grosse Arena mit 80 Bloecken Tiefe, flacher Mitte und sanften Huegeln", () -> {
+            check(ForgeArena.largeDepthBlocks() == 80, "Tiefe muss exakt 80 Bloecke sein");
+            check(ForgeArena.minFloor(false) == 60, "Standard-Arena minFloor=60");
+            check(ForgeArena.minFloor(true) == ForgeArena.FLOOR - 81, "Grosse Arena minFloor=-17 (80 grabbar + Bedrock)");
+            check(ForgeArena.largeRadius() == 56, "Grosser Radius 56");
+
+            int maxHill = 0;
+            int nonZeroCount = 0;
+            int r = ForgeArena.largeRadius();
+            for (int x = -r; x <= r; x++) {
+                for (int z = -r; z <= r; z++) {
+                    int h = ForgeArena.largeHillOffset(x, z);
+                    check(h >= 0 && h <= 4, "Huegelhoehe ausserhalb 0..4 bei " + x + "," + z + ": " + h);
+                    if (Math.hypot(x, z) <= 10.5) {
+                        check(h == 0, "Zentrales Spawn-Plateau muss flach sein bei " + x + "," + z + ": " + h);
+                    }
+                    if (h > maxHill) maxHill = h;
+                    if (h > 0) nonZeroCount++;
+                    if (x < r) {
+                        int dx = Math.abs(h - ForgeArena.largeHillOffset(x + 1, z));
+                        check(dx <= 1, "Huegelstufe X > 1 Block bei " + x + "," + z + ": " + dx);
+                    }
+                    if (z < r) {
+                        int dz = Math.abs(h - ForgeArena.largeHillOffset(x, z + 1));
+                        check(dz <= 1, "Huegelstufe Z > 1 Block bei " + x + "," + z + ": " + dz);
+                    }
+                }
+            }
+            check(maxHill >= 2 && nonZeroCount > 500, "Grosse Arena braucht spuerbare Huegel: max=" + maxHill + " count=" + nonZeroCount);
+        });
+    }
+
+    private static void testStunSlamAlwaysCountsInOpenWindow() throws Exception {
+        run("DrillAttempt: STUN_SLAM zaehlt im offenen Schildfenster auch bei Bodenkontakt/jeder Hoehe", () -> {
+            // Positivfall 1: Bodenkontakt (fallDistance = 0.0) nach Axt-Stun -> zaehlt sofort als Erfolg
+            var groundedSlam = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            groundedSlam.observeFall(10, 18.0);
+            groundedSlam.shieldStun(25);
+            check(groundedSlam.acceptStunSlam(0.0, false), "Mace-Treffer nach Axt-Stun muss auch bei fallDistance=0 zaehlen");
+            check(groundedSlam.done() && groundedSlam.won(), "STUN_SLAM muss gewonnen sein");
+
+            // Positivfall 2: Klassischer Luft-Smash aus Hoehe 19
+            var airSlam = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            airSlam.observeFall(10, 19.0);
+            airSlam.shieldStun(25);
+            check(airSlam.acceptStunSlam(19.0, false) && airSlam.won(), "STUN_SLAM aus Hoehe 19 gewonnen");
+
+            // Gegenfall 1: Mace-Treffer VOR dem Axt-Stun darf nicht zaehlen
+            var noAxe = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            check(!noAxe.acceptStunSlam(18.0, false) && !noAxe.done(), "Ohne Axt-Stun kein Erfolg");
+
+            // Gegenfall 2: Ziel blockt noch -> darf nicht zaehlen
+            var stillBlocking = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            stillBlocking.shieldStun(25);
+            check(!stillBlocking.acceptStunSlam(18.0, true) && !stillBlocking.done(), "Blockendes Ziel kein Erfolg");
+
+            // Rollendes Fallfenster: 3 Ticks Gueltigkeit nach letztem Fall > 1.5
+            var fall = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            fall.observeFall(20, 4.2);
+            check(fall.recentlyFell(), "Fall bei T+20 aktiv");
+            fall.observeFall(23, 0.0);
+            check(fall.recentlyFell(), "Fall 3 Ticks spaeter noch aktiv");
+            fall.observeFall(24, 0.0);
+            check(!fall.recentlyFell(), "Fall 4 Ticks spaeter abgelaufen");
+        });
+    }
+
+    private static void testNewDrillAttemptStateMachines() throws Exception {
+        run("DrillAttempt: DOUBLE_ANCHOR, SHIELD_DRAIN, MACE_COUNTER_DTAP & CORNER_WEB_DTAP", () -> {
+            // DOUBLE_ANCHOR Positivfall: 2 Anker-Pops im Zeitfenster
+            var daWin = new DrillAttempt(DrillOptions.forDrill(Drill.DOUBLE_ANCHOR), -1.0, 0);
+            daWin.anchor(null, BlockPos.ZERO, false);
+            daWin.anchorHit(14.0F);
+            daWin.anchorPop();
+            daWin.settleAnchor(null, 5);
+            check(!daWin.done(), "Nach Anker-Pop 1 noch offen");
+            daWin.anchor(null, BlockPos.ZERO, false);
+            daWin.anchorHit(14.0F);
+            daWin.anchorPop();
+            daWin.settleAnchor(null, 18);
+            check(daWin.done() && daWin.won(), "Zwei Anker-Pops im Fenster gewinnen DOUBLE_ANCHOR");
+
+            // DOUBLE_ANCHOR Gegenfall 1: Anker 2 ohne Pop -> Fehlschlag
+            var daNoPop = new DrillAttempt(DrillOptions.forDrill(Drill.DOUBLE_ANCHOR), -1.0, 0);
+            daNoPop.anchor(null, BlockPos.ZERO, false);
+            daNoPop.anchorPop();
+            daNoPop.settleAnchor(null, 5);
+            daNoPop.anchor(null, BlockPos.ZERO, false);
+            daNoPop.anchorHit(8.0F);
+            daNoPop.settleAnchor(null, 12);
+            check(daNoPop.done() && !daNoPop.won(), "Anker 2 ohne Totem-Pop muss scheitern");
+
+            // DOUBLE_ANCHOR Gegenfall 2: Anker 2 nach Zeitfenster -> Fehlschlag
+            var daLate = new DrillAttempt(DrillOptions.forDrill(Drill.DOUBLE_ANCHOR), -1.0, 0);
+            daLate.anchor(null, BlockPos.ZERO, false);
+            daLate.anchorPop();
+            daLate.settleAnchor(null, 5);
+            daLate.anchor(null, BlockPos.ZERO, false);
+            daLate.anchorPop();
+            daLate.settleAnchor(null, 5 + DrillOptions.forDrill(Drill.DOUBLE_ANCHOR).windowTicks() + 5);
+            check(daLate.done() && !daLate.won(), "Anker 2 nach Zeitfenster muss scheitern");
+
+            // SHIELD_DRAIN Positivfall
+            var drain = new DrillAttempt(DrillOptions.forDrill(Drill.SHIELD_DRAIN), -1.0, 0);
+            check(!drain.done(), "SHIELD_DRAIN startet offen");
+            drain.shieldBreak();
+            check(drain.done() && drain.won(), "Schildbruch gewinnt SHIELD_DRAIN");
+
+            // MACE_COUNTER_DTAP: Schildblock + Gegenfall (ungeblockter Smash)
+            var mcBlock = new DrillAttempt(DrillOptions.forDrill(Drill.MACE_COUNTER_DTAP), -1.0, 0);
+            mcBlock.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, true, 0, true);
+            check(!mcBlock.done() && mcBlock.timingHint() != null && mcBlock.timingHint().contains("blocken"),
+                "Kristall vor Mace-Block darf nicht zaehlen");
+            mcBlock.maceCounterBlock(15);
+            check(mcBlock.maceCounterBlocked() && !mcBlock.done(), "Mace-Block entsperrt D-Tap");
+
+            var mcFail = new DrillAttempt(DrillOptions.forDrill(Drill.MACE_COUNTER_DTAP), -1.0, 0);
+            mcFail.maceCounterFailed(15);
+            check(mcFail.done() && !mcFail.won(), "Ungeblockter Mace-Smash verliert MACE_COUNTER_DTAP");
+
+            // CORNER_WEB_DTAP: Reihenfolge Web -> Shield Break -> 2 Crystal Pops + Gegenfall
+            var cw = new DrillAttempt(DrillOptions.forDrill(Drill.CORNER_WEB_DTAP), -1.0, 0);
+            cw.shieldStun(100);
+            check(!cw.isCornerShieldBroken() && cw.timingHint() != null, "Schildbruch vor Web darf D-Tap nicht freischalten");
+            cw.confirmCornerWeb(true);
+            check(cw.isCornerWebbed(), "Corner-Web bestaetigt");
+            cw.shieldStun(100);
+            check(cw.isCornerShieldBroken(), "Schildbruch nach Corner-Web bestaetigt");
+            cw.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, false, 0, true);
+            check(!cw.done(), "Nach 1. Kristall-Pop noch offen");
+            cw.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, false, 0, true);
+            check(cw.done() && cw.won(), "2. Kristall-Pop gewinnt CORNER_WEB_DTAP");
+
+            var cwNoPop = new DrillAttempt(DrillOptions.forDrill(Drill.CORNER_WEB_DTAP), -1.0, 0);
+            cwNoPop.confirmCornerWeb(true);
+            cwNoPop.shieldStun(100);
+            cwNoPop.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 12.0F, 0.0F, true, false, 0, false);
+            check(cwNoPop.done() && !cwNoPop.won(), "Kristall ohne Totem-Pop scheitert in CORNER_WEB_DTAP");
         });
     }
 

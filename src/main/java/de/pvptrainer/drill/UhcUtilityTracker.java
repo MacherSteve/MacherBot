@@ -79,7 +79,7 @@ final class UhcUtilityTracker {
     }
 
     void trapBlockPlaced(Drill drill, boolean done, BlockPos pos) {
-        if (drill == Drill.OBI_TRAP && !done) {
+        if (drill.isObiTrap() && !done) {
             trapSites.add(pos.immutable());
         }
     }
@@ -92,10 +92,10 @@ final class UhcUtilityTracker {
     }
 
     void webPlaced(DrillAttempt attempt, Drill drill, int tick, int stunUntil, BlockPos pos) {
-        if (drill == Drill.HEAD_WEB || tick < stunUntil) {
+        if (drill == Drill.HEAD_WEB || drill == Drill.CORNER_WEB_DTAP || tick < stunUntil) {
             webAt = tick;
             lastWebSite = pos.immutable();
-            attempt.event(drill == Drill.HEAD_WEB ? "Netz platziert" : "Netz nach Stun gesetzt");
+            attempt.event(drill == Drill.HEAD_WEB ? "Netz platziert" : (drill == Drill.CORNER_WEB_DTAP ? "Corner-Web platziert" : "Netz nach Stun gesetzt"));
         }
     }
 

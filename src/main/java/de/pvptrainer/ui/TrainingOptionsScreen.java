@@ -119,7 +119,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
                   step -> TrainerClient.saveOptions(this.mode, TrainerClient.options(this.mode).withIndex(var17, var17.indexForSliderStep(step)))));
                continue;
             }
-            String label = this.mode == TrainingSettings.Mode.MACE && var17 == DrillOptions.Field.REPLACE
+            String label = (this.mode == TrainingSettings.Mode.MACE || this.mode == TrainingSettings.Mode.HUGOSMP) && var17 == DrillOptions.Field.REPLACE
                   ? "Schild bei Verschleiß" : var17.label();
             var15.add(new TrainingOptionsScreen.Option(label, var2.value(var17, this.mode), () -> {
                TrainerClient.saveOptions(this.mode, TrainerClient.options(this.mode).next(var17, this.mode));
@@ -176,9 +176,13 @@ final class TrainingOptionsScreen extends TrainerPanel {
          } else if (var12.label().equals(DrillOptions.Field.WIND_FLIGHT.label())) {
             tile.tip("Kombiniert startet der Bot mit einer Windladung vom Boden und fängt im selben Flug seine Enderperle. Beim reinen Pearl Catch wirft er die Perle vom Boden aus.");
          } else if (var12.label().equals(DrillOptions.Field.ITEM_CONSUMPTION.label())) {
-            tile.tip(this.mode == TrainingSettings.Mode.MACE || this.mode == TrainingSettings.Mode.CRYSTAL
+            tile.tip(this.mode == TrainingSettings.Mode.MACE || this.mode == TrainingSettings.Mode.CRYSTAL || this.mode == TrainingSettings.Mode.HUGOSMP
                ? "Gilt für beide Kits. Totems werden bei jedem Pop verbraucht. Auto-Totem regelt das Nachfüllen beim Bot."
                : "Regelt den Verbrauch von Vorräten wie Pfeilen, Netzen und Heilitems für dich und den Bot.");
+         } else if (var12.label().equals(DrillOptions.Field.ARENA_SIZE.label())) {
+            tile.tip("Standard-Forge-Arena oder deutlich größere Arena mit leichten Hügeln und 80 Blöcken Tiefe im selben Stil.");
+         } else if (var12.label().equals(DrillOptions.Field.BOT_JUMP.label())) {
+            tile.tip("Lässt den Bot beim Stun-Web dauerhaft springen.");
          } else if (var12.label().equals(DrillOptions.Field.ARMOR_WEAR.label())) {
             tile.tip("Bestimmt, ob die getragene Rüstung von dir und dem Bot Haltbarkeit verliert.");
          } else if (var12.label().equals(DrillOptions.Field.FALL_DAMAGE.label())) {
@@ -259,7 +263,10 @@ final class TrainingOptionsScreen extends TrainerPanel {
       }
 
       List var2 = switch (var1) {
-         case HIT_CRYSTAL, D_TAP, TRIPLE_TAP, TAP_ANCHOR -> List.of(DrillOptions.Field.BASE, DrillOptions.Field.CRYSTAL_AIR, DrillOptions.Field.TERRAIN);
+         case HIT_CRYSTAL, D_TAP, TRIPLE_TAP, SHIELD_TRIPLE_TAP, TAP_ANCHOR, MACE_COUNTER_DTAP, CORNER_WEB_DTAP -> List.of(
+            DrillOptions.Field.BASE, DrillOptions.Field.CRYSTAL_AIR, DrillOptions.Field.TERRAIN
+         );
+         case DOUBLE_ANCHOR -> List.of(DrillOptions.Field.TERRAIN, DrillOptions.Field.WINDOW);
          case LEDGE_DASH -> List.of(DrillOptions.Field.LEDGE, DrillOptions.Field.BASE);
          case SAFE_ANCHOR, HEAL -> List.of(DrillOptions.Field.COVER);
          case RETOTEM, DOUBLE_HAND -> List.of(DrillOptions.Field.BURST_PATTERN, DrillOptions.Field.REACTION);
@@ -274,6 +281,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
       };
       ArrayList var3 = new ArrayList(var2);
       if (this.mode == TrainingSettings.Mode.MACE) var3.add(0, DrillOptions.Field.PEARL_CATCH_ONLY);
+      var3.add(DrillOptions.Field.ARENA_SIZE);
       var3.add(DrillOptions.Field.TICK_RATE);
       var3.add(DrillOptions.Field.PLAYER_PING);
       var3.add(DrillOptions.Field.BOT_PING);
@@ -298,6 +306,10 @@ final class TrainingOptionsScreen extends TrainerPanel {
                case HIT_CRYSTAL:
                case D_TAP:
                case TRIPLE_TAP:
+               case SHIELD_TRIPLE_TAP:
+               case DOUBLE_ANCHOR:
+               case MACE_COUNTER_DTAP:
+               case CORNER_WEB_DTAP:
                case TAP_ANCHOR:
                case SMASH:
                case WIND_CHAIN:
@@ -363,7 +375,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
 
       static TrainingOptionsScreen.Group of(DrillOptions.Field var0) {
          return switch (var0) {
-            case GAZE, TURN_RATE, BOT_REACH, WIND_CENTER, WIND_FLIGHT -> BOT;
+            case GAZE, TURN_RATE, BOT_REACH, WIND_CENTER, WIND_FLIGHT, BOT_JUMP -> BOT;
             case TOTEMS, REFILL, RESET_POP, SHIELD, REPLACE, REBLOCK, DURABILITY, SHIELD_BREAK_TICKS, ARMOR_WEAR, ITEM_CONSUMPTION, FALL_DAMAGE -> DEFENSE;
             default -> SCENE;
          };

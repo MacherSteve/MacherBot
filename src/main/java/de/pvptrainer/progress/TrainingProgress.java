@@ -267,7 +267,7 @@ public final class TrainingProgress {
             OutcomeOverlay.show(owner, result.won());
             if (HudPreferences.hints()) {
                 var title = Component.literal(result.won() ? "Geschafft" : "Fehlversuch").withStyle(result.won() ? ChatFormatting.GREEN : ChatFormatting.RED);
-                String detail = !result.won() ? result.reason() : options.drill() == Drill.OBI_TRAP
+                String detail = !result.won() ? result.reason() : options.drill().isObiTrap()
                     ? TrainingStatus.ObiTimer.format(run.seconds()) : run.score() + " Punkte";
                 SystemToast.addOrUpdate(client.gui.toastManager(), RESULT_TOAST, title, Component.literal(detail));
             }
