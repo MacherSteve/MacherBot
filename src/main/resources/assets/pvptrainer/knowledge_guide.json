@@ -1,0 +1,427 @@
+[
+  {
+    "id": "sword_hit_types",
+    "category": "BASICS",
+    "title": "4 Schwert-Treffer & 84,8 %",
+    "icon": "diamond_sword",
+    "summary": "Das Schwert kennt 4 Treffertypen: Sprint-Knockback-Hit, Crit, Normal-/Weak-Hit und Sweep. Erst ab über 84,8 % Aufladung zählt ein Schlag als voll geladen (Sprint-KB bzw. Crit).",
+    "timing": "> 84,8 % Charge · Sprint-Hit = +0,5 Extra-KB · Crit = 1,5× Schaden (nur ohne Sprint)",
+    "example": "Nutze Sprint-KB-Hits zum Eröffnen und Distanzhalten; wechsle erst auf Crits, wenn du Raumkontrolle hast oder den Gegner aushebelst.",
+    "steps": [
+      "Für vollen Rückstoß: nach vorne sprinten (W) und erst über 84,8 % Charge zuschlagen.",
+      "Nach dem Sprint-Hit kurz W lösen (W-Tap), damit der nächste Schlag wieder ein Sprint-Hit wird.",
+      "Für einen Crit: im Fallen ohne Sprint schlagen (Sprint deaktiviert Crits in Vanilla)."
+    ],
+    "mistakes": "Zu schnelles Spammen (< 84,8 %) kostet KB und Schaden. Blinde Crits gegen Sprint-KB-Hits verlieren den ersten Trade.",
+    "mode": "SWORD",
+    "drill": "SPACING"
+  },
+  {
+    "id": "shield_mechanics",
+    "category": "BASICS",
+    "title": "Schild-Delay (250 ms) & 5 s Disable",
+    "icon": "shield",
+    "summary": "Ein gehobenes Schild braucht 250 ms (5 Ticks) plus Ping, bis es tatsächlich blockt. Ein frontaler Axttreffer deaktiviert das Schild für volle 5 Sekunden (100 Ticks).",
+    "timing": "5 Ticks (250 ms) + Ping Hochheb-Delay · 100 Ticks (5 s) Disable ≈ 4 volle Schwertschläge",
+    "example": "Nach jedem Axt-Stun kannst du im Kopf bis ~4 Schläge mitzählen – danach kommt das Schild des Gegners wieder zurück und du bereitest sofort den nächsten Stun vor.",
+    "steps": [
+      "Schild immer rechtzeitig vor dem Einschlag heben (250 ms Vorlauf einplanen).",
+      "Nach eigenem Schildbruch ~4 Treffer Druck machen, dann rechtzeitig wieder Axt bereithalten.",
+      "Im Schildduell niemals während eines Zwischentreffers panisch das Schild senken."
+    ],
+    "mistakes": "Wer erst beim Einschlag Rechtsklick drückt, kassiert Treffer durch das noch hochhebende Schild.",
+    "mode": "UHC",
+    "drill": "SHIELD_TIMING"
+  },
+  {
+    "id": "auto_hit_cooldown_trick",
+    "category": "BASICS",
+    "title": "Auto-Hit & Cooldown-Trick",
+    "icon": "netherite_axe",
+    "summary": "Beim Auto-Hit klickst du während des Blockens rhythmisch mit der Axt: Sobald dein Schild gebrochen wird, landet sofort ein freier Gegentreffer. Beim Cooldown-Trick (1-Tick-Swap) kombinierst du Grundschaden und Eigenschaften zweier Waffen.",
+    "timing": "Auto-Hit: sofort 0–1 Tick nach Schildbruch · Cooldown-Trick: Waffenwechsel im selben Tick",
+    "example": "Wenn der Gegner ≤ 3 Herzen hat (ohne Schild) oder sein 5-Sekunden-Schild-Cooldown abläuft, liefert Axt → Schwert den höchsten garantierten Schaden.",
+    "steps": [
+      "Auto-Hit: Schild halten und mit der Axt in der Haupthand klicken, bis der gegnerische Stun trifft.",
+      "Cooldown-Trick: Erst nach ~4 Treffern starten, wenn das gegnerische Schild zurückkehrt.",
+      "Axt-Crit → Schwert-Swap nur bei Low-HP (≤ 3 HP) oder wenn der Gegner kein Schild hat."
+    ],
+    "mistakes": "Axt-Crit-Swap gegen ein aktives Schild blockiert dich im schlechten Cooldown.",
+    "mode": "UHC",
+    "drill": "MOMENTUM_BREAK"
+  },
+  {
+    "id": "momentum_sumo_rule",
+    "category": "BASICS",
+    "title": "Momentum & 60 % KB-Trade",
+    "icon": "iron_boots",
+    "summary": "Momentum hat, wer nach vorne drückt, während der Gegner zurückgeworfen wird. Wenn du kurz vor dem Gegentreffer selbst triffst, verlangsamt dein eigener Schlag deinen Rückstoß deutlich (~60 % weniger KB).",
+    "timing": "Treffer-Trade im gleichen Fenster reduziert deinen Rückstoß · niemals umdrehen ohne Reset",
+    "example": "In UHC und Sword: statt bei Druck S zu halten oder wegzurennen, halte W und erzwinge wie beim Sumo einen direkten KB-Trade, um das Momentum zurückzuholen.",
+    "steps": [
+      "Nach einem freien Treffer (Stun/Eröffnung) sofort W halten und nachsetzen.",
+      "Verlierst du Momentum: entweder sauber weit genug rausgehen (S-Reset) oder offensiv einen KB-Trade nehmen.",
+      "Drehe dem Gegner nur den Rücken zu, wenn du bereits echten Abstand zum Gappen hast."
+    ],
+    "mistakes": "Dauerhaft S drücken nach eigenem Treffer schenkt dem Gegner das komplette Momentum.",
+    "mode": "SWORD",
+    "drill": "SPACING"
+  },
+  {
+    "id": "hit_select",
+    "category": "SWORD",
+    "title": "Hit Select",
+    "icon": "iron_sword",
+    "summary": "Du lässt bewusst den ersten Treffer des Gegners zu und konterst direkt im Rückstoß. Weil dein Treffer später im Austausch liegt, übernimmst du sofort die Kombo-Kontrolle.",
+    "timing": "Konter innerhalb von ~4–8 Ticks im Rückstoß + sauberer Anschluss nach Landung",
+    "example": "Perfekt gegen aggressive Gegner, die stur mit W auf dich zulaufen oder in einer P-Crit-Chain festhängen.",
+    "steps": [
+      "Nicht zu früh schlagen – den ersten Sprint-Hit des Gegners annehmen.",
+      "Noch im Rückstoß sauber zurückschlagen, um den Gegner aus dem Rhythmus zu heben.",
+      "Direkt nach deiner Landung mit Sprint-W nachsetzen und die Kombo halten."
+    ],
+    "mistakes": "Zu frühes Klicken führt zum Trade oder gibt dem Gegner selbst einen gratis Hit Select.",
+    "mode": "SWORD",
+    "drill": "HIT_SELECT"
+  },
+  {
+    "id": "jump_reset",
+    "category": "SWORD",
+    "title": "Jump Reset",
+    "icon": "feather",
+    "summary": "Wenn du exakt im Moment des gegnerischen Treffers springst, geht mehr Impuls nach oben statt nach hinten. Dadurch bleibst du in Schlagreichweite und brichst Kombos.",
+    "timing": "Sprung innerhalb von ±1–2 Ticks um den gegnerischen Schwerttreffer",
+    "example": "Besonders stark gegen Sprint-Hits im offenen Schwertduell und gegen Auto-Hits direkt nach einem Axt-Stun.",
+    "steps": [
+      "Anlauf und 3-Block-Reichweite des Gegners genau lesen.",
+      "Im exakten Moment des Treffers (Rot-Aufblitzen) Space drücken.",
+      "Direkt im Anschluss mit W am Gegner bleiben und Gegentreffer landen."
+    ],
+    "mistakes": "Zu frühes Springen macht dich in der Luft noch leichter kombinierbar statt den Rückstoß zu dämpfen.",
+    "mode": "SWORD",
+    "drill": "JUMP_RESET"
+  },
+  {
+    "id": "punish_crit",
+    "category": "SWORD",
+    "title": "Punish Crit (P-Crit)",
+    "icon": "golden_sword",
+    "summary": "Der gegnerische Rückstoß hebt dich automatisch in die Luft. Auf dem Weg nach unten landest du einen voll aufgeladenen Crit – ganz ohne eigenen Sprung.",
+    "timing": "Nach gegnerischem Hit erst im Abwärtsbogen (fallDistance > 0, ohne Sprint) schlagen",
+    "example": "Ideal in engen Trades, wenn der Gegner dich hochschlägt und weiter in dich hineinläuft.",
+    "steps": [
+      "Gegnerischen Treffer annehmen, ohne selbst vorher zu springen.",
+      "Kurz warten, bis du den Scheitelpunkt überschreitest und fällst.",
+      "Im Fallen voll geladenen Schwerttreffer (ohne Sprint) für 1,5× Crit-Schaden landen."
+    ],
+    "mistakes": "Endlose P-Crit-Ketten halten: Top-Spieler brechen sie aktiv per Abstand + Sprint-KB-Hit.",
+    "mode": "SWORD",
+    "drill": "PUNISH_CRIT"
+  },
+  {
+    "id": "pcrit_break",
+    "category": "SWORD",
+    "title": "P-Crit Break",
+    "icon": "netherite_sword",
+    "summary": "Aus einem Punish-Crit-Trade löst du kurz W, gewinnst einen Hauch Abstand und triffst dann mit einem vollen Sprint-Knockback-Hit statt weiter Crits zu tauschen.",
+    "timing": "Kurz W lösen → Abstand öffnen → Sprint-KB-Hit (> 84,8 %) → sofortiger Folge-Hit",
+    "example": "Swights Konter gegen Spieler, die in jeder Situation nur P-Crits spammen: einmal distanzieren, weghitten, Kombo starten.",
+    "steps": [
+      "Ersten Treffer des Gegners annehmen und nicht blind W gedrückt halten.",
+      "Einen kurzen Moment Abstand schaffen, bis der Gegner ins Leere crittet.",
+      "Voll ansprinten, Sprint-KB-Hit landen und sofort den zweiten Treffer nachsetzen."
+    ],
+    "mistakes": "Zu früh schlagen (du wirst selbst hit-selected) oder zu spät reagieren (Gegner landet freien Crit).",
+    "mode": "SWORD",
+    "drill": "PCRIT_BREAK"
+  },
+  {
+    "id": "uppercut_crit_bait",
+    "category": "SWORD",
+    "title": "Uppercut & Crit-Bait (S-Bait)",
+    "icon": "stone_sword",
+    "summary": "Beim Uppercut triffst du aus einer tieferen Position (Geometrie-Vorteil von deinen Augen zu den Füßen des Gegners) oder konterst im Rückstoß. Beim Crit-Bait täuschst du an der 3-Block-Kante einen Angriff an, gehst kurz mit S zurück und bestrafst den Fehlschlag mit einem Crit.",
+    "timing": "3-Block-Kante antäuschen → S + Seitensprung → freier Crit beim Nachrücken",
+    "example": "In hügeligem Gelände (Große Arena) immer die tiefere Position suchen; auf ebener Fläche an der Reach-Kante S-Bait nutzen.",
+    "steps": [
+      "Knapp außerhalb der 3-Block-Reichweite bleiben und kurz nach vorne antäuschen.",
+      "Bei gegnerischem Sprung/Schlag kurz zurückweichen oder aus tieferer Position hochschlagen.",
+      "Sofort in den offenen Cooldown des Gegners mit einem Treffer oder Crit kontern."
+    ],
+    "mistakes": "Zu tief in die Reichweite hineinlaufen – dann gewinnt der Gegner den ersten Sprint-Hit.",
+    "mode": "SWORD",
+    "drill": "UPPERCUT"
+  },
+  {
+    "id": "shield_timing_insta",
+    "category": "UHC",
+    "title": "Shield Timing & Insta-Shield",
+    "icon": "shield",
+    "summary": "Reines Schwert-&-Schild-Training ohne Axt schärft deine Disziplin. Nach einem kassierten Zwischentreffer hältst du konsequent dein Schild, bis der Gegner es trifft – erst dann konterst du. Mit Insta-Shield (LMB + RMB gleichzeitig) verkürzt du die Lücke nach einem Schlag minimal.",
+    "timing": "Nach Zwischentreffer: Schild halten bis Block → sofort Konter · Insta-Shield: LMB+RMB gleichzeitig",
+    "example": "99 % aller Spieler schlagen panisch nach einem Weak-Hit zurück und fressen sofort den Doppel-Hit. Ruhiges Halten dreht jeden Trade.",
+    "steps": [
+      "Nimm keine Axt – spiele sauber nur mit Schwert (1) und Schild.",
+      "Trifft dich der Gegner zwischen deinen Blocks: sofort Schild halten, NICHT zurückschlagen.",
+      "Sobald sein Schlag an deinem Schild abprallt, direkt in seinen Cooldown kontern und wieder Insta-Shielden."
+    ],
+    "mistakes": "Auf Jump-Baits hereinfallen und das Schild zu früh fallen lassen, bevor ein echter Schlag kommt.",
+    "mode": "UHC",
+    "drill": "SHIELD_TIMING"
+  },
+  {
+    "id": "momentum_break",
+    "category": "UHC",
+    "title": "Momentum Break",
+    "icon": "diamond_axe",
+    "summary": "Du springst in den Schildbruch hinein, fängst den unvermeidlichen Auto-Hit des Gegners per Jump-Reset ab und wechselst ohne Verzögerung aufs Schwert.",
+    "timing": "Im Fallen Axt-Stun → bei Landung Space (Jump-Reset auf Auto-Hit) → Slot 1 Schwert",
+    "example": "Gegen gute Spieler, die bei jedem Schildbruch sofort auto-hitten, behältst du damit trotzdem 100 % Vorwärts-Momentum.",
+    "steps": [
+      "In den blockenden Gegner hineinspringen und das Schild kurz vor deiner Landung mit der Axt brechen.",
+      "Direkt beim Auto-Hit des Gegners Space drücken (Jump-Reset).",
+      "Ohne Zögern aufs Schwert (1) wechseln und den Anschluss landen."
+    ],
+    "mistakes": "Nach dem Stun noch mit der Axt stehen bleiben oder das Jump-Reset-Timing verpassen.",
+    "mode": "UHC",
+    "drill": "MOMENTUM_BREAK"
+  },
+  {
+    "id": "stun_web",
+    "category": "UHC",
+    "title": "Stun-Web & Web Stun Dunk",
+    "icon": "cobweb",
+    "summary": "Ein schneller Axt-Doppelklick bricht das Schild (Klick 1) und hebt den Gegner an (Klick 2), sodass du ihn vor der Landung im Cobweb fängst. Beim Web Stun Dunk springst du im Crit-Timing in den Auto-Hit, um kaum Rückstoß zu nehmen.",
+    "timing": "Axt-Doppelklick ≤ 4 Ticks · Blick schon beim Stun tief halten · Pre-Strafe für Sicht auf den Boden",
+    "example": "Steht der Gegner an der hinteren Blockkante, setze das Netz einen Block dahinter. Nach jedem Treffer im Web immer Lava obendrauf setzen!",
+    "steps": [
+      "Position des Gegners auf dem Block lesen (Mitte vs. hintere Kante/Ecke).",
+      "Leicht seitlich anlaufen (Pre-Strafe) und schon beim Axt-Stun weit nach unten zielen.",
+      "Nach dem Doppelklick sofort Cobweb (8) in die Landezone platzieren."
+    ],
+    "mistakes": "Zu nah im Gegner stehen (blockiert das Platzieren) oder erst nach dem Stun langsam nach unten schauen.",
+    "mode": "UHC",
+    "drill": "STUN_WEB"
+  },
+  {
+    "id": "web_lava_dunk",
+    "category": "UHC",
+    "title": "Web Dunk & Lava Dunk",
+    "icon": "lava_bucket",
+    "summary": "Dunking verbindet einen echten Schwert-Crit direkt mit einem Cobweb oder Lava in der Flugbahn – ganz ohne vorherigen Schild-Stun. Ideal als Match-Eröffnung oder Disengage.",
+    "timing": "Crit → sofort strafen → Web in Landeblock / Lava in die Aufwärtsbewegung",
+    "example": "Nutze Web Dunks bei gerader Positionierung (nicht diagonal). Lava Dunks eignen sich super zum Rausgehen aus einem Trade, weil der Gegner erst löschen muss.",
+    "steps": [
+      "Gerade auf den ungeschützten Gegner zulaufen und einen echten Crit landen.",
+      "Unmittelbar nach dem Crit leicht seitlich ausweichen (Strafe), um Platz zu schaffen.",
+      "Cobweb in die Landezone oder Lava in die Aufwärtsbewegung setzen – optimal danach Web + Lava kombinieren."
+    ],
+    "mistakes": "Auf jeden beliebigen Crit blind ein Web werfen statt saubere Positionierungen zu wählen; Lava erst auf dem Weg nach unten setzen.",
+    "mode": "UHC",
+    "drill": "WEB_DUNK"
+  },
+  {
+    "id": "anti_drain",
+    "category": "UHC",
+    "title": "Anti-Drain (Hit → 180° Water)",
+    "icon": "water_bucket",
+    "summary": "Wenn du im Cobweb steckst, darfst du niemals blind Wasser vor dir setzen – gute Gegner drainen es sofort. Erst Schild halten, Gegner per W-Tap wegschlagen, dann 180° drehen und hinter dir watern!",
+    "timing": "Im Web: Schild → W-Tap-KB-Hit → 180°-Drehung → Wasser außer Reichweite (> 4,5 Bl.)",
+    "example": "Swights wichtigste Defensiv-Regel gegen Drain-Spieler: „Whenever you're in a web: HIT, then WATER.“",
+    "steps": [
+      "Sofort Schild heben, sobald du im Cobweb landest.",
+      "Nach dem gegnerischen Schlag per W-Tap einen Knockback-Hit landen, um Abstand zu schaffen.",
+      "180° wegdrehen und Wasser hinter dir setzen (unerreichbar zum Drainen) und sicher entkommen."
+    ],
+    "mistakes": "Sofort beim Webben auf die eigenen Füße watern – du verlierst deinen Eimer und kassierst 3–4 gratis Crits.",
+    "mode": "UHC",
+    "drill": "ANTI_DRAIN"
+  },
+  {
+    "id": "web_drain_relava",
+    "category": "UHC",
+    "title": "Web Drain & Re-Lava",
+    "icon": "bucket",
+    "summary": "Lies anhand der Position des Gegners im Netz, wo er sein Wasser setzen wird (vorne, oben oder Ecke), und schöpfe seine Rettungswasserquelle sofort ab – oder nutze Double-Lava / Re-Lava nach dem Löschen.",
+    "timing": "Leerer Eimer (Spam-Rightclick auf erwarteten Block) oder Sprung-Timing für Double-Lava",
+    "example": "Steht der Gegner weit hinten im Web, setzt er Wasser meist oben drauf; steht er weit vorne, oft direkt vor das Web.",
+    "steps": [
+      "Position des Gegners im Cobweb beobachten und leeren Eimer bereithalten.",
+      "Sobald das Rettungswasser erscheint, die Quellstelle sofort abschöpfen (Drain).",
+      "Bei Re-Lava: nach dem gegnerischen Löschen direkt die zweite Lava nachsetzen."
+    ],
+    "mistakes": "Zu weit weg stehen (> 4,5 Bl.) oder leeren Eimer zu spät wählen.",
+    "mode": "UHC",
+    "drill": "WEB_DRAIN"
+  },
+  {
+    "id": "clean_healing_punish",
+    "category": "UHC",
+    "title": "Clean Healing & Heal-Punish",
+    "icon": "golden_apple",
+    "summary": "Wenn du beim Essen eines Goldapfels 3 Crits kassierst, hat der Gap nichts gebracht. Heile erst mit echtem Abstand (Hit → Water, Bogen, Deckung). Umgekehrt: siehst du den Gegner zu nah gappen, geh all-in mit Crits!",
+    "timing": "Gaps ab ≤ 8,5 Herzen (+2 ❤) · Heads zuerst ab ≤ 6 Herzen (+4 ❤) · Ziel: 0 Treffer beim Essen",
+    "example": "Lieber mit 2 Herzen über die ganze Arena rennen als direkt im Gesicht des Gegners zu gappen. Bei gegnerischem Gap sofort sprinten und critten.",
+    "steps": [
+      "Für eigenen Heal: Gegner erst mit Hit → Water, Bogen oder Blöcken auf Distanz bringen.",
+      "Golden Heads zuerst nutzen (ab ≤ 6 Herzen), Gaps auf Distanz ab ≤ 8,5 Herzen.",
+      "Für Heal-Punish: bei sichtbarem gegnerischem Gap sofort Schild runter und maximale Crits landen."
+    ],
+    "mistakes": "In Schlagreichweite gappen oder dem gegnerischen Heal passiv zusehen.",
+    "mode": "UHC",
+    "drill": "HEAL_PUNISH"
+  },
+  {
+    "id": "dtap_triple_tap",
+    "category": "CRYSTAL",
+    "title": "D-Tap & Triple Tap",
+    "icon": "end_crystal",
+    "summary": "Du hebst den Gegner mit einem Nahkampftreffer an und löst vor seiner Landung zwei (D-Tap) bzw. drei (Triple Tap) End-Kristalle aus, sodass jeder Kristall ein echtes Totem poppt.",
+    "timing": "Vanilla Hurt-Immunity = 10 Ticks · auf Schwer + Blast Prot IV poppt ein naher Kristall 10 Herzen / 9 LP nach Pop",
+    "example": "Standard-Win-Condition im Crystal PvP: Nach Pop 1 hält ein optionaler Luft-Tap den Gegner oben für Kristall 2 und 3.",
+    "steps": [
+      "Mit Totem-Sprint oder Schwert eröffnen, Obsidian in die Flugbahn setzen.",
+      "Kristall 1 zünden (Pop 1 hebt Gegner erneut an).",
+      "Im nächsten Schadensfenster Kristall 2 (und beim Triple Tap per Luft-Tap Kristall 3) vor Bodenkontakt zünden."
+    ],
+    "mistakes": "Zu früh in geschlossener Hurt-Immunity zünden (0 Schaden) oder zu spät, sodass der Gegner zuerst den Boden berührt.",
+    "mode": "CRYSTAL",
+    "drill": "D_TAP"
+  },
+  {
+    "id": "shield_triple_tap",
+    "category": "CRYSTAL",
+    "title": "Shield-Triple-Tap",
+    "icon": "obsidian",
+    "summary": "Viele Spieler ziehen nach dem ersten Totem-Pop sofort ihr Schild, um weitere Lufttreffer zu blocken. Du brichst das Schild noch in der Luft mit der Axt und schließt mit zwei Folgekristallen ab.",
+    "timing": "Pop 1 → Axt-Stun in der Luft → Kristall 2 & 3 vor der Landung",
+    "example": "Typische Situation im Crystal- und HugoSMP-PvP gegen defensive Gegner nach dem ersten Pop.",
+    "steps": [
+      "Normal eröffnen und mit Kristall 1 den ersten Totem-Pop auslösen.",
+      "Sobald der Gegner sein Schild hebt, in der Luft mit der Axt das Schild brechen.",
+      "Sofort zwei weitere Kristalle setzen und zünden, bevor der Gegner landet."
+    ],
+    "mistakes": "Mit dem Schwert oder Totem auf das gehobene Schild schlagen statt auf die Axt zu wechseln.",
+    "mode": "CRYSTAL",
+    "drill": "SHIELD_TRIPLE_TAP"
+  },
+  {
+    "id": "self_web_floor_crystal",
+    "category": "CRYSTAL",
+    "title": "Self-Web · Boden-Crystal",
+    "icon": "cobweb",
+    "summary": "Webt sich ein Gegner selbst ein, kannst du ihn nicht über erhöhtes Obsidian hochschlagen – erhöhte Kristalle werden vom Obsidian abgeschirmt (~6 LP). Setze Obsidian stattdessen auf Fußhöhe IN den Boden für volle ~19 LP Schaden!",
+    "timing": "Kristall auf Fußhöhe (origin.y ≤ bot.y) = 100 % Sichtanteil → ~18,9 LP auf Schwer",
+    "example": "Gegen Gegner, die sich in Cobwebs verschanzen: Bodenblock neben dem Netz abbauen, Obsidian bündig einsetzen und doppelt poppen.",
+    "steps": [
+      "Bodenblock direkt neben dem eingewebten Gegner freimachen (oder vorbereitete Basis nutzen).",
+      "Obsidian bündig auf Fußhöhe in den Boden setzen.",
+      "Zwei Boden-Kristalle im richtigen 10-Tick-Rhythmus für 2 Totem-Pops zünden."
+    ],
+    "mistakes": "Obsidian auf den Boden stellen (1 Block zu hoch): Das Obsidian blockt die Explosion und du schaffst keinen Pop.",
+    "mode": "CRYSTAL",
+    "drill": "SELF_WEB_CRYSTAL"
+  },
+  {
+    "id": "double_safe_anchor",
+    "category": "CRYSTAL",
+    "title": "Double Anchor & Safe Anchor",
+    "icon": "respawn_anchor",
+    "summary": "Geladene Seelenanker explodieren in der Overworld/Arena mit enormem Schaden. Bei Safe Anchor nutzt du einen Block Deckung gegen Selbstschaden; bei Double Anchor verbindest du zwei Anker direkt zu einem Doppel-Pop.",
+    "timing": "Anker setzen → Glowstone laden → mit Totem/Block rechtsklicken → sofort Anker 2",
+    "example": "Ideal in engen Räumen oder wenn der Gegner Obsidian zerstört oder im Loch steht.",
+    "steps": [
+      "Anker neben dem Gegner platzieren und mit Glowstone aufladen.",
+      "Bei Safe Anchor hinter einen Deckungsblock (Obsidian) treten, damit der Gegner deutlich mehr Schaden nimmt als du.",
+      "Mit einem Nicht-Glowstone-Item (z. B. Totem) zünden und bei Double Anchor sofort den zweiten Anker nachlegen."
+    ],
+    "mistakes": "Ohne Deckung direkt neben dem eigenen Anker stehen oder mit Glowstone weiter aufladen statt zu zünden.",
+    "mode": "CRYSTAL",
+    "drill": "DOUBLE_ANCHOR"
+  },
+  {
+    "id": "stun_slam_wind_burst",
+    "category": "MACE",
+    "title": "Stun Slam & Wind Burst",
+    "icon": "mace",
+    "summary": "Im freien Fall (> 1,5 Blöcke Fallstrecke) deaktivierst du erst das gegnerische Schild mit der Axt und landest sofort im selben Fall einen vollen Mace-Smash mit Wind Burst, der dich direkt wieder in die Luft katapultiert.",
+    "timing": "Fallhöhe > 1,5 Bl. · Axt-Stun → schneller Slot-Wechsel auf Wind-Burst-Mace → Auftrieb",
+    "example": "Kern-Technik im Mace PvP: Ohne Wind-Burst-Auftrieb oder mit einem reinen Bodentap verlierst du nach dem Smash sofort die Höhenkontrolle.",
+    "steps": [
+      "Mit Windladung oder Luftstart Höhe gewinnen und frontal auf das gehobene Schild fallen.",
+      "Kurz vor dem Ziel mit der Axt (4) das Schild deaktivieren.",
+      "Noch im selben Fall auf die Wind-Burst-Mace (8) wechseln, vollen Smash landen und wieder nach oben katapultiert werden."
+    ],
+    "mistakes": "Nach dem Axt-Stun zuerst den Boden berühren (0 Bl. Fallhöhe) oder eine Mace ohne Wind Burst nutzen.",
+    "mode": "MACE",
+    "drill": "STUN_SLAM"
+  },
+  {
+    "id": "ely_stun_slam",
+    "category": "MACE",
+    "title": "Ely-Stun-Slam",
+    "icon": "elytra",
+    "summary": "Verbindet den schnellen Elytra-Sturzflug mit einem echten Stun Slam: Im Anflug beendest du den Gleitflug (Brustplatte anlegen oder abbrechen), brichst das Schild mit der Axt und triffst den vollen Wind-Burst-Smash.",
+    "timing": "Gleitflug MUSS vor dem Mace-Schlag beendet sein (Vanilla blockiert Mace-Smash im aktiven Gleitflug!)",
+    "example": "Besonders tödlich aus 16–64 Blöcken Höhe, weil die Kombination aus Speed, Schildbruch und Wind Burst kaum konterbar ist.",
+    "steps": [
+      "Im Luftstart Gleitflug starten und präzise auf den blockenden Gegner zusteuern.",
+      "Kurz vor dem Ziel Gleitflug beenden (oder auf Brustplatte wechseln), damit Fallstrecke für den Smash zählt.",
+      "Frontal mit der Axt (4) das Schild brechen und sofort mit der Wind-Burst-Mace (8) smashen."
+    ],
+    "mistakes": "Während des aktiven Gleitflugs schlagen (kein Smash!) oder zu früh abbrechen und vor dem Smash landen.",
+    "mode": "MACE",
+    "drill": "ELY_STUN_SLAM"
+  },
+  {
+    "id": "wind_stun_cobweb_smash",
+    "category": "MACE",
+    "title": "Wind-Stun-Slam & Cobweb-Smash",
+    "icon": "wind_charge",
+    "summary": "Beim Wind-Stun-Slam brichst du das Schild eines selbst per Wind Charge/Pearl aufsteigenden Gegners in der Luft und smasht ihn im selben Flug. Beim Cobweb-Smash triffst du im Fallen die freien Beine unter einem Kopfnetz.",
+    "timing": "Axt + Mace im selben Flugfenster · Bodenkontakt beendet die Wind-Burst-Flugserie",
+    "example": "Fortgeschrittene Mace-Kontrolle für Luftduelle und gegen Spieler in Kopf-Cobwebs.",
+    "steps": [
+      "Steigflug des Gegners mitlesen und den Fallweg auf den Scheitelpunkt abstimmen.",
+      "Beim Wind-Stun-Slam: in der Luft Schild brechen → sofort Mace-Smash.",
+      "Beim Cobweb-Smash: unter die Netzkante zielen und über Wind Burst dauerhaft in der Luft bleiben."
+    ],
+    "mistakes": "Ins Kopfnetz zielen (kein Treffer auf die Beine) oder nach dem Smash kurz den Boden streifen.",
+    "mode": "MACE",
+    "drill": "WIND_STUN_SLAM"
+  },
+  {
+    "id": "hugo_mace_counter_dtap",
+    "category": "HUGOSMP",
+    "title": "Mace-Konter · D-Tap (HugoSMP)",
+    "icon": "wind_charge",
+    "summary": "Im HugoSMP-Meta springen Gegner mit Wind Charge und Mace auf dich zu. Blocke den ankommenden Smash sauber mit dem Schild (1) und nutze die offene Landephase für einen sofortigen D-Tap.",
+    "timing": "Schild 250 ms vor Einschlag hoch → Block → Obsidian (5) + 2 Kristalle (6)",
+    "example": "Dreht einen gegnerischen Wind-Charge-Angriff sofort in deinen eigenen Kill-Versuch.",
+    "steps": [
+      "Wind-Charge-Absprung beobachten und Schild (1) frontal zum Angreifer heben.",
+      "Den Mace-Smash vollständig mit dem Schild abfangen (0 Schaden).",
+      "Sofort nach dem Block Obsidian (5) setzen und den Gegner mit zwei Kristallen (6) D-Tappen."
+    ],
+    "mistakes": "Zu spät blocken oder nach erfolgreichem Block zögern, bis der Gegner wieder weg ist.",
+    "mode": "HUGOSMP",
+    "drill": "MACE_COUNTER_DTAP"
+  },
+  {
+    "id": "hugo_corner_web_dtap",
+    "category": "HUGOSMP",
+    "title": "Corner Web · Shield Break + D-Tap",
+    "icon": "obsidian",
+    "summary": "Dränge oder fange den Gegner in einer 90°-Ecke im Cobweb, deaktiviere sein gehobenes Schild mit der Axt (8) und poppe ihn zweimal hintereinander mit Kristallen (6) auf Boden-Obsidian (5).",
+    "timing": "Cobweb → Axt-Stun (5 s Fenster) → 2 Boden-Kristall-Pops im offenen Schildfenster",
+    "example": "Extrem zuverlässige Finish-Kombo im HugoSMP-Kit gegen blockende Gegner an Wänden oder Ecken.",
+    "steps": [
+      "Gegner in der Ecke mit einem Cobweb fixieren.",
+      "Das gehobene Schild frontal mit der Axt (8) brechen.",
+      "Direkt im offenen Schildfenster mit zwei Kristallen (6) auf Boden-Obsidian (5) D-Tappen."
+    ],
+    "mistakes": "Erst kristallen, bevor das Schild gebrochen ist, oder nach dem Stun zu lange warten bis das Schild wieder aktiv ist.",
+    "mode": "HUGOSMP",
+    "drill": "CORNER_WEB_DTAP"
+  }
+]

@@ -61,7 +61,7 @@ final class SlamWindowTracker {
         stunUntil = tick + durationTicks;
         axeStunAt = tick;
         stunTargetLifted = false;
-        if (drill == Drill.STUN_SLAM || drill == Drill.CORNER_WEB_DTAP || drill == Drill.SHIELD_TRIPLE_TAP) {
+        if (drill == Drill.STUN_SLAM || drill == Drill.ELY_STUN_SLAM || drill == Drill.CORNER_WEB_DTAP || drill == Drill.SHIELD_TRIPLE_TAP) {
             attempt.clearTimingFault();
         }
         attempt.step("Schild deaktiviert für " + durationTicks + " Ticks");
@@ -106,7 +106,7 @@ final class SlamWindowTracker {
     }
 
     void observeSlamLanding(DrillAttempt attempt, int tick, ServerPlayer player) {
-        if (attempt.done()) return;
+        if (attempt.done() || attempt.awaitingSlamLaunch()) return;
         observeFall(tick, player.fallDistance);
         AABB body = player.getBoundingBox();
         AABB feet = new AABB(body.minX, body.minY - 0.002, body.minZ, body.maxX, body.minY, body.maxZ);

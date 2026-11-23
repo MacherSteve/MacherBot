@@ -213,15 +213,20 @@ public final class TrainingScreen extends TrainerPanel {
       }
 
       this.action(
-            this.col(0, 4), var18, this.cw(0, 4), var17, "Bot & Arena", TrainerPanel.Style.NORMAL, () -> this.open(new TrainingOptionsScreen(this, this.mode))
+            this.col(0, 5), var18, this.cw(0, 5), var17, "Bot & Arena", TrainerPanel.Style.NORMAL, () -> this.open(new TrainingOptionsScreen(this, this.mode))
          )
          .tip("Bot-Verhalten, Verteidigung und Startposition");
-      this.action(this.col(1,4), var18, this.cw(1,4), var17, "Modus-Kits", TrainerPanel.Style.NORMAL,
+      this.action(this.col(1, 5), var18, this.cw(1, 5), var17, "Modus-Kits", TrainerPanel.Style.NORMAL,
          () -> this.open(new KitShelfScreen(this, this.mode, false, false))).active = this.minecraft.level != null;
-      this.action(this.col(2, 4), var18, this.cw(2, 4), var17, "Analytics", TrainerPanel.Style.NORMAL,
+      this.action(
+            this.col(2, 5), var18, this.cw(2, 5), var17, "Technik-Guide", TrainerPanel.Style.NORMAL,
+            () -> this.open(new KnowledgeGuideScreen(this, this.mode, var12))
+         )
+         .tip("Erklärungen, Timings, Beispiele & Konter zu allen PvP-Techniken");
+      this.action(this.col(3, 5), var18, this.cw(3, 5), var17, "Analytics", TrainerPanel.Style.NORMAL,
          () -> this.open(new ProgressScreen(this, this.mode))).tip("Lokale Bestleistungen und Fortschritt je Trainingskonfiguration");
       this.action(
-            this.col(3, 4), var18, this.cw(3, 4), var17, "Rundenlog", TrainerPanel.Style.NORMAL, () -> this.open(new TrainingScreen.Results(this, this.mode))
+            this.col(4, 5), var18, this.cw(4, 5), var17, "Rundenlog", TrainerPanel.Style.NORMAL, () -> this.open(new TrainingScreen.Results(this, this.mode))
          )
          .tip("Ereignisse und Ergebnis der letzten Runden");
    }
@@ -246,7 +251,7 @@ public final class TrainingScreen extends TrainerPanel {
          }
          return;
       }
-      if (var1.drill() == Drill.ELYTRA_SMASH) {
+      if (var1.drill() == Drill.ELYTRA_SMASH || var1.drill() == Drill.ELY_STUN_SLAM) {
          int[] heights = {16, 32, 64};
          for (int column = 0; column < heights.length; column++) {
             int height = heights[column];
@@ -266,7 +271,11 @@ public final class TrainingScreen extends TrainerPanel {
       for (int var6 = 0; var6 < var7; var6++) {
          TrainingPreset var5 = var8[var6];
          TrainingPreset.Setup var9 = var5.setup(var4, var1.drill());
-         DrillOptions baseOptions = var9.options().withIndex(DrillOptions.Field.PEARL_CATCH_ONLY, var1.pearlCatchOnly() ? 1 : 0);
+         DrillOptions baseOptions = var9.options()
+            .withIndex(DrillOptions.Field.PEARL_CATCH_ONLY, var1.pearlCatchOnly() ? 1 : 0)
+            .withIndex(DrillOptions.Field.ARENA_DIFFICULTY, var1.arenaDifficulty().ordinal())
+            .withIndex(DrillOptions.Field.ZERO_DAMAGE, var1.zeroDamage().ordinal())
+            .withIndex(DrillOptions.Field.ARENA_SIZE, var1.largeArena() ? 1 : 0);
          DrillOptions presetOptions = var1.drill() == Drill.WIND_STUN_SLAM
                ? baseOptions.withIndex(DrillOptions.Field.WIND_FLIGHT, var1.windFlight().ordinal()) : baseOptions;
          boolean var10 = var9.behavior().equals(var4) && presetOptions.equals(var1);
@@ -434,23 +443,26 @@ public final class TrainingScreen extends TrainerPanel {
          this.subtitle = this.mode.label();
          List<Drill> var1 = List.of(Drill.PASSIVE, Drill.TOTEM_POPS, Drill.SHIELD, Drill.DUEL)
             .stream().filter(drill -> drill.supports(this.mode)).toList();
-         List var2 = Drill.forMode(this.mode).stream().filter(var1x -> !var1.contains(var1x)).toList();
-         int var3 = (var2.size() + 1) / 2 + (var1.size() + 1) / 2;
+         List<Drill> var2 = Drill.forMode(this.mode).stream().filter(var1x -> !var1.contains(var1x)).toList();
+         int specialCols = var2.size() > 8 ? 3 : 2;
+         int specialRows = (var2.size() + specialCols - 1) / specialCols;
+         int freeRows = (var1.size() + 1) / 2;
+         int var3 = specialRows + freeRows;
          int var4 = Math.min(33, (this.bottom - this.y - 28 - var3 * this.gap) / var3);
          this.specialY = this.y;
-         this.group(var2, this.specialY + 13, var4);
-         this.freeY = this.specialY + 16 + (var2.size() + 1) / 2 * (var4 + this.gap);
-         this.group(var1, this.freeY + 13, var4);
+         this.group(var2, this.specialY + 13, var4, specialCols);
+         this.freeY = this.specialY + 16 + specialRows * (var4 + this.gap);
+         this.group(var1, this.freeY + 13, var4, 2);
       }
 
-      private void group(List<Drill> var1, int var2, int var3) {
+      private void group(List<Drill> var1, int var2, int var3, int cols) {
          for (int var4 = 0; var4 < var1.size(); var4++) {
             Drill var5 = (Drill)var1.get(var4);
             boolean var6 = var5 == TrainerClient.options(this.mode).drill();
             this.action(
-                  this.col(var4 % 2, 2),
-                  var2 + var4 / 2 * (var3 + this.gap),
-                  this.cw(var4 % 2, 2),
+                  this.col(var4 % cols, cols),
+                  var2 + var4 / cols * (var3 + this.gap),
+                  this.cw(var4 % cols, cols),
                   var3,
                   var5.label(),
                   var6 ? TrainerPanel.Style.SELECTED : TrainerPanel.Style.NORMAL,

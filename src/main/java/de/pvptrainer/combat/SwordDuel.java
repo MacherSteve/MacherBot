@@ -351,7 +351,6 @@ public final class SwordDuel {
         }
         int pause = skill.swordPause() + bot.getRandom().nextInt(3 + skill.switchTicks()/2);
         var damage = bot.damageSources().mobAttack(bot);
-        Vec3 beforeHit = player.getDeltaMovement();
         boolean sprintHit = bot.isSprinting() && charge > 0.9F;
         boolean critical = falling && charge > 0.9F;
         if (!onTarget) {
@@ -360,12 +359,10 @@ public final class SwordDuel {
             BotTelemetry.action(level,bot,"WHIFF");
         } else if (TrainingTactics.strikeCharged(level, bot, player, damage, 0, charge, critical)) {
             unansweredHits = 0;
-            float knockback = EnchantmentHelper.modifyKnockback(level, weapon, player, damage, 0);
-            bot.causeExtraKnockback(player, knockback * 0.5F + (sprintHit ? 0.5F : 0), beforeHit, damage, 0, true);
             if (critical) {
                 bot.playSound(SoundEvents.PLAYER_ATTACK_CRIT);
                 level.sendParticles(ParticleTypes.CRIT, player.getX(), player.getY(0.6), player.getZ(), 8, 0.25, 0.3, 0.25, 0.08);
-            } else if (sprintHit) bot.playSound(SoundEvents.PLAYER_ATTACK_KNOCKBACK);
+            }
         }
         seekingCrit = false;
         sprintAfterWhiffUntil = 0;

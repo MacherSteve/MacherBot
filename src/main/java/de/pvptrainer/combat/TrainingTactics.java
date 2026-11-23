@@ -75,12 +75,26 @@ public final class TrainingTactics {
    private final DuelWeapon duelWeapon = new DuelWeapon();
    private final CrystalPressure pressure;
    private boolean swingAnnounced;
+   private boolean healPunishEating;
+   private int healPunishStartCount;
+   private int healPunishEndTick;
+   private int antiDrainNextHit = 12;
 
    public TrainingTactics(BotEquipment var1, DrillOptions var2) {
       this.equipment = var1;
       this.options = var2;
-      this.nextAttack = (var2.drill() == Drill.JUMP_RESET || var2.drill() == Drill.HIT_SELECT) ? 0 : var2.reactionTicks();
+      this.nextAttack = (var2.drill() == Drill.JUMP_RESET || var2.drill() == Drill.HIT_SELECT
+         || var2.drill() == Drill.UPPERCUT || var2.drill() == Drill.PCRIT_BREAK) ? 0 : var2.reactionTicks();
       this.pressure = var2.drill().totemDefense() ? new CrystalPressure(var1, var2) : null;
+   }
+
+   public void onBotShieldDisabled(int tick, TrainingSettings settings) {
+      DuelSkill skill = this.options.drill() == Drill.DUEL && settings != null ? DuelSkill.of(settings) : null;
+      this.uhcDefense.onBotShieldDisabled(tick, skill);
+   }
+
+   public void onBotDamaged(int tick) {
+      this.uhcDefense.onBotDamaged(tick);
    }
 
    public Vec3 pursuitPoint(ServerPlayer var1) {
@@ -128,7 +142,13 @@ public final class TrainingTactics {
       if (this.pressure != null) {
          this.pressure.tick(var1, var2, var3, var5);
       } else {
-         if (this.options.drill().needsSwordAttack()) {
+         if (this.options.drill() == Drill.SHIELD_TIMING) {
+            tickShieldTiming(var1, var2, var3, var5);
+         } else if (this.options.drill() == Drill.ANTI_DRAIN) {
+            tickAntiDrain(var1, var2, var3, var5);
+         } else if (this.options.drill() == Drill.HEAL_PUNISH) {
+            tickHealPunish(var1, var2, var3, var5);
+         } else if (this.options.drill().needsSwordAttack()) {
             boolean var8 = withinReach(var2, var3)
                && (var4.mode() != TrainingSettings.Mode.UHC || uhcDefense.obstructingWeb(var1, var2, var3) == null);
             boolean jumpReset = this.options.drill() == Drill.JUMP_RESET;
@@ -154,12 +174,105 @@ public final class TrainingTactics {
 
             if (var5.time() >= this.nextAttack && var8) {
                this.equipment.equipSword(var2);
+               if (var4.mode() == TrainingSettings.Mode.SWORD && !var2.isUsingItem()) {
+                  var2.setSprinting(true);
+               }
                strike(var1, var2, var3, var2.damageSources().mobAttack(var2), 0.0F);
                this.nextAttack = var5.time() + var5.reaction();
                this.swingAnnounced = false;
             }
          } else if (this.options.drill() != Drill.PASSIVE && var4.counterAttacks()) {
             this.tick(var1, var2, var3, var4, var5.time());
+         }
+      }
+   }
+
+   private void tickShieldTiming(ServerLevel level, LivingEntity bot, ServerPlayer player, DrillAttempt attempt) {
+      int t = attempt.time();
+      if (bot.isUsingItem() && t >= this.lowerShieldAt) {
+         bot.stopUsingItem();
+      }
+      // Occasional jump-bait at edge of range (Swight 19:45) to test calm shield discipline.
+      if (bot.onGround() && !bot.isUsingItem() && t >= this.nextAttack - 4 && t % 43 == 0 && bot.distanceToSqr(player) <= 16.0) {
+         bot.jumpFromGround();
+      }
+      if (t >= this.nextAttack && withinReach(bot, player) && uhcDefense.facing(bot, player)) {
+         if (bot.isUsingItem()) bot.stopUsingItem();
+         this.equipment.equipSword(bot);
+         boolean playerBlocking = player.isBlocking();
+         float hpBefore = DrillAttempt.health(player);
+         strike(level, bot, player, bot.damageSources().mobAttack(bot), 0.0F);
+         float hpLoss = Math.max(0.0F, hpBefore - DrillAttempt.health(player));
+         if (playerBlocking && hpLoss <= 0.01F) {
+            attempt.playerShieldBlocked();
+         }
+         int period = Math.max(12, attempt.reaction());
+         this.nextAttack = t + period;
+         if (this.equipment.equipShield(bot)) {
+            bot.startUsingItem(InteractionHand.OFF_HAND);
+            this.lowerShieldAt = this.nextAttack - 4;
+         }
+      } else if (!bot.isUsingItem() && t < this.nextAttack - 5 && this.equipment.equipShield(bot)) {
+         bot.startUsingItem(InteractionHand.OFF_HAND);
+         this.lowerShieldAt = this.nextAttack - 4;
+      }
+   }
+
+   private void tickAntiDrain(ServerLevel level, LivingEntity bot, ServerPlayer player, DrillAttempt attempt) {
+      int t = attempt.time();
+      // Watch for player-placed water within 4.5 blocks and drain it if player did not push the bot away!
+      BlockPos waterPos = attempt.playerWaterPos();
+      if (waterPos != null && t - attempt.playerWaterAt() >= Math.clamp(this.options.reactionTicks() / 5, 1, 5)) {
+         var state = level.getBlockState(waterPos);
+         boolean isSourceWater = state.is(Blocks.WATER) && state.getFluidState().isSource();
+         double distSq = Vec3.atCenterOf(waterPos).distanceToSqr(bot.getEyePosition());
+         if (isSourceWater && distSq <= 4.5 * 4.5 && this.equipment.has(bot, Items.BUCKET)) {
+            if (bot.isUsingItem()) bot.stopUsingItem();
+            if (this.equipment.equipWeapon(bot, Items.BUCKET)) {
+               var pickup = (net.minecraft.world.level.block.BucketPickup) state.getBlock();
+               ItemStack filled = pickup.pickupBlock(bot, level, waterPos, state);
+               if (!filled.isEmpty()) {
+                  bot.getMainHandItem().consume(1, bot);
+                  this.equipment.stash(filled);
+                  bot.swing(InteractionHand.MAIN_HAND, true);
+                  BotTelemetry.action(level, bot, "DRAIN");
+                  attempt.antiDrainDrained();
+                  return;
+               }
+            }
+         }
+      }
+      if (t >= this.antiDrainNextHit && withinReach(bot, player)) {
+         if (bot.isUsingItem()) bot.stopUsingItem();
+         this.equipment.equipSword(bot);
+         strike(level, bot, player, bot.damageSources().mobAttack(bot), 0.0F);
+         this.antiDrainNextHit = t + Math.max(14, this.options.reactionTicks());
+      }
+   }
+
+   private void tickHealPunish(ServerLevel level, LivingEntity bot, ServerPlayer player, DrillAttempt attempt) {
+      int t = attempt.time();
+      if (this.healPunishEating) {
+         if (!bot.isUsingItem()) {
+            this.healPunishEating = false;
+            boolean healed = t >= this.healPunishEndTick - 2
+               || bot.hasEffect(net.minecraft.world.effect.MobEffects.REGENERATION)
+               || bot.getMainHandItem().getCount() < this.healPunishStartCount;
+            if (healed) {
+               attempt.botHealFinished();
+            }
+         }
+         return;
+      }
+      int startTick = Math.clamp(this.options.reactionTicks() / 4, 2, 10);
+      if (t >= startTick && this.equipment.equipWeapon(bot, Items.GOLDEN_APPLE)) {
+         bot.stopUsingItem();
+         bot.startUsingItem(InteractionHand.MAIN_HAND);
+         if (bot.isUsingItem()) {
+            this.healPunishEating = true;
+            this.healPunishStartCount = bot.getMainHandItem().getCount();
+            this.healPunishEndTick = t + bot.getMainHandItem().getUseDuration(bot);
+            attempt.botStartedHealing();
          }
       }
    }
@@ -274,8 +387,19 @@ public final class TrainingTactics {
          float base = var7 + var4;
          var8 = base * (0.2F + 0.8F * charge * charge) * (critical ? 1.5F : 1) + (var8 - base) * charge;
       }
+      Vec3 beforeHit = var2.getDeltaMovement();
+      boolean sprintHit = var1.isSprinting() && charge > 0.9F;
       boolean var9 = var2.hurtServer(var0, var3, var8);
       if (var9) {
+         float enchantKb = EnchantmentHelper.modifyKnockback(var0, var5, var2, var3, 0.0F);
+         float extraKb = enchantKb * 0.5F + (sprintHit ? 0.5F : 0.0F);
+         if (extraKb > 0.0F) {
+            var1.causeExtraKnockback(var2, extraKb, beforeHit, var3, var8, true);
+            var1.setSprinting(false);
+         }
+         if (sprintHit && !critical) {
+            var1.playSound(SoundEvents.PLAYER_ATTACK_KNOCKBACK);
+         }
          EnchantmentHelper.doPostAttackEffectsWithItemSource(var0, var2, var3, var5);
       }
 
@@ -318,16 +442,18 @@ public final class TrainingTactics {
             boolean var7 = var4.movement() != TrainingSettings.Movement.STILL
                && var1.noBlockCollision(var2, var2.getBoundingBox().expandTowards(0.0, 3.5, 0.0));
             if (var7 && this.equipment.equipWeapon(var2, Items.WIND_CHARGE) && this.equipment.takeOne(var2, Items.WIND_CHARGE)) {
-               Vec3 var8 = var2.getDeltaMovement();
-               var2.swing(InteractionHand.MAIN_HAND, true);
-               var2.setDeltaMovement(var8.x, 0.94, var8.z);
-               var2.setOnGround(false);
-               var2.hurtMarked = true;
-               var2.playSound((SoundEvent)SoundEvents.WIND_CHARGE_BURST.value());
-               var1.sendParticles(ParticleTypes.GUST, var2.getX(), var2.getY(), var2.getZ(), 1, 0.0, 0.0, 0.0, 0.0);
-               this.maceAirborne = true;
-               BotTelemetry.action(var1, var2, "WIND");
-               this.nextAttack = var6 + var5 + 28;
+               var wind = new net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge(
+                  var1, var2.getX(), var2.getY() + 0.5, var2.getZ(), new Vec3(0.0, -1.0, 0.0)
+               );
+               wind.setOwner(var2);
+               wind.shoot(0.0, -1.0, 0.0, 1.5F, 0.0F);
+               if (var1.addFreshEntity(wind)) {
+                  var2.jumpFromGround();
+                  var2.swing(InteractionHand.MAIN_HAND, true);
+                  this.maceAirborne = true;
+                  BotTelemetry.action(var1, var2, "WIND");
+                  this.nextAttack = var6 + var5 + 28;
+               }
             } else if (withinReach(var2, var3) && this.equipment.equipWeapon(var2, Items.MACE)) {
                strike(var1, var2, var3, var2.damageSources().mobAttack(var2), 0.0F);
                this.nextAttack = var6 + var5;
@@ -348,6 +474,7 @@ public final class TrainingTactics {
    private void uhc(ServerLevel level, LivingEntity bot, ServerPlayer opponent, int recovery, int tick, DuelSkill skill) {
       this.arrows.removeIf(Entity::isRemoved);
       boolean duel = options.drill() == Drill.DUEL;
+      if (duel && uhcDefense.executeAutoHit(level, bot, opponent, equipment, tick, duelWeapon)) return;
       if (uhcDefense.followUp(level, bot, opponent, tick, duel ? duelWeapon : null)) return;
       if (duel && uhcUtility.tacticalAction(level, bot, opponent, equipment, uhcDefense, tick, skill, reads)) return;
 
@@ -399,16 +526,27 @@ public final class TrainingTactics {
          nextBowShot = tick + recovery * 3;
       }
       if (bot.isUsingItem() && bot.getUsedItemHand() == InteractionHand.MAIN_HAND) bot.stopUsingItem();
+      boolean healPunish = duel && reads.food(skill) && distance <= 25;
+      if (healPunish && bot.onGround() && distance <= 12.25 && !bot.isUsingItem()) {
+         bot.jumpFromGround();
+      }
+      int effectiveRecovery = healPunish ? Math.max(8, recovery / 2) : recovery;
       if (tick >= nextAttack && withinReach(bot, opponent) && uhcDefense.facing(bot, opponent)) {
          if (options.holdShield()) return;
          bot.stopUsingItem();
-         uhcDefense.attack(level, bot, opponent, equipment, tick, targetGuarding,
-               duel ? skill.switchTicks() + 1 : Math.clamp(recovery / 7, 2, 4), duel ? duelWeapon : null);
-         nextAttack = tick + recovery;
+         if (healPunish && !bot.onGround() && bot.fallDistance > 0.05F) {
+            if (!equipment.equipSword(bot)) equipment.equipAxe(bot);
+            strikeCharged(level, bot, opponent, bot.damageSources().mobAttack(bot), 0.0F, 1.0F, true);
+         } else {
+            uhcDefense.attack(level, bot, opponent, equipment, tick, targetGuarding,
+                  duel ? skill.switchTicks() + 1 : Math.clamp(recovery / 7, 2, 4), duel ? duelWeapon : null);
+         }
+         nextAttack = tick + effectiveRecovery;
          return;
       }
       if (bot.getMainHandItem().is(Items.BOW)) equipment.equipSword(bot);
-      if (visible && (distance < 36 || targetGuarding && distance <= 324)) uhcDefense.guard(bot, equipment);
+      boolean reactiveGuard = duel && !healPunish && uhcDefense.shouldReactiveGuard(tick);
+      if (visible && !healPunish && (reactiveGuard || distance < 36 || targetGuarding && distance <= 324)) uhcDefense.guard(bot, equipment);
       else if (!options.holdShield() && bot.isBlocking()) bot.stopUsingItem();
    }
 

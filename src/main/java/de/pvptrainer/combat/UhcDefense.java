@@ -25,10 +25,49 @@ import net.minecraft.world.phys.Vec3;
 public final class UhcDefense {
    private int firstAxeTick, followTick = -1;
    private int successfulStun = -1000;
+   private int botDisabledAt = -1000;
+   private int autoHitAt = -1000;
+   private int postAutoHitRamUntil = -1000;
+   private int playerShieldReadyAt = -1000;
+   private int botHurtAt = -1000;
    private ServerLevel cuttingLevel;
    private int breaker;
    private BlockPos cutting;
    private float cutProgress;
+
+   void onBotShieldDisabled(int tick, DuelSkill skill) {
+      botDisabledAt = tick;
+      if (skill == null || skill.lead() >= 0.45) {
+         int delay = skill == null ? 1 : Math.max(1, 3 - (int) (skill.lead() * 2.0));
+         autoHitAt = tick + delay;
+      }
+   }
+
+   void onBotDamaged(int tick) {
+      botHurtAt = tick;
+   }
+
+   boolean shouldReactiveGuard(int tick) {
+      return tick - botHurtAt >= 1 && tick - botHurtAt <= 6;
+   }
+
+   boolean executeAutoHit(ServerLevel level, LivingEntity bot, ServerPlayer opponent, BotEquipment equipment, int tick, DuelWeapon weapon) {
+      if (autoHitAt < 0 || tick < autoHitAt) return false;
+      autoHitAt = -1000;
+      if (bot.isUsingItem() || !TrainingTactics.withinReach(bot, opponent) || !facing(bot, opponent)) return false;
+      if (!equipment.equipAxe(bot)) equipment.equipSword(bot);
+      boolean landed = weapon == null
+         ? TrainingTactics.strike(level, bot, opponent, bot.damageSources().mobAttack(bot), 0)
+         : weapon.strike(level, bot, opponent, tick, bot.damageSources().mobAttack(bot), 0);
+      if (landed) {
+         postAutoHitRamUntil = tick + 12;
+      }
+      return landed;
+   }
+
+   boolean inPostAutoHitRam(int tick) {
+      return tick <= postAutoHitRamUntil;
+   }
 
    boolean facing(LivingEntity actor, LivingEntity opponent) {
       Vec3 to = opponent.position().subtract(actor.position()).horizontal();
@@ -60,11 +99,21 @@ public final class UhcDefense {
          // The first click must actually trigger Minecraft's own player-shield cooldown.
          if (!blocking.isEmpty() && opponent.getCooldowns().isOnCooldown(blocking)) {
             firstAxeTick = tick;
+            playerShieldReadyAt = tick + 100;
             followTick = tick + secondClickDelay;
          }
          return;
       }
+      // Track the 5s (100-tick) shield cooldown (~4 hits) & 3-heart Axe finish (Swight cooldown-trick / axe-finish).
+      boolean shieldReturning = tick >= playerShieldReadyAt - 8 && tick <= playerShieldReadyAt + 12;
+      boolean lowUnshieldedFinish = !opponent.isBlocking() && opponent.getHealth() <= 6.0F && bot.fallDistance > 0.1F && !bot.onGround();
+      if ((shieldReturning || lowUnshieldedFinish) && !inPostAutoHitRam(tick) && equipment.equipAxe(bot)) {
+         if (weapon == null) TrainingTactics.strike(level, bot, opponent, bot.damageSources().mobAttack(bot), 0);
+         else weapon.strike(level, bot, opponent, tick, bot.damageSources().mobAttack(bot), 0);
+         return;
+      }
       if (!equipment.equipSword(bot)) equipment.equipAxe(bot);
+      if (inPostAutoHitRam(tick) && !bot.isUsingItem()) bot.setSprinting(true);
       if (weapon==null) TrainingTactics.strike(level, bot, opponent, bot.damageSources().mobAttack(bot), 0);
       else weapon.strike(level,bot,opponent,tick,bot.damageSources().mobAttack(bot),0);
    }

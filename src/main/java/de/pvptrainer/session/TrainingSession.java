@@ -73,7 +73,7 @@ public final class TrainingSession {
    private volatile TrainingSettings lastDuelSettings;
    private String roundBotFingerprint;
    private String roundRules;
-   private volatile TrainingSession.Rules liveRules = new TrainingSession.Rules("normal", true);
+   private volatile TrainingSession.Rules liveRules = new TrainingSession.Rules(net.minecraft.world.Difficulty.NORMAL, true);
    private ServerLevel rulesLevel;
    private List<DrillHistory.Result> recentResults = List.of();
    private int round;
@@ -113,6 +113,7 @@ public final class TrainingSession {
    private long ownerAttackSequence;
    long webClickOnBot;
    private int popsBeforeCrystal;
+   private int botAutoHitAt = -1;
    private WindHeight windHeight;
    private double obiBestSeconds;
    final CobwebFlightTracker cobwebFlight = new CobwebFlightTracker();
@@ -202,6 +203,7 @@ public final class TrainingSession {
          lastDuelSettings = settings;
       }
       this.respawnIn = this.shieldReadyAt = this.previousRepetitionAt = this.roundTick = 0;
+      this.botAutoHitAt = -1;
       this.ownerDefeated = this.resetAfterPop = this.saved = false;
       this.attempt = null;
       this.historyKey = null;
@@ -235,13 +237,13 @@ public final class TrainingSession {
          var3.setYHeadRot(var3.getYRot());
          var3.setYBodyRot(var3.getYRot());
          var3.getAttribute(Attributes.MAX_HEALTH).setBaseValue(this.settings.maxHealth());
-         var3.setHealth(this.settings.maxHealth());
+         var3.setHealth(this.options.drill() == Drill.HEAL_PUNISH ? Math.min(10.0F, this.settings.maxHealth()) : this.settings.maxHealth());
+         var3.updateHealthIndicator();
 
-         var3.setSpeed(this.options.drill() == Drill.DUEL ? 0.1F : switch (this.settings.difficulty()) {
-            case EASY -> 0.065F;
-            case NORMAL -> 0.095F;
-            case HARD -> 0.125F;
-         });
+         // Exact Vanilla Player base movement speed (0.1F); sprinting (+30%) and Speed I/II (+20%/+40%) scale naturally.
+         double baseSpeed = 0.10000000149011612D;
+         var3.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(baseSpeed);
+         var3.setSpeed((float) baseSpeed);
          KitLoadout var4 = this.selection.botKit();
          this.equipment = new BotEquipment(var3, var4, this.options, settings.mode());
          this.tactics = new TrainingTactics(this.equipment, this.options);
@@ -255,6 +257,8 @@ public final class TrainingSession {
          this.keepBotLoaded();
          TrainingResources.begin(var1, var3, this.options, this.settings.mode());
          if (this.options.drill() == Drill.STUN_SLAM
+            || this.options.drill() == Drill.ELY_STUN_SLAM
+            || this.options.drill() == Drill.MOMENTUM_BREAK
             || this.options.drill() == Drill.CORNER_WEB_DTAP
             || this.options.drill() == Drill.SHIELD_DRAIN) {
             BlocksAttacks shield = var3.getItemInHand(this.equipment.shieldHand).get(DataComponents.BLOCKS_ATTACKS);
@@ -267,7 +271,7 @@ public final class TrainingSession {
          this.round++;
          this.rulesLevel = this.arena;
          this.liveRules = readRules(this.arena);
-         this.roundRules = this.liveRules.key(this.settings.mode());
+         this.roundRules = this.liveRules.key(this.settings.mode(), this.options);
          this.roundBotFingerprint = KitLibrary.fingerprint(var1.registryAccess(), var4);
          this.historyKey = DrillHistory.key(
             this.settings, this.options, TrainingKit.startingFingerprint(var1) + "/" + this.roundBotFingerprint + "|" + this.roundRules
@@ -314,7 +318,7 @@ public final class TrainingSession {
    }
 
    private static TrainingSession.Rules readRules(ServerLevel var0) {
-      return new TrainingSession.Rules(var0.getDifficulty().name(), (Boolean)var0.getGameRules().get(GameRules.NATURAL_HEALTH_REGENERATION));
+      return new TrainingSession.Rules(var0.getDifficulty(), (Boolean)var0.getGameRules().get(GameRules.NATURAL_HEALTH_REGENERATION));
    }
 
    public String previewKey(TrainingSettings var1, DrillOptions var2, String var3) {
@@ -323,7 +327,7 @@ public final class TrainingSession {
             && previous.mode() == var1.mode() && previous.duelTier() == var1.duelTier()) {
          var1 = var1.withDuelBand(previous.duelBand());
       }
-      return DrillHistory.key(var1, var2, var3 + "|" + this.liveRules.key(var1.mode()));
+      return DrillHistory.key(var1, var2, var3 + "|" + this.liveRules.key(var1.mode(), var2));
    }
 
    public void layoutUpdated(ServerPlayer var1, KitLoadout var2) {
@@ -384,6 +388,10 @@ public final class TrainingSession {
                }
 
                if (this.bot != null && (!this.bot.isRemoved() || this.bot.isDeadOrDying())) {
+                  this.bot.updateHealthIndicator();
+                  if (!this.waitingForStart && this.attempt != null) {
+                     this.attempt.settleStunSlamLaunch(this.roundTick, var4);
+                  }
                   if (this.bot.isDeadOrDying()) {
                      this.attempt.settleAnchor(var4, this.roundTick + 1);
                   }
@@ -429,7 +437,7 @@ public final class TrainingSession {
                            if (secondarySlam.done()) finishSecondarySlam();
                            else if (secondarySlam.unusedSlamWindowExpired()) secondarySlam = null;
                         }
-                        if (this.options.drill() == Drill.STUN_SLAM) {
+                        if (this.options.drill() == Drill.STUN_SLAM || this.options.drill() == Drill.ELY_STUN_SLAM) {
                            this.attempt.observeSlamLanding(var4);
                            if (this.attempt.done()) this.saveResult();
                         } else if (!this.attempt.done() && this.airStartLanded()) {
@@ -441,6 +449,17 @@ public final class TrainingSession {
                            if (options.drill() == Drill.WIND_STUN_SLAM) tickWindTarget();
                            if (options.drill() == Drill.MACE_COUNTER_DTAP) {
                               maceCounter.tick(roundTick, arena, bot, var4, equipment, attempt);
+                           }
+                           if (options.drill() == Drill.SELF_WEB_CRYSTAL) {
+                              placeSelfWebIfNeeded();
+                           }
+                           if (botAutoHitAt >= 0 && roundTick >= botAutoHitAt) {
+                              botAutoHitAt = -1;
+                              if (bot.isUsingItem()) bot.stopUsingItem();
+                              if (!equipment.equipWeapon(bot, Items.NETHERITE_AXE) && !equipment.equipWeapon(bot, Items.DIAMOND_AXE)) {
+                                 equipment.equipWeapon(bot, Items.DIAMOND_SWORD);
+                              }
+                              TrainingTactics.strike(arena, bot, var4, bot.damageSources().mobAttack(bot), 0.0F);
                            }
                            this.equipment.tick(this.bot, this.roundTick, Math.max(shieldReadyAt, windTarget.guardReadyAt()));
                            if (!options.drill().centeredMaceDrill() && options.drill() != Drill.PERFECT_WIND_CHARGE
@@ -512,7 +531,7 @@ public final class TrainingSession {
    public boolean preventTrainingDeath(ServerPlayer var1, DamageSource var2) {
       if (var1 == this.owner && this.ownerId != null && TrainingArena.isArena(var1.level())) {
          var1.setHealth(Math.max(1.0F, Math.min(this.roundStartHealth, var1.getMaxHealth())));
-         if (this.options.drill() == Drill.STUN_SLAM && (var2.is(DamageTypes.FALL)
+         if ((this.options.drill() == Drill.STUN_SLAM || this.options.drill() == Drill.ELY_STUN_SLAM) && (var2.is(DamageTypes.FALL)
                || var2.is(DamageTypes.STALAGMITE) || var2.is(DamageTypes.FLY_INTO_WALL))) {
             if (var2.is(DamageTypes.FLY_INTO_WALL) && !this.waitingForStart) this.attempt.slamWallImpact();
             return true;
@@ -560,7 +579,7 @@ public final class TrainingSession {
    public void playerHurt(ServerPlayer var1, DamageSource var2, float var3) {
       if (!this.waitingForStart && this.owns(var1)) {
          if (var2.is(DamageTypes.FLY_INTO_WALL)) {
-            if (this.options.drill() == Drill.STUN_SLAM) this.attempt.slamWallImpact();
+            if (this.options.drill() == Drill.STUN_SLAM || this.options.drill() == Drill.ELY_STUN_SLAM) this.attempt.slamWallImpact();
             if (secondarySlam != null) secondarySlam.slamWallImpact();
          }
          if (var2.getDirectEntity() instanceof TrainingCrystal) {
@@ -579,14 +598,18 @@ public final class TrainingSession {
    }
 
    boolean comboWeapon(ServerPlayer var1) {
+      if (this.options != null && (this.options.drill() == Drill.D_TAP || this.options.drill() == Drill.TRIPLE_TAP)) {
+         return true;
+      }
       ItemStack var2 = var1.getMainHandItem();
       if (var2.is(ItemTags.SWORDS)) return true;
       if ((this.settings.mode() == TrainingSettings.Mode.CRYSTAL || this.settings.mode() == TrainingSettings.Mode.HUGOSMP)
             && var2.is(Items.TOTEM_OF_UNDYING)) {
          return true;
       }
-      return this.options != null && this.options.drill() == Drill.MACE_COUNTER_DTAP
-         && (var2.is(ItemTags.AXES) || var2.is(Items.MACE));
+      return this.options != null && (this.options.drill() == Drill.MACE_COUNTER_DTAP
+            && (var2.is(ItemTags.AXES) || var2.is(Items.MACE))
+         || this.options.drill() == Drill.ANTI_DRAIN && var2.is(ItemTags.AXES));
    }
 
    public void attackCharge(ServerPlayer var1, Entity var2, float var3) {
@@ -669,6 +692,16 @@ public final class TrainingSession {
       }
    }
 
+   void playerWaterPlaced(ServerPlayer var1, BlockPos var2) {
+      if (!this.waitingForStart && this.owns(var1)) {
+         this.attempt.playerWaterPlaced(var2);
+      }
+   }
+
+   void scheduleBotAutoHit() {
+      this.botAutoHitAt = this.roundTick + 2;
+   }
+
    public void sawPlayerObsidian(ServerPlayer player, BlockPos pos) {
       if (waitingForStart || !owns(player)) return;
       if (options.drill().isObiTrap()) attempt.trapBlockPlaced(pos);
@@ -716,11 +749,41 @@ public final class TrainingSession {
       if (this.bot != null && this.attempt != null && var1.belongsTo(this.owner, this.bot)) {
          this.lastBotDamage = this.ownCrystalLoss = 0.0F;
          this.popsBeforeCrystal = this.pops;
-         this.targetInAirBeforeBlast = !this.bot.onGround() || !this.options.drill().requiresAirPopChain() && this.bot.getDeltaMovement().y > 0.02;
+         this.targetInAirBeforeBlast = !this.bot.onGround() || this.bot.getDeltaMovement().y > 0.02;
          this.hurtWindowRemaining = Math.max(0, this.bot.invulnerableTime - 10);
          return this.hurtWindowRemaining == 0;
       } else {
          return false;
+      }
+   }
+
+   private void placeSelfWebIfNeeded() {
+      if (this.bot == null || this.arena == null || this.attempt == null || this.attempt.isSelfWebbed()) {
+         return;
+      }
+      if (this.roundTick == 1 || (this.roundTick > 1 && this.bot.onGround())) {
+         BlockPos feet = this.bot.blockPosition();
+         if (this.arena.getBlockState(feet).is(Blocks.COBWEB)) {
+            this.attempt.confirmSelfWeb();
+            return;
+         }
+         if (this.arena.getBlockState(feet).canBeReplaced()) {
+            if (this.equipment != null && this.equipment.has(this.bot, Items.COBWEB)) {
+               this.equipment.equipWeapon(this.bot, Items.COBWEB);
+               this.equipment.takeOne(this.bot, Items.COBWEB);
+            }
+            this.arena.setBlockAndUpdate(feet, Blocks.COBWEB.defaultBlockState());
+            this.bot.swing(net.minecraft.world.InteractionHand.MAIN_HAND, true);
+            this.arena.playSound(
+               null,
+               feet,
+               Blocks.COBWEB.defaultBlockState().getSoundType().getPlaceSound(),
+               net.minecraft.sounds.SoundSource.PLAYERS,
+               1.0F,
+               1.0F
+            );
+            this.attempt.confirmSelfWeb();
+         }
       }
    }
 
@@ -811,7 +874,7 @@ public final class TrainingSession {
 
          if (options.drill() == Drill.WIND_STUN_SLAM) previousRepetitionAt = secondaryPopAt = roundTick;
          else roundTick = 0;
-         if (this.options.drill() == Drill.STUN_SLAM) this.attempt.observeSlamLanding(var1);
+         if (this.options.drill() == Drill.STUN_SLAM || this.options.drill() == Drill.ELY_STUN_SLAM) this.attempt.observeSlamLanding(var1);
          if (BotTelemetry.eligible(settings, options)) {
             int tick = arena.getServer().getTickCount();
             telemetry = new BotTelemetry(tick);
@@ -819,7 +882,11 @@ public final class TrainingSession {
          }
          this.publish("Training läuft");
          String rank = this.options.drill() == Drill.DUEL ? " · " + this.settings.duelRank() : "";
-         notifyPlayer(var1, this.options.drill().label() + rank + " · Runde " + this.round);
+         String diffNote = this.settings.mode() == TrainingSettings.Mode.CRYSTAL
+            && TrainingArena.resolveDamageDifficulty(this.arena) != net.minecraft.world.Difficulty.HARD
+            ? " · Hinweis: Arena-Schwierigkeit auf Schwer für Vanilla-Crystal-Schaden"
+            : "";
+         notifyPlayer(var1, this.options.drill().label() + rank + " · Runde " + this.round + diffNote);
       }
    }
 
@@ -852,7 +919,11 @@ public final class TrainingSession {
       Vec3 var4 = this.options.drill().totemDefense() ? this.tactics.pursuitPoint(var1) : RoundPing.position(var1);
       Vec3 var5 = var4.subtract(this.bot.position());
       double var6 = var5.horizontalDistance();
-      boolean swordTimingDrill = this.options.drill() == Drill.JUMP_RESET || this.options.drill() == Drill.HIT_SELECT;
+      boolean swordTimingDrill = this.options.drill() == Drill.JUMP_RESET
+         || this.options.drill() == Drill.HIT_SELECT
+         || this.options.drill() == Drill.UPPERCUT
+         || this.options.drill() == Drill.PCRIT_BREAK;
+      boolean swordSprintDrill = this.settings.mode() == TrainingSettings.Mode.SWORD && this.options.drill().needsSwordAttack();
       double var8 = this.options.drill().totemDefense()
          ? 1.3
          : (swordTimingDrill ? 2.72 : 2.1);
@@ -871,8 +942,8 @@ public final class TrainingSession {
          && (this.settings.movement() != TrainingSettings.Movement.STILL || this.options.drill().totemDefense());
       this.bot.zza = var16 ? (float)(var10 * Math.cos(var14) + var12 * Math.sin(var14)) : 0.0F;
       this.bot.xxa = var16 ? (float)(-var10 * Math.sin(var14) + var12 * Math.cos(var14)) : 0.0F;
-      if (this.options.drill().totemDefense() || swordTimingDrill) {
-         this.bot.setSprinting(var16 && var10 > 0 && (!swordTimingDrill || var6 > options.botReach() + 0.45) && !this.bot.isUsingItem());
+      if (this.options.drill().totemDefense() || swordSprintDrill) {
+         this.bot.setSprinting(var16 && var10 > 0 && !this.bot.isUsingItem());
       }
       boolean continuousJump = this.options.botJump() && !DrillAttempt.inWeb(this.bot);
       this.bot.setJumping(continuousJump || (var16 && this.bot.horizontalCollision && Math.abs(this.bot.zza) + Math.abs(this.bot.xxa) > 0.1));
@@ -926,7 +997,7 @@ public final class TrainingSession {
       }
       if (this.attempt != null) {
          if (!this.attempt.done()) {
-            if (this.options.drill() == Drill.STUN_SLAM) return;
+            if (this.options.drill() == Drill.STUN_SLAM || this.options.drill() == Drill.ELY_STUN_SLAM) return;
             this.attempt.finish(var1, var2);
          }
 
@@ -1132,9 +1203,12 @@ public final class TrainingSession {
    private record RoundSelection(TrainingSettings settings, DrillOptions options, KitLoadout playerKit, KitLoadout botKit) {
    }
 
-   private record Rules(String difficulty, boolean regeneration) {
-      String key(TrainingSettings.Mode var1) {
-         return this.difficulty + "|natregen=" + (var1 != TrainingSettings.Mode.UHC && this.regeneration);
+   private record Rules(net.minecraft.world.Difficulty worldDifficulty, boolean regeneration) {
+      String key(TrainingSettings.Mode var1, DrillOptions options) {
+         net.minecraft.world.Difficulty effective = options == null
+            ? TrainingArena.effectiveDamageDifficulty(this.worldDifficulty, true)
+            : options.arenaDifficulty().resolve(this.worldDifficulty, true);
+         return effective.name() + "|natregen=" + (var1 != TrainingSettings.Mode.UHC && this.regeneration);
       }
    }
 }

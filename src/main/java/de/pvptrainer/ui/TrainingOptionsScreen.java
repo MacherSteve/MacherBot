@@ -68,6 +68,14 @@ final class TrainingOptionsScreen extends TrainerPanel {
             if (!HudPreferences.hints()) TrainingProgress.hideResultToast();
             this.refresh();
          }));
+         var15.add(new Option("Lebensanzeige (Bot)", on(HudPreferences.botHealth()), () -> {
+            HudPreferences.toggleBotHealth();
+            this.refresh();
+         }));
+         var15.add(new Option("Reach-Indikator", on(HudPreferences.reachIndicator()), () -> {
+            HudPreferences.toggleReachIndicator();
+            this.refresh();
+         }));
          var15.add(new Option("Update-Hinweise", on(HudPreferences.updateCheck()), () -> {
             HudPreferences.toggleUpdateCheck();
             if (HudPreferences.updateCheck()) UpdateChecker.checkAsync();
@@ -167,8 +175,24 @@ final class TrainingOptionsScreen extends TrainerPanel {
          );
          if (var12.label().equals("Hinweise (global)")) {
             tile.tip("Übungstipps und Einblendungen oben rechts für alle Modi und Welten dieses Profils.");
+         } else if (var12.label().equals("Lebensanzeige (Bot)")) {
+            tile.tip("Zeigt die aktuellen Lebenspunkte (und Goldherzen nach einem Pop) direkt über dem Kopf des Bots an.");
+         } else if (var12.label().equals("Reach-Indikator")) {
+            tile.tip("Zeigt in der Arena eine feine Markierung am Fadenkreuz, sobald der Bot in echter 3-Block-Reichweite ist (falls kein Crosshair Indicator aktiv ist).");
+         } else if (var12.label().equals(DrillOptions.Field.RANDOM_BLOCK_POS.label())) {
+            tile.tip("Startet den Bot beim Stun-Web zufällig an Blockkanten oder Ecken, um das Lesen der Flugbahn zu üben.");
+         } else if (var12.label().equals(DrillOptions.Field.BOT_AUTO_HIT.label())) {
+            tile.tip("Bot kontert nach Schildbruch sofort mit einem Auto-Hit – ideal zum Üben des Web Stun Dunks.");
+         } else if (var12.label().equals(DrillOptions.Field.CLEAN_HEAL.label())) {
+            tile.tip("Erzwingt 0 Gegentreffer während des Essens (wie im HT1-UHC-Coaching).");
+         } else if (var12.label().equals(DrillOptions.Field.DUNK_TYPE.label())) {
+            tile.tip("Wählt das Ziel-Secondary nach dem Crit: Cobweb, Lava oder Cobweb + Lava.");
          } else if (var12.label().equals("Update-Hinweise")) {
             tile.tip("Prüft beim Spielstart einmalig auf neue MacherBot-Releases (ohne automatischen Download).");
+         } else if (var12.label().equals(DrillOptions.Field.ARENA_DIFFICULTY.label())) {
+            tile.tip("Minecraft-Schwierigkeit für Schaden in der Arena. Standard ist Schwer (1,5× Crystal-/Ankerschaden wie auf PvP-Servern). 'Von Welt' übernimmt die Schwierigkeit deiner Welt.");
+         } else if (var12.label().equals(DrillOptions.Field.ZERO_DAMAGE.label())) {
+            tile.tip("Kein LP-Verlust für dich oder beide Seiten. Rückstoß, Schildblock, Axt-Stun, Cobwebs und Effekte bleiben vollständig aktiv.");
          } else if (var12.label().equals(DrillOptions.Field.PEARL_CATCH_ONLY.label())) {
             tile.tip("Nur eine in der Luft mit deiner eigenen Windladung gefangene Perle teleportiert dich.");
          } else if (var12.label().equals(DrillOptions.Field.TOTEMS.label())) {
@@ -263,14 +287,16 @@ final class TrainingOptionsScreen extends TrainerPanel {
       }
 
       List var2 = switch (var1) {
-         case HIT_CRYSTAL, D_TAP, TRIPLE_TAP, SHIELD_TRIPLE_TAP, TAP_ANCHOR, MACE_COUNTER_DTAP, CORNER_WEB_DTAP -> List.of(
+         case HIT_CRYSTAL, D_TAP, TRIPLE_TAP, SHIELD_TRIPLE_TAP, SELF_WEB_CRYSTAL, TAP_ANCHOR, MACE_COUNTER_DTAP, CORNER_WEB_DTAP -> List.of(
             DrillOptions.Field.BASE, DrillOptions.Field.CRYSTAL_AIR, DrillOptions.Field.TERRAIN
          );
          case DOUBLE_ANCHOR -> List.of(DrillOptions.Field.TERRAIN, DrillOptions.Field.WINDOW);
          case LEDGE_DASH -> List.of(DrillOptions.Field.LEDGE, DrillOptions.Field.BASE);
-         case SAFE_ANCHOR, HEAL -> List.of(DrillOptions.Field.COVER);
+         case SAFE_ANCHOR, HEAL -> List.of(DrillOptions.Field.COVER, DrillOptions.Field.CLEAN_HEAL);
+         case WEB_DUNK -> List.of(DrillOptions.Field.DUNK_TYPE, DrillOptions.Field.WINDOW);
+         case STUN_WEB -> List.of(DrillOptions.Field.RANDOM_BLOCK_POS);
          case RETOTEM, DOUBLE_HAND -> List.of(DrillOptions.Field.BURST_PATTERN, DrillOptions.Field.REACTION);
-         case SMASH, WIND_CHAIN, BACKSTAB, PEARL_CATCH, ELYTRA_SMASH -> List.of(DrillOptions.Field.START_HEIGHT, DrillOptions.Field.SIDE_OFFSET);
+         case SMASH, WIND_CHAIN, BACKSTAB, PEARL_CATCH, ELYTRA_SMASH, ELY_STUN_SLAM -> List.of(DrillOptions.Field.START_HEIGHT, DrillOptions.Field.SIDE_OFFSET);
          case LOW_WEB_SMASH -> List.of(DrillOptions.Field.START_HEIGHT);
          case WIND_STUN_SLAM, STUN_SLAM -> List.of(
             DrillOptions.Field.SLAM_POSITION, DrillOptions.Field.TARGET_HEIGHT, DrillOptions.Field.HEIGHT_OFFSET, DrillOptions.Field.START_HEIGHT
@@ -281,6 +307,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
       };
       ArrayList var3 = new ArrayList(var2);
       if (this.mode == TrainingSettings.Mode.MACE) var3.add(0, DrillOptions.Field.PEARL_CATCH_ONLY);
+      var3.add(DrillOptions.Field.ARENA_DIFFICULTY);
       var3.add(DrillOptions.Field.ARENA_SIZE);
       var3.add(DrillOptions.Field.TICK_RATE);
       var3.add(DrillOptions.Field.PLAYER_PING);
@@ -307,6 +334,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
                case D_TAP:
                case TRIPLE_TAP:
                case SHIELD_TRIPLE_TAP:
+               case SELF_WEB_CRYSTAL:
                case DOUBLE_ANCHOR:
                case MACE_COUNTER_DTAP:
                case CORNER_WEB_DTAP:
@@ -317,6 +345,9 @@ final class TrainingOptionsScreen extends TrainerPanel {
                case ELYTRA_SMASH:
                case HIT_SELECT:
                case PUNISH_CRIT:
+               case MOMENTUM_BREAK:
+               case WEB_DUNK:
+               case PCRIT_BREAK:
                   yield true;
                case LEDGE_DASH:
                case SAFE_ANCHOR:
@@ -375,8 +406,8 @@ final class TrainingOptionsScreen extends TrainerPanel {
 
       static TrainingOptionsScreen.Group of(DrillOptions.Field var0) {
          return switch (var0) {
-            case GAZE, TURN_RATE, BOT_REACH, WIND_CENTER, WIND_FLIGHT, BOT_JUMP -> BOT;
-            case TOTEMS, REFILL, RESET_POP, SHIELD, REPLACE, REBLOCK, DURABILITY, SHIELD_BREAK_TICKS, ARMOR_WEAR, ITEM_CONSUMPTION, FALL_DAMAGE -> DEFENSE;
+            case GAZE, TURN_RATE, BOT_REACH, WIND_CENTER, WIND_FLIGHT, BOT_JUMP, BOT_AUTO_HIT -> BOT;
+            case TOTEMS, REFILL, RESET_POP, SHIELD, REPLACE, REBLOCK, DURABILITY, SHIELD_BREAK_TICKS, ARMOR_WEAR, ITEM_CONSUMPTION, FALL_DAMAGE, ZERO_DAMAGE -> DEFENSE;
             default -> SCENE;
          };
       }

@@ -50,6 +50,8 @@ final class UhcUtility {
    private final Set<BlockPos> waterBeforeWeb = new HashSet<>();
    private BlockPos rescueWater;
    private int waterSeenAt, drainPunishUntil = -1;
+   private BlockPos pendingLavaFront;
+   private int lavaFrontAt = -1;
    private ItemStack meal=ItemStack.EMPTY;
    private int mealCount, mealEnd;
 
@@ -107,6 +109,36 @@ final class UhcUtility {
       if (lava!=null && tick-lavaTick>=8) {
          if (!level.getBlockState(lava).is(Blocks.LAVA)) lava=null;
          else if (scoop(level,bot,kit,lava)) { lava=null; return true; }
+      }
+      // Offensive Lava -> Front-Web (or Block fallback) follow-up against advancing opponent (Swight 28:55).
+      if (pendingLavaFront != null && tick >= lavaFrontAt) {
+         BlockPos targetFront = pendingLavaFront;
+         pendingLavaFront = null;
+         if (placeWeb(level, bot, kit, targetFront) || placeCover(level, bot, kit, targetFront)) {
+            return true;
+         }
+      }
+      // HT1 Anti-Drain web escape: when bot is webbed near player on T1/T2, knock player back before placing 180° water behind!
+      BlockPos ownWebPos = UhcDefense.touchingWeb(level, bot);
+      if (ownWebPos != null && water == null && skill.lead() >= 0.65 && kit.has(bot, Items.WATER_BUCKET)) {
+         double distSq = bot.distanceToSqr(target);
+         if (distSq < 14.0 && TrainingTactics.withinReach(bot, target)) {
+            bot.stopUsingItem();
+            if (kit.equipSword(bot)) {
+               bot.setSprinting(true);
+               TrainingTactics.strike(level, bot, target, bot.damageSources().mobAttack(bot), 0.0F);
+               return true;
+            }
+         } else if (distSq >= 12.0) {
+            Vec3 away = bot.position().subtract(target.position()).horizontal();
+            Direction backDir = away.lengthSqr() > 1.0e-4 ? Direction.getApproximateNearest(away.x, 0.0, away.z) : bot.getDirection().getOpposite();
+            BlockPos behind = ownWebPos.relative(backDir);
+            if (pour(level, bot, kit, behind, Items.WATER_BUCKET, "WATER") || pour(level, bot, kit, ownWebPos.above(), Items.WATER_BUCKET, "WATER")) {
+               water = level.getBlockState(behind).is(Blocks.WATER) ? behind : ownWebPos.above();
+               waterTick = tick;
+               return true;
+            }
+         }
       }
       boolean visible=seenAt==tick;
       double distance=bot.distanceToSqr(target);
@@ -176,6 +208,18 @@ final class UhcUtility {
                return true;
             }
          }
+         // Defensive secondary (Web or Lava) when low HP and opponent jumps in with momentum (Swight 27:43).
+         if (low && distance >= 4.0 && distance <= 18.0 && !target.onGround() && target.getDeltaMovement().y < 0.05 && !DrillAttempt.inWeb(target)) {
+            BlockPos landing = BlockPos.containing(target.position().add(reads.travel(skill, 3.0)));
+            boolean veryLow = bot.getHealth() <= bot.getMaxHealth() * 0.4;
+            if ((veryLow && placeWeb(level, bot, kit, landing))
+                  || (!target.isOnFire() && lava == null && pour(level, bot, kit, landing, Items.LAVA_BUCKET, "LAVA"))) {
+               if (level.getBlockState(landing).is(Blocks.COBWEB)) { web = landing; webTick = tick; }
+               else { lava = landing; lavaTick = tick; }
+               nextTerrain = tick + 16 + skill.switchTicks();
+               return true;
+            }
+         }
          boolean trapped=holdingTrap(level,web,tick) && DrillAttempt.inWeb(target);
          boolean afterDrain=tick <= drainPunishUntil && web != null && target.distanceToSqr(Vec3.atCenterOf(web)) < 6.25;
          if ((trapped || eatingTarget || afterDrain) && !target.isOnFire() && !target.hasEffect(MobEffects.FIRE_RESISTANCE)
@@ -186,7 +230,17 @@ final class UhcUtility {
             cells.sort((a,b)->Double.compare(Vec3.atCenterOf(a).distanceToSqr(target.position()),Vec3.atCenterOf(b).distanceToSqr(target.position())));
             for (BlockPos pos:cells) {
                if (Vec3.atBottomCenterOf(pos).distanceToSqr(bot.position())<3.24) continue;
-               if (pour(level,bot,kit,pos,Items.LAVA_BUCKET,"LAVA")) {lava=pos;lavaTick=tick;nextTerrain=tick+36;return true;}
+               if (pour(level,bot,kit,pos,Items.LAVA_BUCKET,"LAVA")) {
+                  lava=pos;lavaTick=tick;nextTerrain=tick+36;
+                  if (!trapped && skill.lead() >= 0.55) {
+                     Vec3 towardBot = bot.position().subtract(target.position()).horizontal();
+                     if (towardBot.lengthSqr() > 1.0e-4) {
+                        pendingLavaFront = pos.relative(Direction.getApproximateNearest(towardBot.x, 0.0, towardBot.z));
+                        lavaFrontAt = tick + Math.max(1, skill.switchTicks());
+                     }
+                  }
+                  return true;
+               }
             }
          }
       }
@@ -316,6 +370,8 @@ final class UhcUtility {
       fired.removeIf(a->a.isRemoved());BotTelemetry.action(level,bot,"CROSSBOW");nextBolt=tick+75;return true;
    }
    void clear() {
+      pendingLavaFront = null;
+      lavaFrontAt = -1;
       fired.forEach(a->a.discard());fired.clear();
       if (miningLevel!=null) cancelMining(miningLevel);
       if (changedArena!=null) {ForgeArena.restore(changedArena);changedArena=null;}

@@ -1,6 +1,8 @@
 package de.pvptrainer.session;
 
 import de.pvptrainer.arena.MacherAppearance;
+import de.pvptrainer.arena.TrainingArena;
+import de.pvptrainer.arena.TrainingTarget;
 import de.pvptrainer.combat.MaceDuel;
 import de.pvptrainer.combat.TrainingCrystal;
 import de.pvptrainer.combat.TrainingTactics;
@@ -8,8 +10,10 @@ import de.pvptrainer.drill.Drill;
 import de.pvptrainer.drill.DrillAttempt;
 import de.pvptrainer.drill.DrillOptions;
 import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.progress.HudPreferences;
 import de.pvptrainer.progress.TrainingProgress;
 import java.util.List;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.syncher.SynchedEntityData.DataValue;
@@ -17,16 +21,20 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.damagesource.DamageScaling;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.decoration.Mannequin;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.MaceItem;
 import net.minecraft.world.item.component.BlocksAttacks;
+import net.minecraft.world.item.component.UseEffects;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
 
@@ -41,22 +49,108 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
     private long pendingWebClick;
     private int pendingWebTick;
     private int pendingWebDuration;
-    private DamageSource blockedMelee;
-    private int blockedMeleeTick = -1;
+    private DamageSource shieldBlockedSource;
+    private int shieldBlockedTick = -1;
+    private boolean lastHealthVisible;
+    private int lastShownHp = -1;
+    private int lastShownMaxHp = -1;
+    private int lastShownAbs = -1;
 
     TrainingBot(TrainingSession session, ServerLevel level) {
         super(level);
         this.session = session;
+        this.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.10000000149011612D);
         this.applyImplicitComponent(DataComponents.PROFILE, MacherAppearance.PROFILE);
         this.setCustomName(MacherAppearance.NAME);
         this.setCustomNameVisible(true);
+        this.updateHealthIndicator();
+    }
+
+    void updateHealthIndicator() {
+        boolean visible = HudPreferences.botHealth();
+        int hp = visible ? Math.round(Math.max(0.0F, this.getHealth()) * 10.0F) : -1;
+        int maxHp = visible ? Math.round(Math.max(0.0F, this.getMaxHealth()) * 10.0F) : -1;
+        int abs = visible ? Math.round(Math.max(0.0F, this.getAbsorptionAmount()) * 10.0F) : -1;
+        if (visible == this.lastHealthVisible && hp == this.lastShownHp && maxHp == this.lastShownMaxHp && abs == this.lastShownAbs) {
+            return;
+        }
+        this.lastHealthVisible = visible;
+        this.lastShownHp = hp;
+        this.lastShownMaxHp = maxHp;
+        this.lastShownAbs = abs;
+        this.setCustomName(MacherAppearance.healthName(this.getHealth(), this.getMaxHealth(), this.getAbsorptionAmount(), visible));
+    }
+
+    @Override
+    public float getSpeed() {
+        return (float) this.getAttributeValue(Attributes.MOVEMENT_SPEED);
+    }
+
+    @Override
+    protected float getFlyingSpeed() {
+        return this.isSprinting() ? 0.026F : 0.02F;
+    }
+
+    @Override
+    public boolean canSprint() {
+        return true;
+    }
+
+    @Override
+    protected float getBlockSpeedFactor() {
+        return this.isFallFlying() ? 1.0F : super.getBlockSpeedFactor();
+    }
+
+    @Override
+    public void makeStuckInBlock(BlockState state, Vec3 motionMultiplier) {
+        super.makeStuckInBlock(state, motionMultiplier);
+        this.tryResetCurrentImpulseContext();
+    }
+
+    @Override
+    protected void applyInput() {
+        super.applyInput();
+        // Match Vanilla LocalPlayer.modifyInput(): slow down while blocking/eating/drawing bow or crouching.
+        if (this.isUsingItem() && !this.isPassenger()) {
+            UseEffects effects = this.getUseItem().getOrDefault(DataComponents.USE_EFFECTS, UseEffects.DEFAULT);
+            float mult = effects.speedMultiplier();
+            this.xxa *= mult;
+            this.zza *= mult;
+            if (!effects.canSprint() && this.isSprinting()) {
+                this.setSprinting(false);
+            }
+        }
+        if (this.isCrouching() || this.isVisuallyCrawling()) {
+            this.xxa *= 0.3F;
+            this.zza *= 0.3F;
+        }
+    }
+
+    @Override
+    public void travel(Vec3 travelVector) {
+        if (this.isSwimming()) {
+            double lookY = this.getLookAngle().y;
+            double factor = lookY < -0.2 ? 0.085 : 0.06;
+            if (lookY <= 0.0 || this.jumping
+                || !this.level().getFluidState(BlockPos.containing(this.getX(), this.getY() + 1.0 - 0.1, this.getZ())).isEmpty()) {
+                Vec3 vel = this.getDeltaMovement();
+                this.setDeltaMovement(vel.add(0.0, (lookY - vel.y) * factor, 0.0));
+            }
+        }
+        super.travel(travelVector);
+    }
+
+    @Override
+    protected int getFireImmuneTicks() {
+        return 20;
     }
 
     @Override
     public double meleeReach() {
         double cap = session.options.botReach();
         Drill drill = session.options.drill();
-        if (drill == Drill.JUMP_RESET || drill == Drill.HIT_SELECT || drill == Drill.MACE_COUNTER_DTAP) {
+        if (drill == Drill.JUMP_RESET || drill == Drill.HIT_SELECT || drill == Drill.UPPERCUT
+            || drill == Drill.PCRIT_BREAK || drill == Drill.MACE_COUNTER_DTAP) {
             return cap;
         }
         int tick = session.roundTick;
@@ -133,8 +227,13 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         boolean webMelee = session.options != null && session.options.drill() == Drill.STUN_WEB
             && source != null && source.is(DamageTypes.PLAYER_ATTACK) && source.getDirectEntity() == session.owner;
         if (webMelee && this.stunImpulseAt == session.roundTick) return;
-        boolean blocked = source != null && source == this.blockedMelee && this.blockedMeleeTick == session.roundTick;
-        boolean keepGrounded = (blocked || webMelee) && this.onGround();
+        boolean shieldBlocked = source != null && source == this.shieldBlockedSource && this.shieldBlockedTick == session.roundTick;
+        if (shieldBlocked && damage <= 0.0F) {
+            // Exact Vanilla ServerPlayer parity: when a shield blocks 100% of damage (remaining == 0),
+            // LivingEntity.hurtServer() skips markHurt() so no motion packet is sent and the player takes zero knockback.
+            return;
+        }
+        boolean keepGrounded = webMelee && this.onGround();
         double previousY = this.getDeltaMovement().y;
         super.knockback(strength, x, z, source, damage, force);
         if (keepGrounded) {
@@ -153,6 +252,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         this.resetFallDistance();
         this.clearFire();
         this.setHealth(this.getMaxHealth());
+        this.updateHealthIndicator();
         this.hurtMarked = true;
     }
 
@@ -169,6 +269,21 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
     public boolean hurtServer(ServerLevel level, DamageSource source, float amount) {
         if (session.waitingForStart) {
             return false;
+        }
+        if (session.options != null && session.options.drill() == Drill.SHIELD_TIMING
+            && source.getDirectEntity() == session.owner && session.owner != null
+            && session.owner.getMainHandItem().is(ItemTags.AXES)) {
+            if (session.attempt != null) session.attempt.axeNotAllowedInShieldTiming();
+            return false;
+        }
+        boolean scalesWithDifficulty = source.scalesWithDifficulty()
+            && !(source.type().scaling() == DamageScaling.WHEN_CAUSED_BY_LIVING_NON_PLAYER
+                && TrainingTarget.matches(source.getEntity()));
+        if (scalesWithDifficulty) {
+            amount = TrainingArena.scalePlayerDamage(amount, TrainingArena.resolveDamageDifficulty(level), true, TrainingArena.isArena(level));
+            if (amount == 0.0F) {
+                return false;
+            }
         }
 
         session.equipment.protectPassiveTarget(this);
@@ -190,6 +305,11 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         boolean maceAttack = source.getDirectEntity() == session.owner
             && session.owner.getMainHandItem().is(Items.MACE)
             && (source.is(DamageTypes.MACE_SMASH) || source.is(DamageTypes.PLAYER_ATTACK));
+        boolean realMaceSmash = source.getDirectEntity() == session.owner
+            && session.owner.getMainHandItem().is(Items.MACE)
+            && source.is(DamageTypes.MACE_SMASH);
+        boolean isStunSlamDrill = session.options.drill() == Drill.STUN_SLAM
+            || session.options.drill() == Drill.ELY_STUN_SLAM;
         boolean drillSmash = session.options.drill().centeredMaceDrill() && maceAttack
             && (source.is(DamageTypes.MACE_SMASH)
                 || session.options.drill() == Drill.WIND_STUN_SLAM
@@ -203,7 +323,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         boolean webContact = session.options.drill() == Drill.LOW_WEB_SMASH && maceAttack;
         // Test before damage, totem handling or Wind Burst changes the attacker's fall state.
         boolean webSmash = webContact && (drillSmash || MaceItem.canSmashAttack(session.owner));
-        boolean stunSlamMaceOpen = session.options.drill() == Drill.STUN_SLAM && maceAttack
+        boolean stunSlamMaceOpen = isStunSlamDrill && realMaceSmash
             && !wasBlocking && session.attempt != null && session.attempt.shieldWindowOpen();
         if ((webSmash || stunSlamMaceOpen || validSmash) && invulnerableTime > 10) invulnerableTime = 10;
 
@@ -232,38 +352,25 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
             return hurt;
         }
 
-        boolean stunSlamAccepted = false;
-        if (session.options.drill() == Drill.STUN_SLAM && source.getEntity() == session.owner) {
+        if (isStunSlamDrill && source.getEntity() == session.owner) {
             if (session.owner.getMainHandItem().is(ItemTags.AXES)) {
                 session.attempt.axeContact(wasBlocking, blockDelayRemaining);
             }
-            if (maceAttack && (hurt || stunSlamMaceOpen)) {
-                stunSlamAccepted = session.attempt.acceptStunSlam(session.owner.fallDistance, wasBlocking);
-                if (stunSlamAccepted) {
-                    session.saveResult();
-                }
-            }
-            if (!stunSlamAccepted && session.owner.getMainHandItem().is(Items.MACE) && (!hurt || !source.is(DamageTypes.MACE_SMASH))) {
-                session.attempt.maceContact(session.owner.fallDistance, session.owner.onGround(), source.is(DamageTypes.MACE_SMASH));
+            if (realMaceSmash && hurt) {
+                session.attempt.beginStunSlamLaunch(session.owner, wasBlocking);
+            } else if (session.owner.getMainHandItem().is(Items.MACE) && (!hurt || !realMaceSmash)) {
+                session.attempt.maceContact(session.owner.fallDistance, session.owner.onGround(), realMaceSmash);
             }
         }
 
         if (hurt && source.getEntity() == session.owner) {
             session.hits++;
-            if (session.secondarySlam != null && maceAttack
-                && (source.is(DamageTypes.MACE_SMASH) || session.secondarySlam.recentlyFell())) {
-                if (session.secondarySlam.acceptStunSlam(session.owner.fallDistance, wasBlocking)) {
-                    session.finishSecondarySlam();
-                } else {
-                    session.secondarySlam.smash(session.owner, wasBlocking);
-                    if (session.secondarySlam.won()) session.finishSecondarySlam();
-                }
+            if (session.secondarySlam != null && realMaceSmash) {
+                session.secondarySlam.smash(session.owner, wasBlocking);
+                if (session.secondarySlam.won()) session.finishSecondarySlam();
             }
-            boolean stunSlam = session.options.drill() == Drill.STUN_SLAM;
-            if (!drillSmash && !stunSlamAccepted && source.is(DamageTypes.MACE_SMASH)
-                && (stunSlam ? session.owner.getMainHandItem().is(Items.MACE) : !session.airStartLanded())) {
+            if (!drillSmash && !isStunSlamDrill && source.is(DamageTypes.MACE_SMASH) && !session.airStartLanded()) {
                 session.attempt.smash(session.owner, wasBlocking);
-                if (stunSlam && session.attempt.won()) session.saveResult();
             }
         }
 
@@ -275,7 +382,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                     && !hurtWindowOpen
                     && !wasBlocking
                     && amount > 0.0F
-                    && session.attempt.needsAirSword())) {
+                    && (session.attempt.needsAirSword() || session.attempt.acceptsAirComboTap()))) {
             session.attempt.swordContact(session.owner, this, hurt ? this.damageThisHit : 0.0F, session.swingCharge, airborne, hurt, hurtWindowOpen);
             session.directComboClick = -1;
         }
@@ -306,6 +413,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                 }
             }
             session.resetAfterPop = session.options.resetOnPop();
+            this.updateHealthIndicator();
         }
 
         return hurt;
@@ -340,18 +448,34 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
 
     @Override
     protected void actuallyHurt(ServerLevel level, DamageSource source, float amount) {
-        float before = DrillAttempt.health(this);
+        float hpBefore = this.getHealth();
+        float absBefore = this.getAbsorptionAmount();
+        float before = hpBefore + absBefore;
         super.actuallyHurt(level, source, amount);
         this.damageThisHit = Math.max(0.0F, before - DrillAttempt.health(this));
+        if (TrainingResources.zeroDamageFor(this)) {
+            boolean allowPop = session.options != null
+                && (session.options.drill().requiresPopChain() || session.options.drill() == Drill.TOTEM_POPS)
+                && this.isDeadOrDying()
+                && (getMainHandItem().has(DataComponents.DEATH_PROTECTION) || getOffhandItem().has(DataComponents.DEATH_PROTECTION));
+            if (!allowPop) {
+                this.setHealth(hpBefore);
+                this.setAbsorptionAmount(absBefore);
+            }
+        }
         // Keep the training target available even in kits without death protection.
         if (session.options.drill().centeredMaceDrill() && getHealth() <= 0
             && !getMainHandItem().has(DataComponents.DEATH_PROTECTION) && !getOffhandItem().has(DataComponents.DEATH_PROTECTION)) {
             setHealth(getMaxHealth());
         }
+        this.updateHealthIndicator();
         if (damageThisHit > 0 && session.options.drill() == Drill.DUEL
-            && session.settings.mode() == TrainingSettings.Mode.SWORD
             && source.is(DamageTypes.PLAYER_ATTACK) && source.getDirectEntity() == session.owner) {
-            session.tactics.swordDuel.incomingMelee(session.roundTick);
+            if (session.settings.mode() == TrainingSettings.Mode.SWORD) {
+                session.tactics.swordDuel.incomingMelee(session.roundTick);
+            } else if (session.settings.mode() == TrainingSettings.Mode.UHC) {
+                session.tactics.onBotDamaged(session.roundTick);
+            }
         }
         if (source.getDirectEntity() instanceof TrainingCrystal) {
             session.lastBotDamage = session.lastBotDamage + this.damageThisHit;
@@ -370,7 +494,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         // shield cone flickers 180°. Align head yaw to the falling attacker for frontal axe hits in slam drills.
         if (shield != null
             && session.options != null
-            && session.options.drill().slamOptions()
+            && (session.options.drill().slamOptions() || session.options.drill() == Drill.ELY_STUN_SLAM)
             && source.getDirectEntity() == session.owner
             && session.owner != null
             && session.owner.getMainHandItem().is(ItemTags.AXES)
@@ -384,7 +508,17 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                 this.setYBodyRot(faceYaw);
             }
         }
+        Vec3 velBeforeBlock = this.getDeltaMovement();
         float blocked = super.applyItemBlocking(level, source, amount);
+        if (blocked >= amount && blocked > 0.0F) {
+            this.shieldBlockedSource = source;
+            this.shieldBlockedTick = session.roundTick;
+            // Exact Vanilla ServerPlayer parity: on a 100%-blocked hit (remaining == 0), LivingEntity.hurtServer()
+            // never calls markHurt(), so a real ServerPlayer receives no velocity packet and keeps its prior velocity.
+            if (this.stunImpulseAt != session.roundTick) {
+                this.setDeltaMovement(velBeforeBlock);
+            }
+        }
         if (shield != null && blocked > 0.0F && session.attempt != null && session.equipment != null) {
             int damageBefore = shieldStack.getDamageValue();
             shieldStack.hurtAndBreak(shield.itemDamage().apply(blocked), this, hand);
@@ -416,18 +550,16 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
 
     @Override
     protected void blockUsingItem(ServerLevel level, LivingEntity attacker, DamageSource source, float amount) {
-        // The callback precedes the recoil of a successfully blocked impact. An attack from behind
-        // skips it even while the shield is raised. The stun drill applies its own validated lift below.
-        if (source.getDirectEntity() == attacker && attacker == session.owner && source.is(DamageTypes.PLAYER_ATTACK)) {
-            this.blockedMelee = source;
-            this.blockedMeleeTick = session.roundTick;
-        }
         super.blockUsingItem(level, attacker, source, amount);
         ItemStack shieldStack = this.getItemBlockingWith();
         BlocksAttacks shield = shieldStack == null ? null : shieldStack.get(DataComponents.BLOCKS_ATTACKS);
         if (shield == null || session.attempt == null) return;
 
         float disableSeconds = attacker.getSecondsToDisableBlocking();
+        if (session.options.drill() == Drill.SHIELD_TIMING && attacker == session.owner && disableSeconds > 0) {
+            session.attempt.axeNotAllowedInShieldTiming();
+            return;
+        }
         if (session.options.drill() == Drill.STUN_WEB) {
             if (attacker != session.owner || source.getDirectEntity() != attacker || !source.is(DamageTypes.PLAYER_ATTACK)
                 || !(attacker.getMainHandItem().is(ItemTags.AXES) || attacker.getMainHandItem().is(ItemTags.SWORDS))) {
@@ -461,7 +593,8 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                 if (options.drill() == Drill.CORNER_WEB_DTAP) {
                     session.attempt.confirmCornerWeb(DrillAttempt.inWeb(this));
                 }
-                int raiseTicks = options.drill() == Drill.STUN_SLAM && configured < 0 && !options.instantReblock()
+                int raiseTicks = (options.drill() == Drill.STUN_SLAM || options.drill() == Drill.ELY_STUN_SLAM)
+                    && configured < 0 && !options.instantReblock()
                     ? shield.blockDelayTicks() : 0;
                 session.attempt.shieldStun(pause + raiseTicks);
                 if (options.drill() == Drill.WIND_STUN_SLAM && !session.windTarget.isScoredWindFlight()
@@ -469,8 +602,16 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                     && attacker.getMainHandItem().is(ItemTags.AXES) && source.getDirectEntity() == session.owner) {
                     session.windTarget.markAirborneAxeStun();
                 }
+                if (options.botAutoHit() && pause > 0) {
+                    session.scheduleBotAutoHit();
+                }
+                if (options.drill() == Drill.DUEL && session.settings.mode() == TrainingSettings.Mode.UHC && pause > 0) {
+                    session.tactics.onBotShieldDisabled(session.roundTick, session.settings);
+                }
                 if (options.drill() != Drill.STUN_SLAM
+                    && options.drill() != Drill.ELY_STUN_SLAM
                     && options.drill() != Drill.STUN_WEB
+                    && options.drill() != Drill.MOMENTUM_BREAK
                     && options.drill() != Drill.WIND_STUN_SLAM
                     && options.drill() != Drill.CORNER_WEB_DTAP
                     && options.drill() != Drill.SHIELD_TRIPLE_TAP
@@ -488,6 +629,11 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
     @Override
     public void hurtArmor(DamageSource source, float amount) {
         this.doHurtEquipment(source, amount, new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET});
+    }
+
+    @Override
+    public void hurtHelmet(DamageSource source, float amount) {
+        this.doHurtEquipment(source, amount, new EquipmentSlot[]{EquipmentSlot.HEAD});
     }
 
     @Override

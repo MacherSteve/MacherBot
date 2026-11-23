@@ -117,7 +117,7 @@ public final class ArenaRound {
     }
 
     static boolean airStart(boolean original, DrillOptions options) {
-        return original || options.drill() == Drill.ELYTRA_SMASH
+        return original || options.drill() == Drill.ELYTRA_SMASH || options.drill() == Drill.ELY_STUN_SLAM
             || (options.drill() == Drill.BACKSTAB || options.drill().centeredMaceDrill()) && options.startHeight() > 0;
     }
     static int elevation(DrillOptions options) {
@@ -142,7 +142,7 @@ public final class ArenaRound {
     }
 
     static Vec3 stageScenario(Vec3 target, ServerPlayer player, DrillOptions options, TrainingSettings settings) {
-        if (options.drill() == Drill.ELYTRA_SMASH) equipElytra(player);
+        if (options.drill() == Drill.ELYTRA_SMASH || options.drill() == Drill.ELY_STUN_SLAM) equipElytra(player);
         if (settings.maceCenterLocked()) {
             Vec3 center = new Vec3(CENTER, target.y, CENTER);
             if (options.drill() == Drill.LOW_WEB_SMASH) {
@@ -251,7 +251,7 @@ public final class ArenaRound {
         List<ItemStack> sorted = KitLibrary.inventory(player);
         if (!(player instanceof ServerPlayer owner) || !TrainingArena.isArena(owner.level())) return sorted;
         TrainingSession session = TrainerClient.session(owner.level().getServer());
-        if (session == null || session.status().drill() != Drill.ELYTRA_SMASH) return sorted;
+        if (session == null || (session.status().drill() != Drill.ELYTRA_SMASH && session.status().drill() != Drill.ELY_STUN_SLAM)) return sorted;
         final int chestSlot = 38;
         ItemStack startingChest = original.get(chestSlot), wings = sorted.get(chestSlot);
         if (startingChest.is(Items.ELYTRA) || !wings.is(Items.ELYTRA)) return sorted;

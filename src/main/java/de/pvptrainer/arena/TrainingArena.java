@@ -8,6 +8,7 @@ import de.pvptrainer.kits.TrainingKit;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.mixin.AttackStrengthAccess;
 import de.pvptrainer.mixin.CooldownAccess;
+import de.pvptrainer.session.TrainingResources;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -31,6 +32,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerPlayer.RespawnConfig;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Abilities.Packed;
@@ -73,6 +75,30 @@ public final class TrainingArena {
 
     public static boolean suppressRegeneration(ServerPlayer player) {
         return uhc && isArena(player.level());
+    }
+
+    /** Arena combat treats Peaceful as Normal so drills still deal damage; Easy/Normal/Hard match Vanilla. */
+    public static Difficulty effectiveDamageDifficulty(Difficulty difficulty, boolean inArena) {
+        return difficulty == Difficulty.PEACEFUL && inArena ? Difficulty.NORMAL : difficulty;
+    }
+
+    /** Resolves effective damage difficulty in the arena (default Hard, or world difficulty when configured). */
+    public static Difficulty resolveDamageDifficulty(ServerLevel level) {
+        return isArena(level) ? TrainingResources.arenaDifficulty(level) : level.getDifficulty();
+    }
+
+    /** Exact Vanilla Player.hurtServer() difficulty scaling for difficulty-scaled damage sources. */
+    public static float scalePlayerDamage(float amount, Difficulty difficulty, boolean scalesWithDifficulty, boolean inArena) {
+        if (!scalesWithDifficulty) {
+            return amount;
+        }
+        Difficulty effective = effectiveDamageDifficulty(difficulty, inArena);
+        return switch (effective) {
+            case PEACEFUL -> 0.0F;
+            case EASY -> Math.min(amount / 2.0F + 1.0F, amount);
+            case NORMAL -> amount;
+            case HARD -> amount * 3.0F / 2.0F;
+        };
     }
 
     private static Path returnFile(ServerPlayer player) {
@@ -187,6 +213,12 @@ public final class TrainingArena {
         int startZ = START_Z;
         double botX = 0.5 + options.sideOffset() + Math.sin(approachRad) * options.startDistance();
         double botZ = 0.5 + startZ + Math.cos(approachRad) * options.startDistance();
+        if (options.randomBlockPos()) {
+            // Randomly shift bot to a block edge/corner (±0.30) to train trajectory reading in Stun-Web.
+            var rng = player.getRandom();
+            botX += (rng.nextInt(3) - 1) * 0.30;
+            botZ += (rng.nextInt(3) - 1) * 0.30;
+        }
         boolean isLedgeDash = options.drill() == Drill.LEDGE_DASH;
         int botHill = options.largeArena() && !settings.maceCenterLocked() && !isLedgeDash
             ? ForgeArena.largeHillOffset((int) Math.floor(botX), (int) Math.floor(botZ))
@@ -301,6 +333,9 @@ public final class TrainingArena {
 
         if (options.drill() == Drill.WEB_DRAIN) {
             arena.setBlockAndUpdate(botPos, Blocks.COBWEB.defaultBlockState());
+        }
+        if (options.drill() == Drill.ANTI_DRAIN) {
+            arena.setBlockAndUpdate(new BlockPos(0, FLOOR + 1, startZ), Blocks.COBWEB.defaultBlockState());
         }
     }
 

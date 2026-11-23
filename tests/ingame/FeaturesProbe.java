@@ -8,7 +8,9 @@ import de.pvptrainer.drill.Drill;
 import de.pvptrainer.drill.DrillAttempt;
 import de.pvptrainer.drill.DrillOptions;
 import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.progress.HudPreferences;
 import de.pvptrainer.session.TrainingSession;
+import de.pvptrainer.ui.KnowledgeGuide;
 import de.pvptrainer.ui.TrainingScreen;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,9 +30,11 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -54,6 +58,15 @@ public final class FeaturesProbe implements ClientModInitializer {
     private int botWindCharges;
     private double maxBotY;
     private double hitDistanceAtDamage = -1.0;
+    private Difficulty savedDifficulty;
+    private float parityHardPlayerDmg;
+    private float parityHardBotDmg;
+    private double parityHardBotVy;
+    private float parityNormalPlayerDmg;
+    private float parityNormalBotDmg;
+    private double parityBotMeleeHard;
+    private double parityBotMeleeNormal;
+    private double tripleTapPeakY;
 
     private static void log(String msg) throws Exception {
         Files.writeString(Path.of("checks.txt"), msg + "\n", StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -103,6 +116,7 @@ public final class FeaturesProbe implements ClientModInitializer {
         int hotbar = findHotbarSlot(p, item);
         if (hotbar >= 0) {
             p.getInventory().setSelectedSlot(hotbar);
+            p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket(hotbar));
             return hotbar;
         }
         for (int i = 9; i < 36; i++) {
@@ -112,6 +126,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                 p.getInventory().setItem(0, st);
                 p.getInventory().setItem(i, prev);
                 p.getInventory().setSelectedSlot(0);
+                p.connection.send(new net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket(0));
                 return 0;
             }
         }
@@ -124,6 +139,17 @@ public final class FeaturesProbe implements ClientModInitializer {
             if (entry.getKey().is(key) && entry.getIntValue() >= minLevel) return true;
         }
         return false;
+    }
+
+    private static int equipMace(ServerPlayer p, boolean windBurst) {
+        for (int i = 0; i < 9; i++) {
+            ItemStack st = p.getInventory().getItem(i);
+            if (st.is(Items.MACE) && hasEnchant(st, Enchantments.WIND_BURST, 1) == windBurst) {
+                p.getInventory().setSelectedSlot(i);
+                return i;
+            }
+        }
+        throw new AssertionError("Mace (windBurst=" + windBurst + ") not found on hotbar");
     }
 
     private static void detonateCrystalAt(TrainingSession s, ServerPlayer p, BlockPos base) throws Exception {
@@ -243,12 +269,21 @@ public final class FeaturesProbe implements ClientModInitializer {
                     case 3 -> runLargeArenaAndCleanup(s, server, p);
                     case 4 -> runCornerObiTrapAndFirstHitKnockback(s, server, p);
                     case 5 -> runStunWebContinuousJump(s, server, p);
-                    case 6 -> runStunSlamHeightsAndGroundTouch(s, server, p);
+                    case 6 -> runStunSlamWindBurstAndElyStunSlam(s, server, p);
                     case 7 -> runShieldDrain(s, server, p);
                     case 8 -> runDoubleAnchor(s, server, p);
-                    case 9 -> runShieldTripleTap(s, server, p);
-                    case 10 -> runJumpResetAndHitSelectSpacing(s, server, p);
+                    case 9 -> runVanillaCrystalParityAndTripleTap(s, server, p);
+                    case 10 -> runShieldTripleTap(s, server, p);
+                    case 11 -> runJumpResetAndHitSelectSpacing(s, server, p);
+                    case 12 -> runSelfWebCrystalAndDTapHotfix(s, server, p);
+                    case 13 -> runUppercutAndSwordSprintHits(s, server, p);
+                    case 14 -> runSwightUhcDrills(s, server, p);
+                    case 15 -> runHealPunishPCritBreakAndCleanHeal(s, server, p);
                     default -> {
+                        if (savedDifficulty != null) {
+                            server.setDifficulty(savedDifficulty, true);
+                            savedDifficulty = null;
+                        }
                         check(!TrainingArena.isArena(p.level()), "still in arena at end");
                         check(!p.isNoGravity(), "noGravity left enabled");
                         log("PASS complete");
@@ -295,6 +330,23 @@ public final class FeaturesProbe implements ClientModInitializer {
                     .map(pr -> pr.label(Drill.TRIPLE_TAP))
                     .allMatch(presetLabel -> tripleLabels.stream().anyMatch(l -> l.equals(presetLabel)));
                 check(tripleHasPresets, "Triple Tap counter-case missing preset buttons: " + tripleLabels);
+                // Verify "Technik-Guide" button opens KnowledgeGuideScreen cleanly with categories & CTA
+                var guideBtn = tripleScreen.children().stream()
+                    .filter(c -> c instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().contains("Technik-Guide"))
+                    .map(c -> (net.minecraft.client.gui.components.Button) c)
+                    .findFirst().orElse(null);
+                check(guideBtn != null, "Technik-Guide button missing in TrainingScreen: " + tripleLabels);
+                guideBtn.onPress(null);
+                var guideScreen = mc.gui.screen();
+                check(guideScreen != null && guideScreen.getTitle().getString().contains("Technik-Guide"),
+                    "KnowledgeGuideScreen did not open: " + guideScreen);
+                List<String> guideLabels = guideScreen.children().stream()
+                    .filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget)
+                    .map(c -> ((net.minecraft.client.gui.components.AbstractWidget) c).getMessage().getString())
+                    .toList();
+                check(guideLabels.stream().anyMatch(l -> l.contains("Grundlagen"))
+                    && guideLabels.stream().anyMatch(l -> l.contains("Jetzt üben")),
+                    "KnowledgeGuideScreen missing tabs or CTA: " + guideLabels);
                 mc.gui.setScreen(null);
                 uiFuture.complete("ok");
             } catch (Throwable err) {
@@ -569,9 +621,8 @@ public final class FeaturesProbe implements ClientModInitializer {
         }
     }
 
-    private void runStunSlamHeightsAndGroundTouch(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
+    private void runStunSlamWindBurstAndElyStunSlam(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
         if (sub == 0) {
-            // Test height 18 (odd height where vanilla ground-touch packet often races mace click!)
             var settings = TrainingSettings.defaults(TrainingSettings.Mode.MACE).forDrill(Drill.STUN_SLAM).withAutoRespawn(false);
             var opts = DrillOptions.forDrill(Drill.STUN_SLAM)
                 .withIndex(DrillOptions.Field.START_HEIGHT, DrillOptions.Field.START_HEIGHT.indexOfNumber(18));
@@ -585,49 +636,96 @@ public final class FeaturesProbe implements ClientModInitializer {
             LivingEntity b = bot(s);
             check(b.isBlocking(), "STUN_SLAM bot should block immediately");
             release(s, p);
-            // Simulate player dropping right beside bot, hitting Axe stun, then touching ground slightly (onGround=true, fallDistance=0) before Mace click!
+
+            // 1. Axe shield break ONLY must NOT win!
             p.teleportTo(p.level(), b.getX(), b.getY() + 1.2, b.getZ() - 1.6, java.util.Set.of(), 0.0F, 0.0F, true);
             p.fallDistance = 16.5F;
             equipFromInventory(p, Items.NETHERITE_AXE);
             p.lookAt(Anchor.EYES, b.getEyePosition());
             p.attack(b);
             check(attempt(s).shieldWindowOpen(), "Axe stun failed at height 18");
+            check(!attempt(s).done() && !attempt(s).won(), "Shield break alone must NOT complete STUN_SLAM!");
 
-            // Slight ground touch right before Mace click
+            // 2. Ground tap with Mace (fallDistance=0, no smash) must NOT win!
             p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.6, java.util.Set.of(), 0.0F, 0.0F, true);
             p.setOnGround(true);
             p.fallDistance = 0.0F;
-            equipFromInventory(p, Items.MACE);
+            equipMace(p, true);
             p.lookAt(Anchor.EYES, b.getEyePosition());
             p.attack(b);
-            check(attempt(s).done() && attempt(s).won(), "STUN_SLAM at height 18 with slight ground touch must win! progress=" + attempt(s).progress());
+            check(!attempt(s).done() && !attempt(s).won(), "Ground tap (0.0 bl fall) must NOT complete STUN_SLAM!");
 
-            // Also test height 19 cleanly
-            var settings19 = TrainingSettings.defaults(TrainingSettings.Mode.MACE).forDrill(Drill.STUN_SLAM).withAutoRespawn(false);
-            var opts19 = DrillOptions.forDrill(Drill.STUN_SLAM)
-                .withIndex(DrillOptions.Field.START_HEIGHT, DrillOptions.Field.START_HEIGHT.indexOfNumber(19));
-            s.start(server, p.getUUID(), settings19, opts19);
+            // 3. Full Mace Smash WITHOUT Wind Burst (Slot 9 Breach Mace) must NOT win!
+            p.teleportTo(p.level(), b.getX(), b.getY() + 1.0, b.getZ() - 1.6, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.setOnGround(false);
+            p.fallDistance = 18.0F;
+            equipMace(p, false);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(!attempt(s).done() && !attempt(s).won(), "Mace smash WITHOUT Wind Burst must NOT complete STUN_SLAM!");
+
+            // 4. Full Mace Smash WITH Wind Burst I Mace -> must catapult player upward and WIN!
+            p.teleportTo(p.level(), b.getX(), b.getY() + 1.0, b.getZ() - 1.6, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.setOnGround(false);
+            p.setDeltaMovement(new Vec3(0.0, -0.8, 0.0));
+            p.fallDistance = 18.5F;
+            equipMace(p, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(p.getDeltaMovement().y > 0.5, "Wind Burst Mace Smash must catapult player into air! vy=" + p.getDeltaMovement().y);
             sub = 2;
             age = 0;
             return;
         }
         if (sub == 2) {
-            check(Math.abs(p.getY() - (ForgeArena.FLOOR + 1 + 19)) < 0.1, "Player did not spawn at height 19: y=" + p.getY());
+            check(attempt(s) == null || (attempt(s).done() && attempt(s).won()),
+                "STUN_SLAM with Wind Burst launch must WIN! status=" + s.status());
+            check(s.status().successes() >= 1 || (attempt(s) != null && attempt(s).won()),
+                "STUN_SLAM win not recorded! status=" + s.status());
+
+            // 5. ELY_STUN_SLAM: air start 32m with Elytra equipped, glide -> Axe stun -> Wind Burst Smash -> WIN!
+            var elySettings = TrainingSettings.defaults(TrainingSettings.Mode.MACE).forDrill(Drill.ELY_STUN_SLAM).withAutoRespawn(false);
+            s.start(server, p.getUUID(), elySettings, DrillOptions.forDrill(Drill.ELY_STUN_SLAM));
+            sub = 3;
+            age = 0;
+            return;
+        }
+        if (sub == 3) {
+            check(Math.abs(p.getY() - (ForgeArena.FLOOR + 1 + DrillOptions.DEFAULT_FLIGHT_HEIGHT)) < 0.2,
+                "ELY_STUN_SLAM player should spawn at 32m air start, got y=" + p.getY());
+            check(p.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA), "ELY_STUN_SLAM must equip Elytra on chest");
             LivingEntity b = bot(s);
+            check(b.isBlocking(), "ELY_STUN_SLAM bot should block immediately");
             release(s, p);
-            p.teleportTo(p.level(), b.getX(), b.getY() + 0.8, b.getZ() - 1.6, java.util.Set.of(), 0.0F, 0.0F, true);
-            p.fallDistance = 18.2F;
+
+            // Start & end real Elytra glide
+            p.startFallFlying();
+            check(p.isFallFlying(), "Player should enter fall flying for ELY_STUN_SLAM");
+            p.stopFallFlying();
+
+            // Dive onto bot -> Axe shield break -> Wind Burst Mace Smash
+            p.teleportTo(p.level(), b.getX(), b.getY() + 1.2, b.getZ() - 1.6, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.setOnGround(false);
+            p.fallDistance = 18.0F;
             equipFromInventory(p, Items.NETHERITE_AXE);
             p.lookAt(Anchor.EYES, b.getEyePosition());
             p.attack(b);
-            check(attempt(s).shieldWindowOpen(), "Axe stun failed at height 19");
+            check(attempt(s).shieldWindowOpen() && !attempt(s).done(), "ELY_STUN_SLAM Axe stun must open window without winning");
 
-            equipFromInventory(p, Items.MACE);
-            p.setOnGround(false);
-            p.fallDistance = 18.5F;
+            p.setDeltaMovement(new Vec3(0.0, -0.8, 0.0));
+            p.fallDistance = 19.0F;
+            equipMace(p, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
             p.attack(b);
-            check(attempt(s).done() && attempt(s).won(), "STUN_SLAM at height 19 must win! progress=" + attempt(s).progress());
-            log("PASS STUN_SLAM verified at height 18 (with ground-touch race) AND height 19");
+            check(p.getDeltaMovement().y > 0.5, "ELY_STUN_SLAM Wind Burst Smash must catapult player into air! vy=" + p.getDeltaMovement().y);
+            sub = 4;
+            age = 0;
+            return;
+        }
+        if (sub == 4) {
+            check((attempt(s) == null && s.status().successes() >= 1) || (attempt(s) != null && attempt(s).done() && attempt(s).won()),
+                "ELY_STUN_SLAM with glide + Axe stun + Wind Burst smash must WIN! status=" + s.status());
+            log("PASS STUN_SLAM (shield-only/ground-tap/no-WB rejected; full Wind Burst launch wins) AND ELY_STUN_SLAM verified");
             nextScene(s, server);
         }
     }
@@ -678,6 +776,8 @@ public final class FeaturesProbe implements ClientModInitializer {
 
     private void runDoubleAnchor(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
         if (sub == 0) {
+            if (savedDifficulty == null) savedDifficulty = server.getWorldData().getDifficulty();
+            server.setDifficulty(Difficulty.HARD, true);
             var settings = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.DOUBLE_ANCHOR).withAutoRespawn(false);
             s.start(server, p.getUUID(), settings, DrillOptions.forDrill(Drill.DOUBLE_ANCHOR));
             sub = 1;
@@ -716,6 +816,8 @@ public final class FeaturesProbe implements ClientModInitializer {
 
     private void runShieldTripleTap(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
         if (sub == 0) {
+            if (savedDifficulty == null) savedDifficulty = server.getWorldData().getDifficulty();
+            server.setDifficulty(Difficulty.HARD, true);
             var settings = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.SHIELD_TRIPLE_TAP).withAutoRespawn(false);
             s.start(server, p.getUUID(), settings, DrillOptions.forDrill(Drill.SHIELD_TRIPLE_TAP));
             sub = 1;
@@ -725,24 +827,37 @@ public final class FeaturesProbe implements ClientModInitializer {
         if (sub == 1) {
             LivingEntity b = bot(s);
             check(!b.isBlocking() && !b.getMainHandItem().is(Items.SHIELD), "SHIELD_TRIPLE_TAP bot must NOT hold shield before Pop 1");
-            // Opening totem sprint-hit at full 100% charge (real Crystal PvP D-Tap / Triple-Tap opening)
-            equipFromInventory(p, Items.TOTEM_OF_UNDYING);
+            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
+                "SHIELD_TRIPLE_TAP bot must keep Blast Protection IV leggings from ltcrystal kit");
+            // Equip Netherite Sword 1 tick before attacking so ServerPlayer.tick() refreshes Attributes.ATTACK_DAMAGE to 8.0!
+            equipFromInventory(p, Items.NETHERITE_SWORD);
+            sub = 2;
+            age = 0;
+            return;
+        }
+        if (sub == 2) {
+            LivingEntity b = bot(s);
             release(s, p);
             p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
             p.lookAt(Anchor.EYES, b.getEyePosition());
             p.setSprinting(true);
             p.attack(b);
             p.setSprinting(false);
-            sub = 2;
+            BlockPos ahead = new BlockPos(b.blockPosition().getX(), ForgeArena.FLOOR + 1, b.blockPosition().getZ() + 3);
+            p.level().setBlockAndUpdate(ahead, Blocks.OBSIDIAN.defaultBlockState());
+            p.level().setBlockAndUpdate(ahead.above(), Blocks.AIR.defaultBlockState());
+            check(s.placeCrystal(p, ahead), "placeCrystal ahead failed at " + ahead);
+            sub = 3;
             age = 0;
             return;
         }
-        if (sub == 2) {
-            if (age < 5) return; // apex of knockup
+        if (sub == 3) {
+            if (age < 7) return; // bot arcs cleanly over (0.5, 66.0, 3.5) at T+7 (y=66.04, z=3.11, d=0.40 -> pops full 20 HP on HARD with Blast Prot IV!)
             LivingEntity b = bot(s);
             check(b != null, "SHIELD_TRIPLE_TAP ended before Crystal 1! status=" + s.status());
-            BlockPos cBase = findOpenAdjacentBase(p.level(), b);
-            detonateCrystalAt(s, p, cBase);
+            var crystals = p.level().getEntities(EntityTypeTest.forClass(TrainingCrystal.class), c -> !c.isRemoved());
+            check(!crystals.isEmpty(), "prepared Crystal 1 missing");
+            crystals.getLast().hitInTraining(p.damageSources().playerAttack(p));
             check(pops(s) == 1, "Crystal 1 must pop totem 1 in SHIELD_TRIPLE_TAP; pops=" + pops(s) + " hp=" + b.getHealth() + " tl=" + attempt(s).timeline());
             check(b.getMainHandItem().is(Items.SHIELD), "After Pop 1 bot must equip SHIELD in mainhand");
             check(b.getOffhandItem().is(Items.TOTEM_OF_UNDYING), "After Pop 1 bot must keep TOTEM in offhand");
@@ -756,29 +871,29 @@ public final class FeaturesProbe implements ClientModInitializer {
             p.attack(b);
             check(!b.isBlocking(), "Mid-air Axe hit must disable bot's post-pop shield");
             check(!attempt(s).needsAirSword(), "Mid-air Axe shield break must unlock Crystal 2");
-            sub = 3;
-            age = 0;
-            return;
-        }
-        if (sub == 3) {
-            LivingEntity b = bot(s);
-            check(b != null, "SHIELD_TRIPLE_TAP ended before Crystal 2! status=" + s.status());
-            if (age < 11 || b.getY() > ForgeArena.FLOOR + 4.0) return;
-            detonateCrystalAt(s, p, findOpenAdjacentBase(p.level(), b));
-            check(pops(s) == 2 && !attempt(s).done(),
-                "Crystal 2 must pop totem 2; pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
             sub = 4;
             age = 0;
             return;
         }
         if (sub == 4) {
             LivingEntity b = bot(s);
+            check(b != null, "SHIELD_TRIPLE_TAP ended before Crystal 2! status=" + s.status());
+            if (age < 3) return; // T+10: hurt window opens right at apex after Pop 1 (y ~ 66.4)!
+            detonateCrystalAt(s, p, findOpenAdjacentBase(p.level(), b));
+            check(pops(s) == 2 && !attempt(s).done(),
+                "Crystal 2 must pop totem 2; pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
+            sub = 5;
+            age = 0;
+            return;
+        }
+        if (sub == 5) {
+            LivingEntity b = bot(s);
             check(b != null, "SHIELD_TRIPLE_TAP ended before Crystal 3! status=" + s.status());
-            if (age < 11 || b.getY() > ForgeArena.FLOOR + 2.8) return;
+            if (age < 10) return; // T+20: fresh hurt window while bot is still airborne!
             detonateCrystalAt(s, p, findOpenAdjacentBase(p.level(), b));
             check(pops(s) == 3 && attempt(s).done() && attempt(s).won(),
                 "Crystal 3 must pop totem 3 and win SHIELD_TRIPLE_TAP; pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
-            log("PASS SHIELD_TRIPLE_TAP verified in-game (Pop 1 -> bot raises Shield + keeps Offhand Totem -> mid-air Axe break -> Pop 2 + Pop 3)");
+            log("PASS SHIELD_TRIPLE_TAP verified in-game on HARD with authentic Blast Prot IV (Pop 1 -> Shield -> Axe break -> Pop 2 + Pop 3)");
             nextScene(s, server);
         }
     }
@@ -806,12 +921,857 @@ public final class FeaturesProbe implements ClientModInitializer {
             LivingEntity b = bot(s);
             if (p.hurtTime > 0 && hitDistanceAtDamage < 0) {
                 hitDistanceAtDamage = Math.sqrt(p.getBoundingBox().distanceToSqr(b.getEyePosition()));
+                double sprintKbHor = p.getDeltaMovement().horizontalDistance();
                 check(hitDistanceAtDamage >= 2.2 && hitDistanceAtDamage <= 3.15,
                     "JUMP_RESET bot should strike cleanly near 3-block reach, struck at " + hitDistanceAtDamage);
-                log("PASS JUMP_RESET & HIT_SELECT verified (startDist=7 Bl., exact 3.0 reach, bot struck at "
-                    + String.format("%.2f", hitDistanceAtDamage) + " Bl.)");
+                check(sprintKbHor > 0.55,
+                    "JUMP_RESET bot must always deal Sprint Hit knockback (>0.55 hor), got " + sprintKbHor);
+                log("PASS JUMP_RESET & HIT_SELECT verified (startDist=7 Bl., exact 3.0 reach, bot Sprint-Hit at "
+                    + String.format("%.2f", hitDistanceAtDamage) + " Bl., horKB=" + String.format("%.3f", sprintKbHor) + ")");
                 nextScene(s, server);
             }
+        }
+    }
+
+    /** Side-by-side Vanilla ServerPlayer vs TrainingBot parity on HARD & NORMAL + full 3-pop TRIPLE_TAP. */
+    private void runVanillaCrystalParityAndTripleTap(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
+        // Sub 0..2: Symmetric crystal blast on HARD & NORMAL comparing ServerPlayer vs TrainingBot (identical ltcrystal armor!)
+        if (sub == 0) {
+            if (savedDifficulty == null) savedDifficulty = server.getWorldData().getDifficulty();
+            server.setDifficulty(Difficulty.HARD, true);
+            // Explicitly use Difficulty.HARD on non-DUEL drill to verify base MOVEMENT_SPEED stays exact Vanilla 0.10 (NOT 0.125!)
+            var settings = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL)
+                .forDrill(Drill.PASSIVE)
+                .withDifficulty(TrainingSettings.Difficulty.HARD)
+                .withAutoRespawn(false);
+            s.start(server, p.getUUID(), settings, DrillOptions.forDrill(Drill.PASSIVE));
+            sub = 1;
+            age = 0;
+            return;
+        }
+        if (sub == 1) {
+            LivingEntity b = bot(s);
+            release(s, p);
+            // Verify authentic ltcrystal armor + Vanilla attributes (Blast Prot IV -> 0.6 explosion KB resist, Netherite -> 0.4 KB resist)
+            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
+                "Bot must wear Blast Protection IV leggings");
+            check(Math.abs(b.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE) - 0.6) < 1e-4,
+                "Bot explosion KB resist must be 0.6 (Blast Prot IV), got " + b.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE));
+            check(Math.abs(b.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) - 0.4) < 1e-4,
+                "Bot melee KB resist must be 0.4 (4x Netherite), got " + b.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE));
+            check(Math.abs(b.getMaxHealth() - 20.0F) < 1e-4, "Crystal default bot maxHealth must be 20 HP (10 hearts), got " + b.getMaxHealth());
+
+            // Verify exact Vanilla Player base speed (0.10 even on HARD), canSprint(), sprint +30%, and item-use 0.2x slowdown!
+            check(b.canSprint(), "Bot canSprint() must match Vanilla Player (true)");
+            float walkSpeed = b.getSpeed();
+            check(Math.abs(walkSpeed - 0.1F) < 1e-4F, "Bot base walk speed must be exact Vanilla 0.10 even on HARD, got " + walkSpeed);
+            b.setSprinting(true);
+            float sprintSpeed = b.getSpeed();
+            check(Math.abs(sprintSpeed - 0.13F) < 1e-4F, "Bot sprint speed must be exact Vanilla 0.13 (+30%), got " + sprintSpeed);
+
+            // Verify applyInput() slows bot to 0.2x and cancels sprint while blocking with shield (matching LocalPlayer.modifyInput())
+            b.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.SHIELD));
+            b.startUsingItem(InteractionHand.MAIN_HAND);
+            b.zza = 1.0F;
+            b.xxa = 0.0F;
+            var applyInputMethod = LivingEntity.class.getDeclaredMethod("applyInput");
+            applyInputMethod.setAccessible(true);
+            applyInputMethod.invoke(b);
+            check(!b.isSprinting(), "Using shield must cancel sprint just like Vanilla LocalPlayer");
+            check(Math.abs(b.zza - (0.98F * 0.2F)) < 1e-4F,
+                "Shield-use movement input must scale to 0.98*0.2=0.196, got " + b.zza);
+            b.zza = 0.0F;
+
+            // Verify Vanilla ServerPlayer shield-block parity: 100% blocked hit must deal ZERO horizontal AND vertical knockback!
+            b.snapTo(2.0, ForgeArena.FLOOR + 1.0, 0.5, 90.0F, 0.0F);
+            b.setYHeadRot(90.0F);
+            b.setYBodyRot(90.0F);
+            b.setOnGround(true);
+            b.setDeltaMovement(Vec3.ZERO);
+            // Advance use ticks past 5-tick vanilla blockDelayTicks so shield is actively blocking
+            var useRemaining = LivingEntity.class.getDeclaredField("useItemRemaining");
+            useRemaining.setAccessible(true);
+            useRemaining.setInt(b, b.getUseItem().getUseDuration(b) - 10);
+            check(b.isBlocking(), "Bot shield should be blocking after 10 ticks");
+            p.teleportTo(p.level(), 0.5, ForgeArena.FLOOR + 1.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            equipFromInventory(p, Items.TOTEM_OF_UNDYING);
+            p.setSprinting(false);
+            p.attack(b);
+            check(b.getDeltaMovement().lengthSqr() < 1e-8,
+                "Fully shield-blocked melee hit must apply ZERO knockback like Vanilla ServerPlayer, got " + b.getDeltaMovement());
+            b.stopUsingItem();
+            b.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.TOTEM_OF_UNDYING));
+
+            // Place obsidian at (0, 65, 0), crystal at (0.5, 66.0, 0.5). Put Player at (-1.0, 66.0, 0.5) and Bot at (+2.0, 66.0, 0.5):
+            // Both at exact distance 1.5 blocks, Y=66.0 (seenPercent = 1.0, zero obsidian occlusion!).
+            ServerLevel level = p.level();
+            BlockPos base = new BlockPos(0, ForgeArena.FLOOR + 1, 0);
+            level.setBlockAndUpdate(base, Blocks.OBSIDIAN.defaultBlockState());
+            level.setBlockAndUpdate(base.above(), Blocks.AIR.defaultBlockState());
+            p.setNoGravity(true);
+            b.setNoGravity(true);
+            p.setHealth(20.0F);
+            p.setAbsorptionAmount(0.0F);
+            b.setHealth(20.0F);
+            b.setAbsorptionAmount(0.0F);
+            p.invulnerableTime = 0;
+            b.invulnerableTime = 0;
+            p.teleportTo(level, -1.0, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(2.0, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
+            p.setDeltaMovement(Vec3.ZERO);
+            b.setDeltaMovement(Vec3.ZERO);
+
+            // Verify Health Indicator nametag shows live HP at full health
+            check(HudPreferences.botHealth(), "Health indicator should default ON");
+            String fullTag = b.getCustomName() == null ? "" : b.getCustomName().getString();
+            check(fullTag.contains("20,0") && fullTag.contains("❤"), "Bot nametag must show health indicator, got: " + fullTag);
+
+            // Default ARENA_DIFFICULTY is HARD: even if Overworld is NORMAL, BOTH Player and Bot must still take HARD (~17.6 HP) damage!
+            server.setDifficulty(Difficulty.NORMAL, true);
+            detonateCrystalAt(s, p, base);
+            parityHardPlayerDmg = 20.0F - p.getHealth();
+            parityHardBotDmg = 20.0F - b.getHealth();
+            parityHardBotVy = b.getDeltaMovement().y;
+            check(Math.abs(parityHardBotDmg - parityHardPlayerDmg) < 0.05F,
+                "Default HARD Arena Crystal damage mismatch! player=" + parityHardPlayerDmg + " bot=" + parityHardBotDmg);
+            check(parityHardBotDmg > 16.5F && parityHardBotDmg < 18.8F,
+                "Default HARD Arena Crystal damage on NORMAL Overworld expected ~17.6 HP, got " + parityHardBotDmg);
+            // With Blast Prot IV (60% resist), explosion vy at d=1.5 is (1-1.5/12)*(1.62/sqrt(1.5^2+1.62^2))*0.4 = ~0.257 (NOT ~0.64!)
+            check(parityHardBotVy > 0.15 && parityHardBotVy < 0.38,
+                "HARD Crystal explosion vy with Blast Prot IV expected ~0.26 (NOT unresisted ~0.64), got " + parityHardBotVy);
+
+            // Point-blank 10-heart (20 HP) single crystal pop on default HARD Arena (even on NORMAL world!) + Health Indicator absorption check!
+            p.setNoGravity(true);
+            b.setNoGravity(true);
+            p.setHealth(20.0F);
+            p.setAbsorptionAmount(0.0F);
+            b.setHealth(20.0F);
+            b.setAbsorptionAmount(0.0F);
+            p.invulnerableTime = 0;
+            b.invulnerableTime = 0;
+            int popsBefore = pops(s);
+            p.teleportTo(level, -2.0, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(3.0, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
+            check(s.placeCrystal(p, base), "placeCrystal for point-blank pop test failed");
+            p.teleportTo(level, 0.15, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(0.85, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
+            var pbCrystals = level.getEntities(EntityTypeTest.forClass(TrainingCrystal.class), c -> !c.isRemoved());
+            pbCrystals.getLast().hitInTraining(p.damageSources().playerAttack(p));
+            check(pops(s) == popsBefore + 1, "Point-blank (d=0.35) HARD Crystal MUST pop 10-heart ltcrystal Bot! pops=" + pops(s) + " hp=" + b.getHealth());
+            check(p.getHealth() <= 2.0F && p.getAbsorptionAmount() >= 7.0F,
+                "Point-blank (d=0.35) HARD Crystal MUST also pop 10-heart ltcrystal Player! playerHp=" + p.getHealth() + " abs=" + p.getAbsorptionAmount());
+            String popTag = b.getCustomName() == null ? "" : b.getCustomName().getString();
+            check(popTag.contains("+8,0"), "Health indicator after totem pop must show +8,0 absorption, got: " + popTag);
+            // Toggle Health Indicator OFF -> verify nametag reverts cleanly -> toggle back ON
+            HudPreferences.toggleBotHealth();
+            var upd = b.getClass().getDeclaredMethod("updateHealthIndicator");
+            upd.setAccessible(true);
+            upd.invoke(b);
+            check("MacherBot".equals(b.getCustomName().getString()), "Disabled health indicator must show plain MacherBot, got: " + b.getCustomName().getString());
+            HudPreferences.toggleBotHealth();
+            upd.invoke(b);
+
+            // Also verify Bot melee damage against Player does NOT falsely scale 1.5x on HARD (DrillDamageMixin parity!)
+            // AND verify side-by-side melee knockback parity (ServerPlayer vs TrainingBot with identical 4x Netherite armor!)
+            p.setNoGravity(false);
+            b.setNoGravity(false);
+            p.removeAllEffects();
+            p.setHealth(20.0F);
+            p.setAbsorptionAmount(0.0F);
+            p.invulnerableTime = 0;
+            p.teleportTo(level, 0.5, ForgeArena.FLOOR + 1.0, 0.5, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.setOnGround(true);
+            p.setDeltaMovement(Vec3.ZERO);
+            server.setDifficulty(Difficulty.NORMAL, true);
+            b.snapTo(2.0, ForgeArena.FLOOR + 1.0, 0.5, 90.0F, 0.0F);
+            b.setOnGround(true);
+            b.setDeltaMovement(Vec3.ZERO);
+            b.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_SWORD));
+            TrainingTactics.strike(level, b, p, b.damageSources().mobAttack(b), 0.0F);
+            parityBotMeleeNormal = 20.0F - p.getHealth();
+            Vec3 playerMeleeKb = p.getDeltaMovement();
+
+            // Same base 0.4 melee knockback onto Bot (non-sprint bare/totem hit, 4x Netherite = 0.4 KB resist -> 0.24 hor, 0.24 vy)
+            b.invulnerableTime = 0;
+            b.setHealth(20.0F);
+            b.setAbsorptionAmount(0.0F);
+            b.setOnGround(true);
+            b.setDeltaMovement(Vec3.ZERO);
+            equipFromInventory(p, Items.TOTEM_OF_UNDYING);
+            p.setSprinting(false);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            Vec3 botMeleeKb = b.getDeltaMovement();
+            check(Math.abs(botMeleeKb.y - playerMeleeKb.y) < 1e-4 && Math.abs(botMeleeKb.horizontalDistance() - playerMeleeKb.horizontalDistance()) < 1e-4,
+                "Melee knockback mismatch! player=" + playerMeleeKb + " bot=" + botMeleeKb);
+
+            server.setDifficulty(Difficulty.HARD, true);
+            p.setHealth(20.0F);
+            p.setAbsorptionAmount(0.0F);
+            p.invulnerableTime = 0;
+            TrainingTactics.strike(level, b, p, b.damageSources().mobAttack(b), 0.0F);
+            parityBotMeleeHard = 20.0F - p.getHealth();
+            check(parityBotMeleeNormal > 0.2 && Math.abs(parityBotMeleeHard - parityBotMeleeNormal) < 0.05,
+                "Bot melee attack must NOT scale 1.5x on HARD! normal=" + parityBotMeleeNormal + " hard=" + parityBotMeleeHard);
+
+            // Also verify Bot Knockback I sword deals real Vanilla extra knockback + slows attacker by 0.6x!
+            p.setHealth(20.0F);
+            p.setAbsorptionAmount(0.0F);
+            p.invulnerableTime = 0;
+            p.setOnGround(true);
+            p.setDeltaMovement(Vec3.ZERO);
+            ItemStack kbSword = new ItemStack(Items.NETHERITE_SWORD);
+            kbSword.enchant(level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(Enchantments.KNOCKBACK), 1);
+            b.setItemInHand(InteractionHand.MAIN_HAND, kbSword);
+            b.setDeltaMovement(new Vec3(-0.2, 0.0, 0.0));
+            b.setSprinting(true);
+            TrainingTactics.strike(level, b, p, b.damageSources().mobAttack(b), 0.0F);
+            double kb1PlayerHor = p.getDeltaMovement().horizontalDistance();
+            check(kb1PlayerHor > playerMeleeKb.horizontalDistance() * 2.5,
+                "Bot KB1+Sprint strike must deal real extra knockback (expected >0.60, got " + kb1PlayerHor + " vs base " + playerMeleeKb.horizontalDistance() + ")");
+            check(!b.isSprinting() && Math.abs(b.getDeltaMovement().x - (-0.12)) < 1e-4,
+                "Bot KB1+Sprint strike must stop sprinting and slow attacker velocity by 0.6x! sprint=" + b.isSprinting() + " vx=" + b.getDeltaMovement().x);
+
+            log("PASS Side-by-side Player vs Bot parity: HARD d=1.5 player=" + String.format("%.2f", parityHardPlayerDmg)
+                + " bot=" + String.format("%.2f", parityHardBotDmg)
+                + " vy=" + String.format("%.3f", parityHardBotVy)
+                + " | NORMAL d=1.5 player=" + String.format("%.2f", parityNormalPlayerDmg)
+                + " bot=" + String.format("%.2f", parityNormalBotDmg)
+                + " | meleeKB player/bot vy=" + String.format("%.3f/%.3f", playerMeleeKb.y, botMeleeKb.y)
+                + " hor=" + String.format("%.3f/%.3f", playerMeleeKb.horizontalDistance(), botMeleeKb.horizontalDistance())
+                + " | shieldKB=0.000 | shieldUseSpeed=0.2x | speed=0.10/0.13 | KB1+sprint hor=" + String.format("%.3f", kb1PlayerHor)
+                + " | HARD d=0.35 BOTH popped 10-heart totem | botMelee normal/hard="
+                + String.format("%.2f/%.2f", parityBotMeleeNormal, parityBotMeleeHard));
+
+            s.stop(server);
+            sub = 20;
+            age = 0;
+            return;
+        }
+        // Sub 20..21: Verify ARENA_DIFFICULTY=WORLD adopts NORMAL world difficulty + ZERO_DAMAGE (BOTH & PLAYER_ONLY) preserves knockback!
+        if (sub == 20) {
+            if (TrainingArena.isArena(p.level())) return;
+            server.setDifficulty(Difficulty.NORMAL, true);
+            var settings = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.PASSIVE).withAutoRespawn(false);
+            var worldOpts = DrillOptions.forDrill(Drill.PASSIVE)
+                .withIndex(DrillOptions.Field.ARENA_DIFFICULTY, DrillOptions.ArenaDifficulty.WORLD.ordinal());
+            s.start(server, p.getUUID(), settings, worldOpts);
+            sub = 21;
+            age = 0;
+            return;
+        }
+        if (sub == 21) {
+            LivingEntity b = bot(s);
+            ServerLevel level = p.level();
+            release(s, p);
+            BlockPos base = new BlockPos(0, ForgeArena.FLOOR + 1, 0);
+            level.setBlockAndUpdate(base, Blocks.OBSIDIAN.defaultBlockState());
+            level.setBlockAndUpdate(base.above(), Blocks.AIR.defaultBlockState());
+            p.setNoGravity(true);
+            b.setNoGravity(true);
+            p.setHealth(20.0F);
+            p.setAbsorptionAmount(0.0F);
+            b.setHealth(20.0F);
+            b.setAbsorptionAmount(0.0F);
+            p.invulnerableTime = 0;
+            b.invulnerableTime = 0;
+            p.teleportTo(level, -1.0, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(2.0, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
+            p.setDeltaMovement(Vec3.ZERO);
+            b.setDeltaMovement(Vec3.ZERO);
+            detonateCrystalAt(s, p, base);
+            parityNormalPlayerDmg = 20.0F - p.getHealth();
+            parityNormalBotDmg = 20.0F - b.getHealth();
+            check(Math.abs(parityNormalBotDmg - parityNormalPlayerDmg) < 0.05F,
+                "ARENA_DIFFICULTY=WORLD NORMAL mismatch! player=" + parityNormalPlayerDmg + " bot=" + parityNormalBotDmg);
+            check(parityNormalBotDmg < parityHardBotDmg - 5.0F,
+                "ARENA_DIFFICULTY=WORLD on NORMAL must be well below HARD: normal=" + parityNormalBotDmg + " hard=" + parityHardBotDmg);
+
+            // Switch to ZERO_DAMAGE = BOTH -> 0 HP lost on BOTH sides while real knockback still applies!
+            var zeroBothSettings = TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.PASSIVE).withAutoRespawn(false);
+            var zeroBothOpts = DrillOptions.forDrill(Drill.PASSIVE)
+                .withIndex(DrillOptions.Field.ZERO_DAMAGE, DrillOptions.ZeroDamage.BOTH.ordinal());
+            s.start(server, p.getUUID(), zeroBothSettings, zeroBothOpts);
+            sub = 22;
+            age = 0;
+            return;
+        }
+        if (sub == 22) {
+            LivingEntity b = bot(s);
+            ServerLevel level = p.level();
+            release(s, p);
+            p.setNoGravity(false);
+            b.setNoGravity(false);
+            p.setHealth(20.0F);
+            b.setHealth(20.0F);
+            p.teleportTo(level, 0.5, ForgeArena.FLOOR + 1.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(2.0, ForgeArena.FLOOR + 1.0, 0.5, 90.0F, 0.0F);
+            p.setDeltaMovement(Vec3.ZERO);
+            b.setDeltaMovement(Vec3.ZERO);
+            b.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_SWORD));
+            TrainingTactics.strike(level, b, p, b.damageSources().mobAttack(b), 0.0F);
+            check(Math.abs(p.getHealth() - 20.0F) < 1e-4F, "ZERO_DAMAGE=BOTH player must lose 0 HP, got hp=" + p.getHealth());
+            check(p.getDeltaMovement().horizontalDistance() > 0.2, "ZERO_DAMAGE=BOTH player must still receive knockback, got " + p.getDeltaMovement());
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(Math.abs(b.getHealth() - 20.0F) < 1e-4F, "ZERO_DAMAGE=BOTH bot must lose 0 HP, got hp=" + b.getHealth());
+            check(b.getDeltaMovement().horizontalDistance() > 0.2, "ZERO_DAMAGE=BOTH bot must still receive knockback, got " + b.getDeltaMovement());
+
+            // ZERO_DAMAGE = PLAYER_ONLY -> player takes 0 HP, bot DOES take damage!
+            var zeroPlayerOpts = DrillOptions.forDrill(Drill.PASSIVE)
+                .withIndex(DrillOptions.Field.ZERO_DAMAGE, DrillOptions.ZeroDamage.PLAYER_ONLY.ordinal());
+            s.start(server, p.getUUID(), TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.PASSIVE).withAutoRespawn(false), zeroPlayerOpts);
+            sub = 23;
+            age = 0;
+            return;
+        }
+        if (sub == 23) {
+            LivingEntity b = bot(s);
+            ServerLevel level = p.level();
+            release(s, p);
+            p.setHealth(20.0F);
+            b.setHealth(20.0F);
+            p.teleportTo(level, 0.5, ForgeArena.FLOOR + 1.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(2.0, ForgeArena.FLOOR + 1.0, 0.5, 90.0F, 0.0F);
+            b.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_SWORD));
+            TrainingTactics.strike(level, b, p, b.damageSources().mobAttack(b), 0.0F);
+            check(Math.abs(p.getHealth() - 20.0F) < 1e-4F, "ZERO_DAMAGE=PLAYER_ONLY player must lose 0 HP");
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(b.getHealth() < 19.9F, "ZERO_DAMAGE=PLAYER_ONLY bot MUST take normal damage, got hp=" + b.getHealth());
+            log("PASS ARENA_DIFFICULTY (default HARD + WORLD=NORMAL), ZERO_DAMAGE (BOTH & PLAYER_ONLY), and Health Indicator verified");
+            s.stop(server);
+            sub = 2;
+            age = 0;
+            return;
+        }
+        // Sub 2..7: Full Vanilla 10-heart TRIPLE_TAP on HARD (Blast Prot IV intact -> Pop 1 + Air Hit 2 + Pop 2 + Pop 3!)
+        if (sub == 2) {
+            if (TrainingArena.isArena(p.level())) return;
+            server.setDifficulty(Difficulty.HARD, true);
+            tripleTapPeakY = 0.0;
+            var settings = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.TRIPLE_TAP).withAutoRespawn(false);
+            s.start(server, p.getUUID(), settings, DrillOptions.forDrill(Drill.TRIPLE_TAP));
+            sub = 3;
+            age = 0;
+            return;
+        }
+        if (sub == 3) {
+            LivingEntity b = bot(s);
+            check(b.getMaxHealth() == 20.0F, "TRIPLE_TAP bot must start at 10 hearts (20 HP)");
+            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
+                "TRIPLE_TAP bot must NOT strip Blast Protection IV");
+            // Equip Netherite Sword 1 tick ahead so ServerPlayer refreshes ATTACK_DAMAGE to 8.0 before attacking!
+            equipFromInventory(p, Items.NETHERITE_SWORD);
+            sub = 4;
+            age = 0;
+            return;
+        }
+        if (sub == 4) {
+            LivingEntity b = bot(s);
+            release(s, p);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            p.setSprinting(false);
+            BlockPos ahead = new BlockPos(b.blockPosition().getX(), ForgeArena.FLOOR + 1, b.blockPosition().getZ() + 3);
+            p.level().setBlockAndUpdate(ahead, Blocks.OBSIDIAN.defaultBlockState());
+            p.level().setBlockAndUpdate(ahead.above(), Blocks.AIR.defaultBlockState());
+            check(s.placeCrystal(p, ahead), "TRIPLE_TAP placeCrystal 1 ahead failed at " + ahead);
+            sub = 5;
+            age = 0;
+            return;
+        }
+        if (sub == 5) {
+            LivingEntity b = bot(s);
+            check(b != null, "TRIPLE_TAP ended before Crystal 1! status=" + s.status());
+            if (age < 7) return; // T+7: bot arcs directly over (0.5, 66.0, 3.5) at y=66.04, z=3.11 (d=0.40 -> pops full 20 HP on HARD!)
+            var crystals = p.level().getEntities(EntityTypeTest.forClass(TrainingCrystal.class), c -> !c.isRemoved());
+            check(!crystals.isEmpty(), "TRIPLE_TAP Crystal 1 missing");
+            crystals.getLast().hitInTraining(p.damageSources().playerAttack(p));
+            check(pops(s) == 1, "TRIPLE_TAP Crystal 1 must pop 10-heart bot on HARD; pops=" + pops(s) + " hp=" + b.getHealth()
+                + " botPos=" + b.position() + " botVel=" + b.getDeltaMovement() + " tl=" + attempt(s).timeline());
+            sub = 6;
+            age = 0;
+            return;
+        }
+        if (sub == 6) {
+            LivingEntity b = bot(s);
+            check(b != null, "TRIPLE_TAP ended before Air Hit 2 / Crystal 2! status=" + s.status());
+            tripleTapPeakY = Math.max(tripleTapPeakY, b.getY());
+            // Wait until hurt window opens after Hit 1 (age 3 after T=7 = T=10), land Air Hit 2, then detonate Crystal 2!
+            if (age < 3) return;
+            check(tripleTapPeakY < ForgeArena.FLOOR + 4.5,
+                "Blast Prot IV must keep Triple Tap knockup near Vanilla height (<4.5 bl), peaked at " + (tripleTapPeakY - ForgeArena.FLOOR));
+            equipFromInventory(p, Items.TOTEM_OF_UNDYING);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            detonateCrystalAt(s, p, findOpenAdjacentBase(p.level(), b));
+            check(pops(s) == 2 && !attempt(s).done(),
+                "TRIPLE_TAP Crystal 2 must pop totem 2; pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
+            sub = 7;
+            age = 0;
+            return;
+        }
+        if (sub == 7) {
+            LivingEntity b = bot(s);
+            check(b != null, "TRIPLE_TAP ended before Crystal 3! status=" + s.status());
+            if (age < 10) return; // fresh hurt window after Air Hit 2
+            detonateCrystalAt(s, p, findOpenAdjacentBase(p.level(), b));
+            check(pops(s) == 3 && attempt(s).done() && attempt(s).won(),
+                "TRIPLE_TAP Crystal 3 must pop totem 3 and win; pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
+            log("PASS Vanilla Crystal Parity verified in-game (HARD player=" + String.format("%.2f", parityHardPlayerDmg)
+                + " vs bot=" + String.format("%.2f", parityHardBotDmg)
+                + ", NORMAL player=" + String.format("%.2f", parityNormalPlayerDmg)
+                + " vs bot=" + String.format("%.2f", parityNormalBotDmg)
+                + ", BlastProt vy=" + String.format("%.3f", parityHardBotVy)
+                + ", botMelee normal/hard=" + String.format("%.2f/%.2f", parityBotMeleeNormal, parityBotMeleeHard)
+                + ", TRIPLE_TAP 3/3 pops peak=" + String.format("%.2f", tripleTapPeakY - ForgeArena.FLOOR) + " bl)");
+            nextScene(s, server);
+        }
+    }
+
+    private void runSelfWebCrystalAndDTapHotfix(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
+        // Sub 0..4: SELF_WEB_CRYSTAL (bot self-webs, floor crystals soften -> Pop 1 -> Pop 2 wins!)
+        if (sub == 0) {
+            // Even with Overworld set to NORMAL, default ARENA_DIFFICULTY=HARD must deal full HARD crystal damage!
+            server.setDifficulty(Difficulty.NORMAL, true);
+            var settings = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.SELF_WEB_CRYSTAL).withAutoRespawn(false);
+            var opts = DrillOptions.forDrill(Drill.SELF_WEB_CRYSTAL).withIndex(DrillOptions.Field.BASE, 1);
+            s.start(server, p.getUUID(), settings, opts);
+            sub = 1;
+            age = 0;
+            return;
+        }
+        if (sub == 1) {
+            release(s, p);
+            sub = 2;
+            age = 0;
+            return;
+        }
+        if (sub == 2) {
+            if (age < 2) return;
+            LivingEntity b = bot(s);
+            check(p.level().getBlockState(b.blockPosition()).is(Blocks.COBWEB),
+                "SELF_WEB_CRYSTAL bot must self-web at its feet! block=" + p.level().getBlockState(b.blockPosition()));
+            check(attempt(s).isSelfWebbed(), "SELF_WEB_CRYSTAL attempt should confirm self-web");
+            BlockPos floorBase = findFlushFloorObsidian(p.level(), b.blockPosition());
+            // Floor crystal 1 softens 20 HP -> ~1.15 HP (must NOT prematurely fail!)
+            detonateCrystalAt(s, p, floorBase);
+            check(!attempt(s).done(), "Pre-Pop-1 floor crystal in SELF_WEB_CRYSTAL must not fail prematurely! progress=" + attempt(s).progress());
+            sub = 3;
+            age = 0;
+            return;
+        }
+        if (sub == 3) {
+            if (age < 11) return;
+            LivingEntity b = bot(s);
+            BlockPos floorBase = findFlushFloorObsidian(p.level(), b.blockPosition());
+            detonateCrystalAt(s, p, floorBase);
+            check(pops(s) == 1 && !attempt(s).done(),
+                "SELF_WEB_CRYSTAL floor crystal 2 must pop totem 1! pops=" + pops(s) + " progress=" + attempt(s).progress());
+            sub = 4;
+            age = 0;
+            return;
+        }
+        if (sub == 4) {
+            if (age < 11) return;
+            LivingEntity b = bot(s);
+            BlockPos floorBase = findFlushFloorObsidian(p.level(), b.blockPosition());
+            detonateCrystalAt(s, p, floorBase);
+            check(pops(s) == 2 && attempt(s).done() && attempt(s).won(),
+                "SELF_WEB_CRYSTAL floor crystal 3 must pop totem 2 and WIN! pops=" + pops(s) + " progress=" + attempt(s).progress());
+            log("PASS SELF_WEB_CRYSTAL verified in-game (bot self-webs, 2 floor crystal pops win on default HARD arena)");
+
+            // Sub 5..8: D_TAP hotfix — 2 real pops at T+10 (old bug failed at T+9!) MUST WIN!
+            var dtapSettings = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.D_TAP).withAutoRespawn(false);
+            s.start(server, p.getUUID(), dtapSettings, DrillOptions.forDrill(Drill.D_TAP));
+            sub = 5;
+            age = 0;
+            return;
+        }
+        if (sub == 5) {
+            equipFromInventory(p, Items.NETHERITE_SWORD);
+            sub = 6;
+            age = 0;
+            return;
+        }
+        if (sub == 6) {
+            LivingEntity b = bot(s);
+            release(s, p);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            p.setSprinting(false);
+            sub = 7;
+            age = 0;
+            return;
+        }
+        if (sub == 7) {
+            LivingEntity b = bot(s);
+            check(b != null && !attempt(s).done(), "D_TAP must NOT fail before T+10 while bot is airborne! status=" + s.status());
+            if (age < 10) {
+                // Keep bot airborne across T+1..T+9 (simulating hitting off elevation/mid-air) so we test T+10 Pop 1 cleanly!
+                b.setOnGround(false);
+                b.setDeltaMovement(new Vec3(0.0, 0.22, 0.0));
+                return;
+            }
+            BlockPos base = new BlockPos(b.blockPosition().getX() + 1, ForgeArena.FLOOR, b.blockPosition().getZ());
+            p.level().setBlockAndUpdate(base, Blocks.OBSIDIAN.defaultBlockState());
+            p.level().setBlockAndUpdate(base.above(), Blocks.AIR.defaultBlockState());
+            b.snapTo(base.getX() - 0.35, ForgeArena.FLOOR + 1.4, base.getZ() + 0.5, b.getYRot(), 0.0F);
+            b.setOnGround(false);
+            b.setDeltaMovement(new Vec3(0.0, 0.35, 0.0));
+            detonateCrystalAt(s, p, base);
+            check(pops(s) == 1 && !attempt(s).done(),
+                "D_TAP Pop 1 at T+10 must register cleanly! pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
+            sub = 8;
+            age = 0;
+            return;
+        }
+        if (sub == 8) {
+            LivingEntity b = bot(s);
+            check(b != null, "D_TAP ended before Pop 2! status=" + s.status());
+            if (age < 10) {
+                b.setOnGround(false);
+                b.setDeltaMovement(new Vec3(0.0, 0.15, 0.0));
+                return;
+            }
+            BlockPos base = new BlockPos(b.blockPosition().getX() + 1, ForgeArena.FLOOR, b.blockPosition().getZ());
+            p.level().setBlockAndUpdate(base, Blocks.OBSIDIAN.defaultBlockState());
+            p.level().setBlockAndUpdate(base.above(), Blocks.AIR.defaultBlockState());
+            b.snapTo(base.getX() - 0.35, ForgeArena.FLOOR + 1.4, base.getZ() + 0.5, b.getYRot(), 0.0F);
+            b.setOnGround(false);
+            detonateCrystalAt(s, p, base);
+            check(pops(s) == 2 && attempt(s).done() && attempt(s).won(),
+                "D_TAP 2 pops MUST WIN! pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
+            log("PASS D_TAP hotfix verified in-game (T+10 Pop 1 + airborne Pop 2 wins cleanly)");
+            nextScene(s, server);
+        }
+    }
+
+    private void runUppercutAndSwordSprintHits(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
+        // Sub 0..1: Negative case — hitting bot FIRST on flat ground at equal Y fails UPPERCUT
+        if (sub == 0) {
+            var settings = TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.UPPERCUT).withAutoRespawn(false);
+            s.start(server, p.getUUID(), settings, DrillOptions.forDrill(Drill.UPPERCUT));
+            sub = 1;
+            age = 0;
+            return;
+        }
+        if (sub == 1) {
+            LivingEntity b = bot(s);
+            release(s, p);
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(attempt(s).done() && !attempt(s).won(),
+                "UPPERCUT flat pre-hit before knockback must FAIL! progress=" + attempt(s).progress());
+
+            // Sub 2..3: Positive case 1 — bot gives real Sprint Hit, player counters in knockback -> WIN!
+            var settings2 = TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.UPPERCUT).withAutoRespawn(false);
+            s.start(server, p.getUUID(), settings2, DrillOptions.forDrill(Drill.UPPERCUT));
+            sub = 2;
+            age = 0;
+            return;
+        }
+        if (sub == 2) {
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            release(s, p);
+            sub = 3;
+            age = 0;
+            return;
+        }
+        if (sub == 3) {
+            LivingEntity b = bot(s);
+            if (p.hurtTime > 0) {
+                double sprintKbHor = p.getDeltaMovement().horizontalDistance();
+                check(sprintKbHor > 0.55, "UPPERCUT bot must deal real Sprint Hit knockback (>0.55), got " + sprintKbHor);
+                equipFromInventory(p, Items.DIAMOND_SWORD);
+                p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+                p.lookAt(Anchor.EYES, b.getEyePosition());
+                p.attack(b);
+                check(attempt(s).done() && attempt(s).won(),
+                    "UPPERCUT counter in Sprint-Hit knockback must WIN! progress=" + attempt(s).progress()
+                    + " held=" + p.getMainHandItem() + " tl=" + attempt(s).timeline());
+
+                // Sub 4..5: Positive case 2 — player hits bot from lower position (under bot) -> WIN!
+                var settings3 = TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.UPPERCUT).withAutoRespawn(false);
+                s.start(server, p.getUUID(), settings3, DrillOptions.forDrill(Drill.UPPERCUT));
+                sub = 4;
+                age = 0;
+            }
+            return;
+        }
+        if (sub == 4) {
+            LivingEntity b = bot(s);
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            release(s, p);
+            // Elevate bot 1 block higher than player so player strikes upward from below
+            b.snapTo(b.getX(), p.getY() + 1.0, b.getZ(), b.getYRot(), 0.0F);
+            p.teleportTo(p.level(), b.getX(), p.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(attempt(s).done() && attempt(s).won(),
+                "UPPERCUT strike from lower position must WIN! progress=" + attempt(s).progress());
+            log("PASS UPPERCUT (flat pre-hit fails; Sprint-Hit knockback counter & lower-ground hit win) verified");
+            nextScene(s, server);
+        }
+    }
+
+    private void runSwightUhcDrills(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
+        // Sub 0..1: KnowledgeGuide + MOMENTUM_BREAK (Axe stun -> Bot Auto-Hit -> Jump-Reset -> Sword follow-up wins!)
+        if (sub == 0) {
+            check(KnowledgeGuide.all().size() >= 24, "KnowledgeGuide must load >= 24 entries in-game");
+            var settings = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.MOMENTUM_BREAK).withAutoRespawn(false);
+            s.start(server, p.getUUID(), settings, DrillOptions.forDrill(Drill.MOMENTUM_BREAK));
+            sub = 1;
+            age = 0;
+            return;
+        }
+        if (sub == 1) {
+            LivingEntity b = bot(s);
+            check(b.isBlocking(), "MOMENTUM_BREAK bot must raise shield immediately");
+            release(s, p);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            equipFromInventory(p, Items.DIAMOND_AXE);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(attempt(s).shieldWindowOpen(), "MOMENTUM_BREAK Axe stun must open shield window");
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            sub = 2;
+            age = 0;
+            return;
+        }
+        if (sub == 2) {
+            // Wait for bot's scheduled Auto-Hit (2 ticks after stun) -> Jump-Reset + Sword counter!
+            LivingEntity b = bot(s);
+            if (p.hurtTime > 0) {
+                p.jumpFromGround();
+                p.lookAt(Anchor.EYES, b.getEyePosition());
+                p.attack(b);
+                check(attempt(s).done() && attempt(s).won(),
+                    "MOMENTUM_BREAK with Jump-Reset on Auto-Hit + Sword follow-up must WIN! progress=" + attempt(s).progress());
+
+                // Sub 3..4: WEB_DUNK (Crit -> Cobweb at bot feet -> WIN!)
+                var wdSettings = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.WEB_DUNK).withAutoRespawn(false);
+                s.start(server, p.getUUID(), wdSettings, DrillOptions.forDrill(Drill.WEB_DUNK));
+                sub = 3;
+                age = 0;
+            }
+            return;
+        }
+        if (sub == 3) {
+            LivingEntity b = bot(s);
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            release(s, p);
+            p.teleportTo(p.level(), b.getX(), b.getY() + 0.6, b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.setOnGround(false);
+            p.setSprinting(false);
+            p.fallDistance = 0.6F;
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            // Place Cobweb at bot's feet and notify webPlaced
+            BlockPos webPos = b.blockPosition();
+            p.level().setBlockAndUpdate(webPos, Blocks.COBWEB.defaultBlockState());
+            var webM = TrainingSession.class.getDeclaredMethod("webPlaced", ServerPlayer.class, BlockPos.class);
+            webM.setAccessible(true);
+            webM.invoke(s, p, webPos);
+            sub = 4;
+            age = 0;
+            return;
+        }
+        if (sub == 4) {
+            check((attempt(s) == null && s.status().successes() >= 1) || (attempt(s) != null && attempt(s).done() && attempt(s).won()),
+                "WEB_DUNK after Crit + Cobweb must WIN! status=" + s.status());
+
+            // Sub 5..7: ANTI_DRAIN (negative: water beside bot gets drained; positive: hit bot back + water + escape wins!)
+            var adSettings = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.ANTI_DRAIN).withAutoRespawn(false);
+            s.start(server, p.getUUID(), adSettings, DrillOptions.forDrill(Drill.ANTI_DRAIN));
+            sub = 5;
+            age = 0;
+            return;
+        }
+        if (sub == 5) {
+            check(p.level().getBlockState(p.blockPosition()).is(Blocks.COBWEB), "ANTI_DRAIN must spawn player inside a Cobweb");
+            release(s, p);
+            // Negative case: place water right beside bot WITHOUT pushing bot back -> bot drains it and round FAILS!
+            BlockPos waterPos = p.blockPosition().above();
+            p.level().setBlockAndUpdate(waterPos, Blocks.WATER.defaultBlockState());
+            var wp = TrainingSession.class.getDeclaredMethod("playerWaterPlaced", ServerPlayer.class, BlockPos.class);
+            wp.setAccessible(true);
+            wp.invoke(s, p, waterPos);
+            sub = 6;
+            age = 0;
+            return;
+        }
+        if (sub == 6) {
+            if (attempt(s) != null && attempt(s).done()) {
+                check(!attempt(s).won(), "ANTI_DRAIN water drained by bot must FAIL! progress=" + attempt(s).progress());
+            } else if (attempt(s) == null) {
+                check(!s.status().recent().isEmpty() && !s.status().recent().getLast().won(),
+                    "ANTI_DRAIN drained round must record failure! status=" + s.status());
+            } else {
+                return;
+            }
+            // Positive case: hit bot away, place water out of reach (>5 blocks behind), step out of cobweb -> WIN!
+            var adSettings2 = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.ANTI_DRAIN).withAutoRespawn(false);
+            s.start(server, p.getUUID(), adSettings2, DrillOptions.forDrill(Drill.ANTI_DRAIN));
+            sub = 7;
+            age = 0;
+            return;
+        }
+        if (sub == 7) {
+            LivingEntity b = bot(s);
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            release(s, p);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(attempt(s).antiDrainPushed(), "ANTI_DRAIN pushing bot back must register");
+            BlockPos behindPos = p.blockPosition().offset(0, 0, -2);
+            p.level().setBlockAndUpdate(behindPos, Blocks.WATER.defaultBlockState());
+            var wp = TrainingSession.class.getDeclaredMethod("playerWaterPlaced", ServerPlayer.class, BlockPos.class);
+            wp.setAccessible(true);
+            wp.invoke(s, p, behindPos);
+            p.teleportTo(p.level(), behindPos.getX() + 0.5, behindPos.getY(), behindPos.getZ() + 0.5, java.util.Set.of(), 0.0F, 0.0F, true);
+            sub = 8;
+            age = 0;
+            return;
+        }
+        if (sub == 8) {
+            check((attempt(s) == null && s.status().successes() >= 1) || (attempt(s) != null && attempt(s).done() && attempt(s).won()),
+                "ANTI_DRAIN push + safe water + escape must WIN! status=" + s.status());
+
+            // Sub 9..10: SHIELD_TIMING (Axe rejected, panic swing after unblocked hit fails)
+            var stSettings = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.SHIELD_TIMING).withAutoRespawn(false);
+            s.start(server, p.getUUID(), stSettings, DrillOptions.forDrill(Drill.SHIELD_TIMING));
+            sub = 9;
+            age = 0;
+            return;
+        }
+        if (sub == 9) {
+            LivingEntity b = bot(s);
+            release(s, p);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            equipFromInventory(p, Items.DIAMOND_AXE);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(attempt(s).timingHint() != null && attempt(s).timingHint().contains("ohne Axt"),
+                "SHIELD_TIMING must reject Axe attacks! hint=" + attempt(s).timingHint());
+            // Take unblocked hit -> panic swing must FAIL!
+            b.stopUsingItem();
+            b.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_SWORD));
+            TrainingTactics.strike(p.level(), b, p, b.damageSources().mobAttack(b), 0.0F);
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            p.attack(b);
+            check(attempt(s).done() && !attempt(s).won(),
+                "SHIELD_TIMING panic swing after unblocked hit must FAIL! progress=" + attempt(s).progress());
+            log("PASS Swight UHC drills verified in-game (KnowledgeGuide, MOMENTUM_BREAK, WEB_DUNK, ANTI_DRAIN fail+win, SHIELD_TIMING axe+panic)");
+            nextScene(s, server);
+        }
+    }
+
+    private void runHealPunishPCritBreakAndCleanHeal(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
+        // Sub 0..2: HEAL_PUNISH (bot starts at 10 HP, starts eating Golden Apple -> 2 player Crits win!)
+        if (sub == 0) {
+            var settings = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.HEAL_PUNISH).withAutoRespawn(false);
+            s.start(server, p.getUUID(), settings, DrillOptions.forDrill(Drill.HEAL_PUNISH));
+            sub = 1;
+            age = 0;
+            return;
+        }
+        if (sub == 1) {
+            LivingEntity b = bot(s);
+            check(Math.abs(b.getHealth() - 10.0F) < 0.1F, "HEAL_PUNISH bot must start at 10 HP, got " + b.getHealth());
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            release(s, p);
+            sub = 2;
+            age = 0;
+            return;
+        }
+        if (sub == 2) {
+            LivingEntity b = bot(s);
+            if (!b.isUsingItem() || !b.getUseItem().is(Items.GOLDEN_APPLE)) return;
+            // Bot is eating Golden Apple (32 ticks) -> land Crit 1, then wait 13 ticks for real Vanilla recharge and land Crit 2!
+            p.teleportTo(p.level(), b.getX(), b.getY() + 0.6, b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.setOnGround(false);
+            p.setSprinting(false);
+            p.fallDistance = 0.6F;
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(!attempt(s).done() && attempt(s).healPunishCrits() == 1,
+                "HEAL_PUNISH Crit 1 should register! progress=" + attempt(s).progress());
+            sub = 20;
+            age = 0;
+            return;
+        }
+        if (sub == 20) {
+            if (age < 13) return;
+            LivingEntity b = bot(s);
+            p.teleportTo(p.level(), b.getX(), b.getY() + 0.6, b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.setOnGround(false);
+            p.setSprinting(false);
+            p.fallDistance = 0.6F;
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.attack(b);
+            check(attempt(s).done() && attempt(s).won(), "HEAL_PUNISH 2 Crits while bot gaps must WIN! progress=" + attempt(s).progress());
+
+            // Sub 3..4: PCRIT_BREAK (bot sprint-hits -> player Sprint-KB hit + follow-up wins!)
+            var pcSettings = TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.PCRIT_BREAK).withAutoRespawn(false);
+            s.start(server, p.getUUID(), pcSettings, DrillOptions.forDrill(Drill.PCRIT_BREAK));
+            sub = 3;
+            age = 0;
+            return;
+        }
+        if (sub == 3) {
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            release(s, p);
+            sub = 4;
+            age = 0;
+            return;
+        }
+        if (sub == 4) {
+            LivingEntity b = bot(s);
+            if (p.hurtTime > 0) {
+                p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
+                p.setOnGround(true);
+                p.setSprinting(true);
+                p.lookAt(Anchor.EYES, b.getEyePosition());
+                p.attack(b);
+                b.invulnerableTime = 0;
+                p.attack(b);
+                check(attempt(s).done() && attempt(s).won(),
+                    "PCRIT_BREAK Sprint-KB hit + follow-up must WIN! progress=" + attempt(s).progress());
+
+                // Sub 5..6: HEAL with CLEAN_HEAL = 1 -> taking hit while eating Golden Apple FAILS!
+                var chSettings = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.HEAL).withAutoRespawn(false);
+                var chOpts = DrillOptions.forDrill(Drill.HEAL)
+                    .withIndex(DrillOptions.Field.CLEAN_HEAL, 1)
+                    .withIndex(DrillOptions.Field.DISTANCE, 0);
+                s.start(server, p.getUUID(), chSettings, chOpts);
+                sub = 5;
+                age = 0;
+            }
+            return;
+        }
+        if (sub == 5) {
+            equipFromInventory(p, Items.GOLDEN_APPLE);
+            release(s, p);
+            p.startUsingItem(InteractionHand.MAIN_HAND);
+            LivingEntity b = bot(s);
+            b.snapTo(p.getX(), p.getY(), p.getZ() + 1.5, 180.0F, 0.0F);
+            TrainingTactics.strike(p.level(), b, p, b.damageSources().mobAttack(b), 0.0F);
+            check(attempt(s).done() && !attempt(s).won(),
+                "HEAL with CLEAN_HEAL=1 taking a hit while eating must FAIL! progress=" + attempt(s).progress());
+            log("PASS HEAL_PUNISH, PCRIT_BREAK, and HEAL CLEAN_HEAL verified in-game");
+            nextScene(s, server);
         }
     }
 }

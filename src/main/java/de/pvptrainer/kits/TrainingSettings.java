@@ -45,7 +45,6 @@ public record TrainingSettings(
 
    public static TrainingSettings defaults(TrainingSettings.Mode var0) {
       byte var1 = switch (var0) {
-         case CRYSTAL -> 40;
          case MACE -> 30;
          default -> 20;
       };
@@ -53,13 +52,14 @@ public record TrainingSettings(
    }
 
    public TrainingSettings forDrill(Drill var1) {
-      boolean var2 = var1 == Drill.DUEL || var1.needsSwordAttack() || var1 == Drill.RETOTEM || var1 == Drill.DOUBLE_HAND;
+      boolean var2 = var1 == Drill.DUEL || var1.needsSwordAttack() || var1 == Drill.RETOTEM || var1 == Drill.DOUBLE_HAND
+         || var1 == Drill.SHIELD_TIMING || var1 == Drill.ANTI_DRAIN;
       TrainingSettings.Movement var3 = TrainingSettings.Movement.STILL;
       if (var1 == Drill.DUEL) {
          var3 = this.mode != TrainingSettings.Mode.SWORD && this.mode != TrainingSettings.Mode.CRYSTAL && this.mode != TrainingSettings.Mode.HUGOSMP
             ? TrainingSettings.Movement.FOLLOW
             : TrainingSettings.Movement.STRAFE;
-      } else if (var1.needsSwordAttack() || var1.totemDefense()) {
+      } else if (var1.needsSwordAttack() || var1.totemDefense() || var1 == Drill.SHIELD_TIMING || var1 == Drill.ANTI_DRAIN) {
          var3 = TrainingSettings.Movement.FOLLOW;
       }
 

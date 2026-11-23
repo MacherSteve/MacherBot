@@ -4,6 +4,8 @@ import de.pvptrainer.arena.TrainingArena;
 import de.pvptrainer.kits.TrainingSettings;
 
 import java.util.UUID;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.LivingEntity;
 
 /** Immutable round settings are also read by local client-side item prediction. */
@@ -25,6 +27,26 @@ public final class TrainingResources {
         if (active == null || actor == null || !TrainingArena.isArena(actor.level())) return null;
         UUID id = actor.getUUID();
         return (id.equals(active.owner()) || id.equals(active.bot())) ? active : null;
+    }
+
+    public static Difficulty arenaDifficulty(ServerLevel level) {
+        if (level == null || !TrainingArena.isArena(level)) {
+            return level == null ? Difficulty.HARD : level.getDifficulty();
+        }
+        Round active = round;
+        DrillOptions.ArenaDifficulty setting = active != null
+            ? active.options().arenaDifficulty()
+            : DrillOptions.ArenaDifficulty.HARD;
+        return setting.resolve(level.getDifficulty(), true);
+    }
+
+    public static boolean zeroDamageFor(LivingEntity actor) {
+        Round active = activeRound(actor);
+        if (active == null) return false;
+        DrillOptions.ZeroDamage mode = active.options().zeroDamage();
+        if (mode == DrillOptions.ZeroDamage.OFF) return false;
+        if (mode == DrillOptions.ZeroDamage.BOTH) return true;
+        return actor.getUUID().equals(active.owner());
     }
 
     public static boolean keepSupplies(LivingEntity actor) {

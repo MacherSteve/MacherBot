@@ -59,19 +59,6 @@ public final class BotEquipment {
       var1.setItemSlot(EquipmentSlot.LEGS, MacherItems.name(items.get(37)));
       var1.setItemSlot(EquipmentSlot.CHEST, MacherItems.name(items.get(38)));
       var1.setItemSlot(EquipmentSlot.HEAD, MacherItems.name(items.get(39)));
-      if (var3.drill().requiresPopChain() && var2.preset()) {
-         var protection = var1.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
-            .getOrThrow(net.minecraft.world.item.enchantment.Enchantments.PROTECTION);
-         for (EquipmentSlot slot : List.of(EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD)) {
-            ItemStack armor = var1.getItemBySlot(slot);
-            if (!armor.isEmpty()) {
-               net.minecraft.world.item.enchantment.EnchantmentHelper.updateEnchantments(armor, enchants -> {
-                  enchants.removeIf(enchantment -> !enchantment.equals(protection));
-                  enchants.set(protection, 4);
-               });
-            }
-         }
-      }
       var1.setItemInHand(InteractionHand.MAIN_HAND, this.stock.set(0, ItemStack.EMPTY));
       var1.setItemInHand(InteractionHand.OFF_HAND, MacherItems.name(items.get(40)));
       if (replaceStartingTotem && !equipSword(var1)) equipAxe(var1);
@@ -98,6 +85,13 @@ public final class BotEquipment {
          if (var7.is(Items.SHIELD)) {
             this.replacementShield = var7.copy();
             this.replacementShield.setDamageValue(0);
+         }
+      }
+
+      if (var3.drill() == Drill.ANTI_DRAIN && !has(var1, Items.BUCKET)) {
+         ItemStack spareWater = take(var1, Items.WATER_BUCKET);
+         if (!spareWater.isEmpty()) {
+            stash(MacherItems.name(new ItemStack(Items.BUCKET)));
          }
       }
 

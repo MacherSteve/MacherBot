@@ -89,7 +89,6 @@ final class CrystalPressure {
                   }
 
                   DamageSource var9 = var2.damageSources().mobAttack(var2);
-                  Vec3 var10 = var3.getDeltaMovement();
                   int var11 = var4.playerPops();
                   boolean var12 = var3.getMainHandItem().is(Items.TOTEM_OF_UNDYING);
                   boolean var13 = var3.getOffhandItem().is(Items.TOTEM_OF_UNDYING);
@@ -101,11 +100,6 @@ final class CrystalPressure {
                   if (!var16 && (!var19 || !var14 || var3.isBlocking())) {
                      this.restart(var4);
                      return;
-                  }
-
-                  if (var16) {
-                     float var17 = EnchantmentHelper.modifyKnockback(var1, var2.getMainHandItem(), var3, var9, 0.0F);
-                     var2.causeExtraKnockback(var3, var17 * 0.5F + (var15 ? 0.5F : 0.0F), var10, var9, 0.0F, true);
                   }
 
                   if (var11 != var4.playerPops()) {

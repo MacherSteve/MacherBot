@@ -95,4 +95,11 @@ public final class ArenaSignals {
          var2.waterDrawn(var0, var1);
       }
    }
+
+   public static void waterPlaced(ServerPlayer var0, BlockPos var1) {
+      TrainingSession var2 = active(var0);
+      if (var2 != null) {
+         var2.playerWaterPlaced(var0, var1);
+      }
+   }
 }

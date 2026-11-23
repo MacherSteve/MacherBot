@@ -54,6 +54,15 @@ public enum TrainingPreset {
          case CORNER_OBI_TRAP -> names("Ecke sperren", "Zulauf in Ecke", "Seitliche Ecke");
          case MACE_COUNTER_DTAP -> names("Ruhiger Konter", "Standard-Konter", "Schneller Konter");
          case CORNER_WEB_DTAP -> names("Ecken-Web + D-Tap", "D-Tap aus Distanz", "Schneller Schild-Reset");
+         case SELF_WEB_CRYSTAL -> names("Fertige Basis", "Selbst setzen", "Schneller D-Tap");
+         case UPPERCUT -> names("Rückstoß-Uppercut", "Schräger Uppercut", "Uppercut im Wechsel");
+         case ELY_STUN_SLAM -> names("Hoher Anflug", "Standard-Anflug", "Kurzer Anflug");
+         case SHIELD_TIMING -> names("Ruhiger Rhythmus", "Mit Baits", "Schnelle Konter");
+         case MOMENTUM_BREAK -> names("Standard-Break", "Schneller Auto-Hit", "Seitlicher Break");
+         case WEB_DUNK -> names("Web Dunk", "Lava Dunk", "Web + Lava Dunk");
+         case ANTI_DRAIN -> names("Standard-Escape", "Schneller Drainer", "Druck im Web");
+         case HEAL_PUNISH -> names("Nahes Gappen", "Abstand brechen", "Schneller Punish");
+         case PCRIT_BREAK -> names("Gerader Break", "Schräger Break", "Wechselnder Takt");
       };
    }
 
@@ -118,6 +127,13 @@ public enum TrainingPreset {
             var3 = var3.withMovement(TrainingSettings.Movement.STILL);
             yield "Ecken-Web, Axt-Stun & 2 Kristall-Pops";
          }
+         case SELF_WEB_CRYSTAL -> {
+            var4.index(DrillOptions.Field.BASE, var6 ? 1 : 0);
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(2, 3, 4));
+            var4.number(DrillOptions.Field.WINDOW, this.choose(60, 40, 20));
+            var3 = var3.withMovement(TrainingSettings.Movement.STILL);
+            yield var6 ? "Vorbereitetes Boden-Obsidian · Bot webt sich ein" : "Selbst setzen · " + this.choose(60, 40, 20) + " Ticks für 2 Pops";
+         }
          case LEDGE_DASH -> {
             int var16 = this.choose(1, 2, 3);
             var4.number(DrillOptions.Field.LEDGE, var16);
@@ -139,13 +155,17 @@ public enum TrainingPreset {
             var4.index(DrillOptions.Field.BURST_PATTERN, var5 ? 1 : 0);
             yield (var5 ? "Triple Tap" : "D-Tap") + " · " + var14 + " Ticks Vorbereitung";
          }
-         case SMASH, WIND_CHAIN, PEARL_CATCH, ELYTRA_SMASH -> {
+         case SMASH, WIND_CHAIN, PEARL_CATCH, ELYTRA_SMASH, ELY_STUN_SLAM -> {
             int var13 = this.choose(0, 2, 4);
             var4.number(DrillOptions.Field.SIDE_OFFSET, var13);
             var4.number(DrillOptions.Field.DISTANCE, this.choose(2, 3, 4));
-            if (var2 == Drill.ELYTRA_SMASH) {
+            if (var2 == Drill.ELYTRA_SMASH || var2 == Drill.ELY_STUN_SLAM) {
                var4.number(DrillOptions.Field.START_HEIGHT, this.choose(40, DrillOptions.DEFAULT_FLIGHT_HEIGHT, 24));
                var4.number(DrillOptions.Field.DISTANCE, this.choose(9, 7, 5));
+            }
+            if (var2 == Drill.ELY_STUN_SLAM) {
+               var4.index(DrillOptions.Field.SHIELD, 1);
+               var4.index(DrillOptions.Field.REBLOCK, 0);
             }
 
             var3 = var3.withMovement(var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.STILL);
@@ -197,10 +217,10 @@ public enum TrainingPreset {
             var3 = var3.withMovement(var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.STILL);
             yield "Schild mit " + var12 + (var12 == 1 ? " Punkt" : " Punkten") + " Resthaltbarkeit";
          }
-         case SPACING, HIT_SELECT, PUNISH_CRIT, JUMP_RESET -> {
+         case SPACING, HIT_SELECT, PUNISH_CRIT, JUMP_RESET, UPPERCUT, PCRIT_BREAK -> {
             int var11 = this.choose(30, 20, 10);
             var4.number(DrillOptions.Field.REACTION, var11);
-            boolean readableApproach = var2 == Drill.HIT_SELECT || var2 == Drill.JUMP_RESET;
+            boolean readableApproach = var2 == Drill.HIT_SELECT || var2 == Drill.JUMP_RESET || var2 == Drill.UPPERCUT || var2 == Drill.PCRIT_BREAK;
             var4.number(DrillOptions.Field.ANGLE, readableApproach ? this.choose(0, 0, 15) : this.choose(0, 15, 30));
             if (readableApproach) {
                var4.number(DrillOptions.Field.DISTANCE, this.choose(7, 7, 9));
@@ -212,7 +232,7 @@ public enum TrainingPreset {
                var4.number(DrillOptions.Field.COMBO_LENGTH, var17);
                yield var17 + " Treffer · " + (var5 ? "wechselnder Takt" : var11 + " Ticks Angriffstakt");
             } else if (readableApproach) {
-               yield var5 ? "9 Bl. Abstand · 3-Block-Hit" : "7 Bl. Abstand · direkter 3-Block-Hit";
+               yield var5 ? "9 Bl. Abstand · 3-Block-Sprint-Hit" : "7 Bl. Abstand · direkter 3-Block-Sprint-Hit";
             } else {
                yield var5 ? "Schräger Anlauf · wechselnder Takt" : var11 + " Ticks Angriffstakt · " + (var6 ? "gerader Anlauf" : "15° Anlauf");
             }
@@ -244,8 +264,47 @@ public enum TrainingPreset {
             var4.number(DrillOptions.Field.DISTANCE, var9);
             var4.number(DrillOptions.Field.REACTION, this.choose(40, 20, 10));
             var4.number(DrillOptions.Field.START_HEALTH, 8);
+            if (var5) var4.index(DrillOptions.Field.CLEAN_HEAL, 1);
             var3 = var3.withMovement(TrainingSettings.Movement.FOLLOW);
-            yield coverDescription(var8) + " · " + var9 + " Bl. Vorsprung";
+            yield coverDescription(var8) + " · " + var9 + " Bl. Vorsprung" + (var5 ? " · Sauberer Heal" : "");
+         }
+         case SHIELD_TIMING -> {
+            int react = this.choose(20, 10, 5);
+            var4.number(DrillOptions.Field.REACTION, react);
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(3, 4, 4));
+            var3 = var3.withMovement(var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.FOLLOW).withCounterAttacks(true);
+            yield "Nur Schwert & Schild · " + (var6 ? "ruhiger Takt" : (var5 ? "schnelle Baits" : "Jump-Baits & Konter"));
+         }
+         case MOMENTUM_BREAK -> {
+            var4.index(DrillOptions.Field.SHIELD, 1);
+            var4.index(DrillOptions.Field.REBLOCK, 0);
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(3, 3, 4));
+            var4.number(DrillOptions.Field.WINDOW, this.choose(40, 30, 20));
+            var3 = var3.withMovement(var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.STILL);
+            yield "Axt-Stun → Jump-Reset auf Auto-Hit → Schwert-Anschluss";
+         }
+         case WEB_DUNK -> {
+            var4.index(DrillOptions.Field.DUNK_TYPE, this.ordinal());
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(3, 3, 4));
+            var4.number(DrillOptions.Field.WINDOW, this.choose(40, 30, 30));
+            var3 = var3.withMovement(var6 ? TrainingSettings.Movement.STILL : (var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.FOLLOW));
+            yield switch (this) {
+               case BEGINNER -> "Crit → Cobweb in die Flugbahn";
+               case PRACTICE -> "Crit → Lava unter den Bot";
+               case ADVANCED -> "Crit → Cobweb + Lava darüber";
+            };
+         }
+         case ANTI_DRAIN -> {
+            var4.number(DrillOptions.Field.REACTION, this.choose(20, 10, 5));
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(3, 3, 2));
+            var3 = var3.withMovement(TrainingSettings.Movement.FOLLOW).withCounterAttacks(true);
+            yield "Im Cobweb erst Bot wegschlagen · dann sicher watern";
+         }
+         case HEAL_PUNISH -> {
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(4, 5, 5));
+            var4.number(DrillOptions.Field.REACTION, this.choose(20, 10, 5));
+            var3 = var3.withMovement(TrainingSettings.Movement.STILL);
+            yield "Bot gapt aus " + this.choose(4, 5, 5) + " Bl. · 2 Crits landen";
          }
          default -> throw new IllegalStateException("Unbekannte Übung " + var2);
       };

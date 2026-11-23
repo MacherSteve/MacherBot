@@ -92,11 +92,29 @@ final class UhcUtilityTracker {
     }
 
     void webPlaced(DrillAttempt attempt, Drill drill, int tick, int stunUntil, BlockPos pos) {
-        if (drill == Drill.HEAD_WEB || drill == Drill.CORNER_WEB_DTAP || tick < stunUntil) {
+        if (drill == Drill.HEAD_WEB || drill == Drill.CORNER_WEB_DTAP || drill == Drill.WEB_DUNK || tick < stunUntil) {
             webAt = tick;
             lastWebSite = pos.immutable();
-            attempt.event(drill == Drill.HEAD_WEB ? "Netz platziert" : (drill == Drill.CORNER_WEB_DTAP ? "Corner-Web platziert" : "Netz nach Stun gesetzt"));
+            attempt.event(drill == Drill.HEAD_WEB ? "Netz platziert"
+                : (drill == Drill.CORNER_WEB_DTAP ? "Corner-Web platziert"
+                    : (drill == Drill.WEB_DUNK ? "Dunk-Netz platziert" : "Netz nach Stun gesetzt")));
         }
+    }
+
+    int lastWebAt() {
+        return webAt;
+    }
+
+    int lastLavaAt() {
+        return lavaPlacedAt;
+    }
+
+    BlockPos lastWebSite() {
+        return lastWebSite;
+    }
+
+    BlockPos lastLavaSource() {
+        return lastLavaSource;
     }
 
     void waterPlaced(DrillAttempt attempt, int tick, BlockPos pos) {
@@ -188,7 +206,7 @@ final class UhcUtilityTracker {
         return false;
     }
 
-    private static boolean heals(ItemStack stack) {
+    static boolean heals(ItemStack stack) {
         return stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE) || MacherItems.isHealingHead(stack);
     }
 

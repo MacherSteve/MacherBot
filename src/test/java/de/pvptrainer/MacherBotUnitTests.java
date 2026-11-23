@@ -9,6 +9,8 @@ import de.pvptrainer.analytics.BotStatistics;
 import de.pvptrainer.analytics.BotTelemetry;
 import de.pvptrainer.analytics.CalibrationPlan;
 import de.pvptrainer.arena.ForgeArena;
+import de.pvptrainer.arena.MacherAppearance;
+import de.pvptrainer.arena.TrainingArena;
 import de.pvptrainer.drill.Drill;
 import de.pvptrainer.drill.DrillAttempt;
 import de.pvptrainer.drill.DrillOptions;
@@ -16,9 +18,11 @@ import de.pvptrainer.drill.WindHeight;
 import de.pvptrainer.kits.TrainingPreset;
 import de.pvptrainer.kits.TrainingProfiles;
 import de.pvptrainer.kits.TrainingSettings;
+import de.pvptrainer.progress.HudPreferences;
 import de.pvptrainer.progress.TrainingProgress;
 import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.CobwebFlightTracker;
+import de.pvptrainer.ui.KnowledgeGuide;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -29,6 +33,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.phys.Vec3;
 
 /** Schnelle Offline-Unit-Tests ohne Minecraft-Client (Aufruf via build.py --test). */
@@ -51,8 +56,11 @@ public final class MacherBotUnitTests {
         testHugoSmpKitJsonSchema();
         testNewDrillsAndOptions();
         testLargeArenaGeometry();
-        testStunSlamAlwaysCountsInOpenWindow();
+        testStunSlamAndElyStunSlamWindBurst();
         testNewDrillAttemptStateMachines();
+        testVanillaPlayerDamageAndCrystalParity();
+        testBatchFeaturesAndCrystalHotfixes();
+        testSwightDrillsAndKnowledgeGuide();
         System.out.println("PASS " + passed + " Unit-Tests erfolgreich.");
     }
 
@@ -550,29 +558,71 @@ public final class MacherBotUnitTests {
         });
     }
 
-    private static void testStunSlamAlwaysCountsInOpenWindow() throws Exception {
-        run("DrillAttempt: STUN_SLAM zaehlt im offenen Schildfenster auch bei Bodenkontakt/jeder Hoehe", () -> {
-            // Positivfall 1: Bodenkontakt (fallDistance = 0.0) nach Axt-Stun -> zaehlt sofort als Erfolg
-            var groundedSlam = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
-            groundedSlam.observeFall(10, 18.0);
-            groundedSlam.shieldStun(25);
-            check(groundedSlam.acceptStunSlam(0.0, false), "Mace-Treffer nach Axt-Stun muss auch bei fallDistance=0 zaehlen");
-            check(groundedSlam.done() && groundedSlam.won(), "STUN_SLAM muss gewonnen sein");
+    private static void testStunSlamAndElyStunSlamWindBurst() throws Exception {
+        run("DrillAttempt: STUN_SLAM & ELY_STUN_SLAM fordern vollen Smash + Wind-Burst-Auftrieb", () -> {
+            // Gegenfall 1: Nur Schildbruch zaehlt NICHT als Sieg
+            var shieldOnly = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            shieldOnly.observeFall(10, 18.0);
+            shieldOnly.shieldStun(105);
+            check(!shieldOnly.done() && !shieldOnly.won(), "Nur Schildbruch darf STUN_SLAM niemals gewinnen");
 
-            // Positivfall 2: Klassischer Luft-Smash aus Hoehe 19
+            // Gegenfall 2: Bodentap (fallDistance = 0.0) nach Axt-Stun zaehlt NICHT
+            var groundTap = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            groundTap.observeFall(10, 0.0);
+            groundTap.shieldStun(105);
+            check(!groundTap.beginStunSlamLaunch(0.0, 65.0, true, false, true), "Bodentap ohne Smash-Fallstrecke darf nicht zaehlen");
+            check(!groundTap.done() && !groundTap.won(), "Bodentap darf STUN_SLAM nicht gewinnen");
+
+            // Gegenfall 3: Voller Smash OHNE Wind Burst zaehlt NICHT
+            var noWindBurst = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            noWindBurst.observeFall(10, 18.0);
+            noWindBurst.shieldStun(105);
+            check(!noWindBurst.beginStunSlamLaunch(18.0, 66.0, false, false, false), "Mace ohne Wind Burst darf nicht starten");
+            check(!noWindBurst.done() && noWindBurst.timingHint() != null && noWindBurst.timingHint().contains("Wind Burst"),
+                "Hinweis auf fehlenden Wind Burst erwartet");
+
+            // Gegenfall 4: Wind-Burst-Smash ohne tatsaechlichen Auftrieb in die Luft
+            var noLift = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
+            noLift.observeFall(10, 18.0);
+            noLift.shieldStun(105);
+            check(noLift.beginStunSlamLaunch(18.0, 66.0, false, false, true), "Wind-Burst-Smash startet Auftriebspruefung");
+            noLift.settleStunSlamLaunch(16, 0.0, 66.0);
+            check(!noLift.won() && !noLift.awaitingSlamLaunch(), "Ohne Auftrieb kein Sieg");
+
+            // Positivfall 1: Axt-Stun + voller Smash aus Hoehe 19 + Wind-Burst-Auftrieb -> Sieg
             var airSlam = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
             airSlam.observeFall(10, 19.0);
-            airSlam.shieldStun(25);
-            check(airSlam.acceptStunSlam(19.0, false) && airSlam.won(), "STUN_SLAM aus Hoehe 19 gewonnen");
+            airSlam.shieldStun(105);
+            check(airSlam.beginStunSlamLaunch(19.0, 66.0, false, false, true), "Voller Wind-Burst-Smash aus Hoehe 19 akzeptiert");
+            check(!airSlam.done() && airSlam.awaitingSlamLaunch(), "Vor Wind-Burst-Auftrieb noch offen");
+            airSlam.settleStunSlamLaunch(10, 1.45, 66.0);
+            check(airSlam.done() && airSlam.won(), "STUN_SLAM mit Wind-Burst-Auftrieb gewonnen");
 
-            // Gegenfall 1: Mace-Treffer VOR dem Axt-Stun darf nicht zaehlen
+            // Gegenfall 5: Mace-Treffer VOR dem Axt-Stun darf nicht zaehlen
             var noAxe = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
-            check(!noAxe.acceptStunSlam(18.0, false) && !noAxe.done(), "Ohne Axt-Stun kein Erfolg");
+            check(!noAxe.beginStunSlamLaunch(18.0, 66.0, false, false, true) && !noAxe.done(), "Ohne Axt-Stun kein Erfolg");
 
-            // Gegenfall 2: Ziel blockt noch -> darf nicht zaehlen
+            // Gegenfall 6: Ziel blockt noch -> darf nicht zaehlen
             var stillBlocking = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
             stillBlocking.shieldStun(25);
-            check(!stillBlocking.acceptStunSlam(18.0, true) && !stillBlocking.done(), "Blockendes Ziel kein Erfolg");
+            check(!stillBlocking.beginStunSlamLaunch(18.0, 66.0, false, true, true) && !stillBlocking.done(), "Blockendes Ziel kein Erfolg");
+
+            // ELY_STUN_SLAM Gegenfall: ohne vorherigen Elytra-Gleitflug kein Sieg
+            var elyNoGlide = new DrillAttempt(DrillOptions.forDrill(Drill.ELY_STUN_SLAM), -1.0, 0);
+            elyNoGlide.observeFall(15, 24.0);
+            elyNoGlide.shieldStun(105);
+            check(!elyNoGlide.beginStunSlamLaunch(24.0, 66.0, false, false, true) && !elyNoGlide.won(),
+                "ELY_STUN_SLAM ohne Gleitflug darf nicht gewinnen");
+
+            // ELY_STUN_SLAM Positivfall: Gleitflug -> Axt-Stun -> voller Wind-Burst-Smash -> Auftrieb -> Sieg
+            var elyWin = new DrillAttempt(DrillOptions.forDrill(Drill.ELY_STUN_SLAM), -1.0, 0);
+            elyWin.observeFall(5, 0.0);
+            elyWin.glideStarted();
+            elyWin.observeFall(20, 24.0);
+            elyWin.shieldStun(105);
+            check(elyWin.beginStunSlamLaunch(24.0, 66.0, false, false, true), "ELY_STUN_SLAM nach Gleitflug akzeptiert");
+            elyWin.settleStunSlamLaunch(20, 1.5, 66.0);
+            check(elyWin.done() && elyWin.won(), "ELY_STUN_SLAM mit Wind-Burst-Auftrieb gewonnen");
 
             // Rollendes Fallfenster: 3 Ticks Gueltigkeit nach letztem Fall > 1.5
             var fall = new DrillAttempt(DrillOptions.forDrill(Drill.STUN_SLAM), -1.0, 0);
@@ -656,6 +706,279 @@ public final class MacherBotUnitTests {
             cwNoPop.shieldStun(100);
             cwNoPop.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 12.0F, 0.0F, true, false, 0, false);
             check(cwNoPop.done() && !cwNoPop.won(), "Kristall ohne Totem-Pop scheitert in CORNER_WEB_DTAP");
+        });
+    }
+
+    private static void testVanillaPlayerDamageAndCrystalParity() throws Exception {
+        run("Vanilla-Spieler-Paritaet: Schwierigkeitsskalierung, Crystal-Defaults und Triple-Tap", () -> {
+            // Positivfaelle: exakt Vanilla Player.hurtServer()-Skalierung fuer skalierende Quellen (Kristall/Anker/Explosion)
+            check(Math.abs(TrainingArena.scalePlayerDamage(80.0F, Difficulty.HARD, true, true) - 120.0F) < 1e-5F,
+                "HARD muss 1,5x skalieren (80 -> 120)");
+            check(Math.abs(TrainingArena.scalePlayerDamage(80.0F, Difficulty.NORMAL, true, true) - 80.0F) < 1e-5F,
+                "NORMAL muss 1,0x bleiben");
+            check(Math.abs(TrainingArena.scalePlayerDamage(80.0F, Difficulty.EASY, true, true) - 41.0F) < 1e-5F,
+                "EASY muss min(dmg/2 + 1, dmg) skalieren (80 -> 41)");
+            check(Math.abs(TrainingArena.scalePlayerDamage(1.0F, Difficulty.EASY, true, true) - 1.0F) < 1e-5F,
+                "EASY darf kleinen Schaden nicht erhoehen (1 -> 1)");
+            check(Math.abs(TrainingArena.scalePlayerDamage(80.0F, Difficulty.PEACEFUL, true, true) - 80.0F) < 1e-5F,
+                "PEACEFUL in Arena wird wie DrillDamageMixin als NORMAL behandelt");
+
+            // Gegenfaelle: ausserhalb der Arena gibt PEACEFUL 0; nicht-skalierende Quellen bleiben unveraendert
+            check(TrainingArena.scalePlayerDamage(80.0F, Difficulty.PEACEFUL, true, false) == 0.0F,
+                "PEACEFUL ausserhalb Arena muss 0 liefern");
+            check(Math.abs(TrainingArena.scalePlayerDamage(11.0F, Difficulty.HARD, false, true) - 11.0F) < 1e-5F,
+                "Nicht-skalierender Nahkampfschaden darf auf HARD nicht mit 1,5x multipliziert werden");
+
+            // Crystal-Standard startet auf Vanilla 10 Herzen (20 LP), nicht 20 Herzen (40 LP)
+            check(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).maxHealth() == 20,
+                "CRYSTAL-Standard muss Vanilla 10 Herzen (20 LP) sein");
+            check(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.TRIPLE_TAP).maxHealth() == 20,
+                "TRIPLE_TAP startet mit 10 Herzen (20 LP)");
+            check(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.D_TAP).maxHealth() == 20,
+                "D_TAP startet mit 10 Herzen (20 LP)");
+
+            // SHIELD_TRIPLE_TAP: optionaler 3. Luft-Nahkampftreffer nach Pop 2 darf crystalHits nicht auf 0 zuruecksetzen
+            var stt = new DrillAttempt(DrillOptions.forDrill(Drill.SHIELD_TRIPLE_TAP), -1.0, 0);
+            stt.observeFall(0, 0.0);
+            // Setze Zustand via reflection-freie oeffentliche Methoden: Shield-Stun + 2 Pops -> optionaler 3. Lufttreffer -> Pop 3
+            var ttField = DrillAttempt.class.getDeclaredField("swordAt");
+            ttField.setAccessible(true);
+            ttField.setInt(stt, 0);
+            var airField = DrillAttempt.class.getDeclaredField("airborneTarget");
+            airField.setAccessible(true);
+            airField.setBoolean(stt, true);
+            stt.observeFall(4, 0.0);
+            stt.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, false, true, 6, true);
+            check(stt.crystalHits() == 1 && stt.needsAirSword(), "Nach Pop 1 muss Schildbruch erwartet werden");
+            stt.observeFall(6, 0.0);
+            stt.shieldStun(100);
+            check(!stt.needsAirSword(), "Schildbruch entsperrt Kristall 2");
+            stt.observeFall(10, 0.0);
+            stt.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 15.0F, 0.0F, true, true, 0, true);
+            check(stt.crystalHits() == 2 && !stt.done(), "Pop 2 registriert");
+            stt.observeFall(20, 0.0);
+            stt.swordContact(null, null, 1.5F, 1.0F, true, true, true);
+            check(stt.crystalHits() == 2 && !stt.done(), "Optionaler 3. Lufttreffer nach Pop 2 darf crystalHits nicht zuruecksetzen");
+            stt.observeFall(22, 0.0);
+            stt.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 15.0F, 0.0F, false, true, 8, true);
+            check(stt.done() && stt.won() && stt.crystalHits() == 3, "Pop 3 im Fenster von Lufttreffer 3 gewinnt SHIELD_TRIPLE_TAP");
+        });
+    }
+
+    private static void testBatchFeaturesAndCrystalHotfixes() throws Exception {
+        run("Neue Features & Hotfixes: Arena-Schwierigkeit, Zero-Damage, Health-Tag, Self-Web, Uppercut, D-Tap/Triple-Tap", () -> {
+            // 1. Arena-Schwierigkeit: Standard Schwer (HARD), 'Von Welt' uebernimmt Weltschwierigkeit
+            var defaultOpts = DrillOptions.forDrill(Drill.D_TAP);
+            check(defaultOpts.arenaDifficulty() == DrillOptions.ArenaDifficulty.HARD, "Standard Arena-Schwierigkeit muss Schwer (HARD) sein");
+            check(defaultOpts.arenaDifficulty().resolve(Difficulty.NORMAL, true) == Difficulty.HARD, "Standard Schwer bleibt auf Normal-Welt HARD");
+            var worldOpts = defaultOpts.withIndex(DrillOptions.Field.ARENA_DIFFICULTY, DrillOptions.ArenaDifficulty.WORLD.ordinal());
+            check(worldOpts.arenaDifficulty().resolve(Difficulty.NORMAL, true) == Difficulty.NORMAL, "Von Welt uebernimmt NORMAL");
+            check(worldOpts.arenaDifficulty().resolve(Difficulty.EASY, true) == Difficulty.EASY, "Von Welt uebernimmt EASY");
+            check(worldOpts.arenaDifficulty().resolve(Difficulty.PEACEFUL, true) == Difficulty.NORMAL, "Von Welt mappt PEACEFUL in Arena auf NORMAL");
+
+            // 2. Zero-Damage-Modus
+            check(defaultOpts.zeroDamage() == DrillOptions.ZeroDamage.OFF, "Zero-Damage Standard Aus");
+            var zeroPlayer = defaultOpts.withIndex(DrillOptions.Field.ZERO_DAMAGE, DrillOptions.ZeroDamage.PLAYER_ONLY.ordinal());
+            var zeroBoth = defaultOpts.withIndex(DrillOptions.Field.ZERO_DAMAGE, DrillOptions.ZeroDamage.BOTH.ordinal());
+            check(zeroPlayer.zeroDamage() == DrillOptions.ZeroDamage.PLAYER_ONLY && zeroBoth.zeroDamage() == DrillOptions.ZeroDamage.BOTH,
+                "Zero-Damage-Optionen verfuegbar");
+
+            // 3. Health Indicator Nametag
+            check("MacherBot".equals(MacherAppearance.healthName(20.0F, 20.0F, 0.0F, false).getString()), "Aus blendet Lebensanzeige aus");
+            String fullTag = MacherAppearance.healthName(20.0F, 20.0F, 0.0F, true).getString();
+            check(fullTag.contains("20,0") && fullTag.contains("❤") && !fullTag.contains("+"), "Volle LP ohne Goldherzen: " + fullTag);
+            String popTag = MacherAppearance.healthName(1.0F, 20.0F, 8.0F, true).getString();
+            check(popTag.contains("1,0") && popTag.contains("+8,0"), "Nach Pop mit Goldherzen: " + popTag);
+
+            // 4. D-Tap Hotfix: 2 Pops gewinnen auch ohne vorherigen Schwerttreffer, bei T+10, und trotz Luft-Zwischentreffer
+            var dtapDirect = new DrillAttempt(DrillOptions.forDrill(Drill.D_TAP), -1.0, 0);
+            dtapDirect.observeFall(4, 0.0);
+            dtapDirect.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, true, 0, true);
+            check(!dtapDirect.done() && dtapDirect.crystalHits() == 1, "Direkter Pop 1 zaehlt im D-Tap");
+            dtapDirect.observeFall(8, 0.0);
+            dtapDirect.swordContact(null, null, 2.0F, 1.0F, true, true, true);
+            check(dtapDirect.crystalHits() == 1, "Lufttreffer zwischen Pop 1 und Pop 2 darf crystalHits nicht zuruecksetzen");
+            dtapDirect.observeFall(14, 0.0);
+            dtapDirect.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, true, 0, true);
+            check(dtapDirect.done() && dtapDirect.won(), "Zwei Pops muessen D-Tap gewinnen");
+
+            // D-Tap Gegenfall: Pop 2 ohne Totem-Pop scheitert
+            var dtapNoPop = new DrillAttempt(DrillOptions.forDrill(Drill.D_TAP), -1.0, 0);
+            dtapNoPop.observeFall(4, 0.0);
+            dtapNoPop.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, true, 0, true);
+            dtapNoPop.observeFall(14, 0.0);
+            dtapNoPop.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 6.0F, 0.0F, true, true, 0, false);
+            check(dtapNoPop.done() && !dtapNoPop.won(), "Kristall 2 ohne Pop muss im D-Tap scheitern");
+
+            // 5. Triple Tap Hotfix: 3 Pops gewinnen auch ohne erzwungenen Schwert-Lufttreffer dazwischen
+            var ttap = new DrillAttempt(DrillOptions.forDrill(Drill.TRIPLE_TAP), -1.0, 0);
+            ttap.observeFall(4, 0.0);
+            ttap.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, false, true, 6, true);
+            ttap.observeFall(14, 0.0);
+            ttap.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, false, true, 4, true);
+            check(!ttap.done() && ttap.crystalHits() == 2, "2 Pops im Triple Tap registriert");
+            ttap.observeFall(24, 0.0);
+            ttap.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, true, 0, true);
+            check(ttap.done() && ttap.won() && ttap.crystalHits() == 3, "3 Pops muessen Triple Tap gewinnen");
+
+            // Triple Tap Gegenfall: Kristall 3 am Boden scheitert
+            var ttapGround = new DrillAttempt(DrillOptions.forDrill(Drill.TRIPLE_TAP), -1.0, 0);
+            ttapGround.observeFall(4, 0.0);
+            ttapGround.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, true, 0, true);
+            ttapGround.observeFall(14, 0.0);
+            ttapGround.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, true, 0, true);
+            ttapGround.observeFall(24, 0.0);
+            ttapGround.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, false, 0, true);
+            check(ttapGround.done() && !ttapGround.won(), "Kristall 3 nach Bodenkontakt muss scheitern");
+
+            // 6. SELF_WEB_CRYSTAL: Boden-Crystal Positiv- und Gegenfaelle
+            check(Drill.SELF_WEB_CRYSTAL.supports(TrainingSettings.Mode.CRYSTAL) && Drill.SELF_WEB_CRYSTAL.requiresPopChain()
+                && !Drill.SELF_WEB_CRYSTAL.requiresAirPopChain(), "SELF_WEB_CRYSTAL Modus-Flags");
+            var swc = new DrillAttempt(DrillOptions.forDrill(Drill.SELF_WEB_CRYSTAL), -1.0, 0);
+            swc.confirmSelfWeb();
+            // Erhoehter Kristall (nicht auf Fusshoehe) wird abgelehnt
+            swc.crystalBlast(null, null, new Vec3(1, 66, 0), new Vec3(0, 65, 0), 6.0F, 0.0F, true, false, 0, false);
+            check(!swc.done() && swc.timingHint() != null && swc.timingHint().contains("Boden-Crystal"), "Erhoehter Kristall abgelehnt");
+            // Boden-Kristall 1 (Vorbereitung 18.8 LP ohne Pop) scheitert nicht vorzeitig
+            swc.crystalBlast(null, null, new Vec3(1, 65, 0), new Vec3(0, 65, 0), 18.8F, 0.0F, true, false, 0, false);
+            check(!swc.done(), "Vorbereitender Boden-Crystal vor Pop 1 darf nicht scheitern");
+            // Boden-Kristall Pop 1 + Pop 2 -> Sieg
+            swc.observeFall(12, 0.0);
+            swc.crystalBlast(null, null, new Vec3(1, 65, 0), new Vec3(0, 65, 0), 18.8F, 0.0F, true, false, 0, true);
+            check(!swc.done(), "Nach Pop 1 noch offen");
+            swc.observeFall(24, 0.0);
+            swc.crystalBlast(null, null, new Vec3(1, 65, 0), new Vec3(0, 65, 0), 18.8F, 0.0F, true, false, 0, true);
+            check(swc.done() && swc.won(), "2 Boden-Crystal-Pops gewinnen SELF_WEB_CRYSTAL");
+
+            // 7. Alle Presets fuer die 3 neuen Drills muessen sauber bauen
+            for (var preset : TrainingPreset.values()) {
+                check(preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL), Drill.SELF_WEB_CRYSTAL) != null, "SELF_WEB_CRYSTAL Preset " + preset);
+                var up = preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.SWORD), Drill.UPPERCUT);
+                check(up.options().startDistance() >= 7, "UPPERCUT Preset startet bei >= 7 Bl.");
+                var ely = preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.MACE), Drill.ELY_STUN_SLAM);
+                check(ely.options().holdShield() && ely.options().startHeight() >= 24, "ELY_STUN_SLAM Preset mit Schild & Luftstart");
+            }
+        });
+    }
+
+    private static void testSwightDrillsAndKnowledgeGuide() throws Exception {
+        run("Swight-Drills, Optionen, Reach-Indikator & Knowledge Guide", () -> {
+            // 1. Knowledge Guide JSON vollstaendig & valide
+            var entries = KnowledgeGuide.all();
+            check(entries.size() >= 24, "Knowledge Guide braucht >= 24 Techniken, gefunden: " + entries.size());
+            for (var cat : KnowledgeGuide.Category.values()) {
+                check(!KnowledgeGuide.byCategory(cat).isEmpty(), "Kategorie leer: " + cat);
+            }
+            for (var entry : entries) {
+                check(!entry.id().isBlank() && !entry.title().isBlank() && !entry.summary().isBlank()
+                    && !entry.timing().isBlank() && !entry.example().isBlank() && !entry.steps().isEmpty()
+                    && !entry.mistakes().isBlank(), "Unvollstaendiger Guide-Eintrag: " + entry.id());
+                if (entry.drill() != null && entry.mode() != null) {
+                    check(entry.drill().supports(entry.mode()), "Guide-Drill passt nicht zum Modus: " + entry.id());
+                }
+            }
+            var mbEntry = KnowledgeGuide.forDrill(Drill.MOMENTUM_BREAK, TrainingSettings.Mode.UHC);
+            check(mbEntry != null && "momentum_break".equals(mbEntry.id()), "forDrill findet Momentum Break");
+            check(HudPreferences.reachIndicator(), "Reach-Indikator standardmaessig aktiv");
+
+            // 2. SHIELD_TIMING: Gegenfall (Panik-Schlag nach Zwischentreffer + Axt verboten) & Positivfall (3 Schild-Konter)
+            var stFail = new DrillAttempt(DrillOptions.forDrill(Drill.SHIELD_TIMING), -1.0, 0);
+            stFail.observeFall(5, 0.0);
+            stFail.axeNotAllowedInShieldTiming();
+            check(stFail.timingHint() != null && stFail.timingHint().contains("ohne Axt"), "Axt in SHIELD_TIMING abgelehnt");
+            stFail.playerHit(null, 3.0F);
+            stFail.observeFall(8, 0.0);
+            stFail.swordContact(null, null, 3.0F, 1.0F, false, true, true);
+            check(stFail.done() && !stFail.won(), "Panik-Schlag nach Zwischentreffer muss scheitern");
+
+            var stWin = new DrillAttempt(DrillOptions.forDrill(Drill.SHIELD_TIMING), -1.0, 0);
+            for (int i = 0; i < 3; i++) {
+                stWin.observeFall(10 + i * 20, 0.0);
+                stWin.playerShieldBlocked();
+                stWin.observeFall(14 + i * 20, 0.0);
+                stWin.swordContact(null, null, 3.0F, 1.0F, false, true, true);
+            }
+            check(stWin.done() && stWin.won(), "3 saubere Schild-Konter gewinnen SHIELD_TIMING");
+
+            // 3. MOMENTUM_BREAK: Positivfall (Stun + Auto-Hit + Jump-Reset + Schwert) & Gegenfall (kein Jump-Reset)
+            var mbWin = new DrillAttempt(DrillOptions.forDrill(Drill.MOMENTUM_BREAK), -1.0, 0);
+            mbWin.observeFall(10, 0.0);
+            mbWin.shieldStun(100);
+            mbWin.observeFall(12, 0.0);
+            mbWin.playerHit(null, 2.0F);
+            mbWin.jump();
+            mbWin.observeFall(15, 0.0);
+            mbWin.swordContact(null, null, 4.0F, 1.0F, false, true, true);
+            check(mbWin.done() && mbWin.won(), "Stun + Jump-Reset auf Auto-Hit + Schwert gewinnt MOMENTUM_BREAK");
+
+            var mbFail = new DrillAttempt(DrillOptions.forDrill(Drill.MOMENTUM_BREAK), -1.0, 0);
+            mbFail.observeFall(10, 0.0);
+            mbFail.shieldStun(100);
+            mbFail.observeFall(12, 0.0);
+            mbFail.playerHit(null, 2.0F);
+            mbFail.observeFall(15, 0.0);
+            mbFail.swordContact(null, null, 4.0F, 1.0F, false, true, true);
+            check(mbFail.done() && !mbFail.won(), "Auto-Hit ohne Jump-Reset scheitert in MOMENTUM_BREAK");
+
+            // 4. WEB_DUNK: Gegenfall (Web vor Crit)
+            var wd = new DrillAttempt(DrillOptions.forDrill(Drill.WEB_DUNK), -1.0, 0);
+            wd.webPlaced(BlockPos.ZERO);
+            check(!wd.done() && wd.timingHint() != null && wd.timingHint().contains("kritischen"), "Web vor Crit gibt Hinweis");
+
+            // 5. ANTI_DRAIN: Gegenfall (gedraint) & Push-Flag
+            var adFail = new DrillAttempt(DrillOptions.forDrill(Drill.ANTI_DRAIN), -1.0, 0);
+            adFail.playerWaterPlaced(BlockPos.ZERO);
+            adFail.antiDrainDrained();
+            check(adFail.done() && !adFail.won(), "Gedraintes Wasser verliert ANTI_DRAIN");
+            var adPush = new DrillAttempt(DrillOptions.forDrill(Drill.ANTI_DRAIN), -1.0, 0);
+            adPush.swordContact(null, null, 3.0F, 1.0F, false, true, true);
+            check(adPush.antiDrainPushed(), "Wegschlagen im Web wird fuer ANTI_DRAIN registriert");
+
+            // 6. HEAL_PUNISH: Positivfall (2 Crits) & Gegenfall (Bot heilt durch)
+            var hpWin = new DrillAttempt(DrillOptions.forDrill(Drill.HEAL_PUNISH), -1.0, 0);
+            hpWin.botStartedHealing();
+            hpWin.critical();
+            check(!hpWin.done() && hpWin.healPunishCrits() == 1, "Nach 1 Crit noch offen");
+            hpWin.critical();
+            check(hpWin.done() && hpWin.won(), "2 Crits gewinnen HEAL_PUNISH");
+
+            var hpFail = new DrillAttempt(DrillOptions.forDrill(Drill.HEAL_PUNISH), -1.0, 0);
+            hpFail.botStartedHealing();
+            hpFail.critical();
+            hpFail.botHealFinished();
+            check(hpFail.done() && !hpFail.won(), "Fertiger Bot-Heal bei < 2 Crits scheitert");
+
+            // 7. PCRIT_BREAK: Gegenfall (vor Bot-Hit / zu schwacher Charge) & Positivfall (Sprint-KB + Anschluss)
+            var pcFail = new DrillAttempt(DrillOptions.forDrill(Drill.PCRIT_BREAK), -1.0, 0);
+            pcFail.swordContact(null, null, 3.0F, 1.0F, false, true, true);
+            check(pcFail.done() && !pcFail.won(), "Schlag vor Bot-Treffer scheitert in PCRIT_BREAK");
+
+            var pcWin = new DrillAttempt(DrillOptions.forDrill(Drill.PCRIT_BREAK), -1.0, 0);
+            pcWin.observeFall(10, 0.0);
+            pcWin.playerHit(null, 3.0F);
+            pcWin.observeFall(14, 0.0);
+            pcWin.swordContact(null, null, 2.0F, 0.5F, false, true, true);
+            check(!pcWin.done() && pcWin.timingHint() != null, "Schwacher Hit (<85%) zaehlt nicht als Sprint-KB-Break");
+            pcWin.observeFall(18, 0.0);
+            pcWin.swordContact(null, null, 4.0F, 1.0F, false, true, true);
+            check(!pcWin.done(), "Nach Sprint-KB-Break 1/2 noch offen");
+            pcWin.observeFall(26, 0.0);
+            pcWin.swordContact(null, null, 4.0F, 1.0F, false, true, true);
+            check(pcWin.done() && pcWin.won(), "Sprint-KB-Break + Anschluss gewinnt PCRIT_BREAK");
+
+            // 8. Neue Optionen & Presets fuer alle 6 Swight-Drills
+            var swOpts = DrillOptions.forDrill(Drill.STUN_WEB)
+                .withIndex(DrillOptions.Field.RANDOM_BLOCK_POS, 1)
+                .withIndex(DrillOptions.Field.BOT_AUTO_HIT, 1);
+            check(swOpts.randomBlockPos() && swOpts.botAutoHit(), "STUN_WEB neue Optionen aktivierbar");
+            check(DrillOptions.forDrill(Drill.HEAL).withIndex(DrillOptions.Field.CLEAN_HEAL, 1).cleanHeal(), "HEAL Sauberer Heal aktivierbar");
+            for (var preset : TrainingPreset.values()) {
+                for (var drill : List.of(Drill.SHIELD_TIMING, Drill.MOMENTUM_BREAK, Drill.WEB_DUNK, Drill.ANTI_DRAIN, Drill.HEAL_PUNISH)) {
+                    check(preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.UHC), drill) != null, drill + " Preset " + preset);
+                }
+                check(preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.SWORD), Drill.PCRIT_BREAK).options().startDistance() >= 7,
+                    "PCRIT_BREAK Preset startet bei >= 7 Bl.");
+            }
         });
     }
 

@@ -73,8 +73,10 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
 
    private static boolean requiresStunWindow(Drill var0) {
       return var0 == Drill.STUN_SLAM
+         || var0 == Drill.ELY_STUN_SLAM
          || var0 == Drill.WIND_STUN_SLAM
          || var0 == Drill.STUN_WEB
+         || var0 == Drill.MOMENTUM_BREAK
          || var0 == Drill.CORNER_WEB_DTAP
          || var0 == Drill.SHIELD_TRIPLE_TAP;
    }
@@ -94,10 +96,10 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
          case REPLACE, HINTS, WIND_CENTER -> 1;
          case DURABILITY -> var0 == Drill.SHIELD_DRAIN ? 2 : 0;
          case DISTANCE -> switch (var0) {
-            case HEAL, JUMP_RESET, HIT_SELECT -> 4;
+            case HEAL, JUMP_RESET, HIT_SELECT, UPPERCUT, PCRIT_BREAK -> 4;
             case MACE_COUNTER_DTAP -> 3;
-            case HEAD_WEB, OBI_TRAP, CORNER_OBI_TRAP, CORNER_WEB_DTAP -> 1;
-            case ELYTRA_SMASH, PERFECT_WIND_CHARGE -> 5;
+            case HEAD_WEB, OBI_TRAP, CORNER_OBI_TRAP, CORNER_WEB_DTAP, SELF_WEB_CRYSTAL, ANTI_DRAIN -> 1;
+            case ELYTRA_SMASH, ELY_STUN_SLAM, PERFECT_WIND_CHARGE -> 5;
             default -> 2;
          };
          case REACTION -> var0 == Drill.RETOTEM ? 1 : 2;
@@ -144,7 +146,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       }
 
       int var2 = var1 == DrillOptions.Field.HEIGHT_OFFSET ? this.heightOffset() : this.number(var1);
-      if (var1 == Field.START_HEIGHT && drill == Drill.ELYTRA_SMASH && var2 == 0) return "Auto (" + DEFAULT_FLIGHT_HEIGHT + " Bl.)";
+      if (var1 == Field.START_HEIGHT && (drill == Drill.ELYTRA_SMASH || drill == Drill.ELY_STUN_SLAM) && var2 == 0) return "Auto (" + DEFAULT_FLIGHT_HEIGHT + " Bl.)";
       if (var1 == Field.SHIELD_BREAK_TICKS && drill == Drill.WIND_STUN_SLAM && var2 < 0) return "Standard (8 Ticks)";
 
       return switch (var1) {
@@ -233,8 +235,32 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       return index(Field.ARENA_SIZE) == 1;
    }
 
+   public ArenaDifficulty arenaDifficulty() {
+      return ArenaDifficulty.values()[index(Field.ARENA_DIFFICULTY)];
+   }
+
+   public ZeroDamage zeroDamage() {
+      return ZeroDamage.values()[index(Field.ZERO_DAMAGE)];
+   }
+
    public boolean botJump() {
       return drill == Drill.STUN_WEB && index(Field.BOT_JUMP) == 1;
+   }
+
+   public boolean randomBlockPos() {
+      return drill == Drill.STUN_WEB && index(Field.RANDOM_BLOCK_POS) == 1;
+   }
+
+   public boolean botAutoHit() {
+      return drill == Drill.MOMENTUM_BREAK || (drill == Drill.STUN_WEB && index(Field.BOT_AUTO_HIT) == 1);
+   }
+
+   public boolean cleanHeal() {
+      return drill == Drill.HEAL && index(Field.CLEAN_HEAL) == 1;
+   }
+
+   public DunkType dunkType() {
+      return DunkType.values()[index(Field.DUNK_TYPE)];
    }
 
    public DrillOptions.SlamScene slamScene() {
@@ -249,6 +275,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       return this.drill == Drill.SMASH
          || this.drill == Drill.PEARL_CATCH
          || this.drill == Drill.ELYTRA_SMASH
+         || this.drill == Drill.ELY_STUN_SLAM
          || this.drill == Drill.WIND_CHAIN
          || this.drill == Drill.BACKSTAB;
    }
@@ -364,7 +391,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       } else {
          if (!Field.START_HEIGHT.visible(this)) return 0;
          int configured = number(Field.START_HEIGHT);
-         return drill == Drill.ELYTRA_SMASH && configured == 0 ? DEFAULT_FLIGHT_HEIGHT : configured;
+         return (drill == Drill.ELYTRA_SMASH || drill == Drill.ELY_STUN_SLAM) && configured == 0 ? DEFAULT_FLIGHT_HEIGHT : configured;
       }
    }
 
@@ -427,7 +454,13 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       WIND_FLIGHT("Bot-Aufstieg", "Nur Wind Charge", "Wind Charge + Pearl Catch", "Nur Pearl Catch"),
       PEARL_CATCH_ONLY("Nur Pearl-Catches", "Aus", "Ein"),
       ARENA_SIZE("Arena", "Standard", "Groß"),
-      BOT_JUMP("Dauerhaft springen", "Aus", "Ein");
+      BOT_JUMP("Dauerhaft springen", "Aus", "Ein"),
+      ARENA_DIFFICULTY("Arena-Schwierigkeit", "Schwer", "Von Welt", "Normal", "Leicht"),
+      ZERO_DAMAGE("Zero-Damage-Modus", "Aus", "Nur Spieler", "Beide"),
+      RANDOM_BLOCK_POS("Blockposition", "Mitte", "Zufällig"),
+      BOT_AUTO_HIT("Bot Auto-Hit", "Aus", "Ein"),
+      CLEAN_HEAL("Sauberer Heal", "Aus", "Ein"),
+      DUNK_TYPE("Secondary-Typ", "Cobweb", "Lava", "Web + Lava");
 
       private final String label;
       private final String[] names;
@@ -511,7 +544,9 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
                && !var1.drill().needsShield()
                && !var1.drill().totemDefense();
             case WIND_CENTER, WIND_FLIGHT -> var1.drill() == Drill.WIND_STUN_SLAM;
-            case BOT_JUMP -> var1.drill() == Drill.STUN_WEB;
+            case BOT_JUMP, RANDOM_BLOCK_POS, BOT_AUTO_HIT -> var1.drill() == Drill.STUN_WEB;
+            case CLEAN_HEAL -> var1.drill() == Drill.HEAL;
+            case DUNK_TYPE -> var1.drill() == Drill.WEB_DUNK;
             case HINTS -> false;
             case REPLACE -> var1.holdShield();
             case DURABILITY -> var1.holdShield();
@@ -521,6 +556,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
                || var1.drill() == Drill.D_TAP
                || var1.drill() == Drill.TRIPLE_TAP
                || var1.drill() == Drill.SHIELD_TRIPLE_TAP
+               || var1.drill() == Drill.SELF_WEB_CRYSTAL
                || var1.drill() == Drill.LEDGE_DASH
                || var1.drill() == Drill.TAP_ANCHOR
                || var1.drill() == Drill.MACE_COUNTER_DTAP
@@ -533,6 +569,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
                || var1.drill() == Drill.D_TAP
                || var1.drill() == Drill.TRIPLE_TAP
                || var1.drill() == Drill.SHIELD_TRIPLE_TAP
+               || var1.drill() == Drill.SELF_WEB_CRYSTAL
                || var1.drill() == Drill.SAFE_ANCHOR
                || var1.drill() == Drill.TAP_ANCHOR
                || var1.drill() == Drill.DOUBLE_ANCHOR;
@@ -572,5 +609,35 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       OFF,
       RESERVE,
       UNLIMITED;
+   }
+
+   public enum ArenaDifficulty {
+      HARD,
+      WORLD,
+      NORMAL,
+      EASY;
+
+      public net.minecraft.world.Difficulty resolve(net.minecraft.world.Difficulty worldDifficulty, boolean inArena) {
+         return switch (this) {
+            case HARD -> net.minecraft.world.Difficulty.HARD;
+            case NORMAL -> net.minecraft.world.Difficulty.NORMAL;
+            case EASY -> net.minecraft.world.Difficulty.EASY;
+            case WORLD -> worldDifficulty == net.minecraft.world.Difficulty.PEACEFUL && inArena
+               ? net.minecraft.world.Difficulty.NORMAL
+               : (worldDifficulty == null ? net.minecraft.world.Difficulty.HARD : worldDifficulty);
+         };
+      }
+   }
+
+   public enum ZeroDamage {
+      OFF,
+      PLAYER_ONLY,
+      BOTH;
+   }
+
+   public enum DunkType {
+      WEB,
+      LAVA,
+      WEB_LAVA;
    }
 }

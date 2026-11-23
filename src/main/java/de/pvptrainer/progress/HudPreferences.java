@@ -13,6 +13,8 @@ public final class HudPreferences {
     private static final Path FILE = resolveFile();
     private static volatile boolean showHints = true;
     private static volatile boolean checkUpdates = true;
+    private static volatile boolean showBotHealth = true;
+    private static volatile boolean showReachIndicator = true;
     private static volatile String updateFeedUrl = "";
 
     static {
@@ -36,6 +38,14 @@ public final class HudPreferences {
         return checkUpdates;
     }
 
+    public static boolean botHealth() {
+        return showBotHealth;
+    }
+
+    public static boolean reachIndicator() {
+        return showReachIndicator;
+    }
+
     public static String updateFeedUrl() {
         return updateFeedUrl;
     }
@@ -43,6 +53,8 @@ public final class HudPreferences {
     static synchronized void load(Path path) {
         showHints = true;
         checkUpdates = true;
+        showBotHealth = true;
+        showReachIndicator = true;
         updateFeedUrl = "";
         if (path == null || !Files.isRegularFile(path)) {
             return;
@@ -52,6 +64,8 @@ public final class HudPreferences {
             values.load(reader);
             showHints = !"false".equalsIgnoreCase(values.getProperty("showHints", values.getProperty("showResultToasts")));
             checkUpdates = !"false".equalsIgnoreCase(values.getProperty("checkUpdates"));
+            showBotHealth = !"false".equalsIgnoreCase(values.getProperty("showBotHealth"));
+            showReachIndicator = !"false".equalsIgnoreCase(values.getProperty("showReachIndicator"));
             updateFeedUrl = values.getProperty("updateFeedUrl", "").trim();
         } catch (IOException | IllegalArgumentException error) {
             LoggerFactory.getLogger("pvptrainer").warn("HUD-Einstellungen konnten nicht gelesen werden", error);
@@ -60,25 +74,45 @@ public final class HudPreferences {
 
     public static synchronized void toggleHints() {
         boolean nextHints = !showHints;
-        if (persist(FILE, nextHints, checkUpdates, updateFeedUrl)) {
+        if (persist(FILE, nextHints, checkUpdates, showBotHealth, showReachIndicator, updateFeedUrl)) {
             showHints = nextHints;
         }
     }
 
     public static synchronized void toggleUpdateCheck() {
         boolean nextUpdates = !checkUpdates;
-        if (persist(FILE, showHints, nextUpdates, updateFeedUrl)) {
+        if (persist(FILE, showHints, nextUpdates, showBotHealth, showReachIndicator, updateFeedUrl)) {
             checkUpdates = nextUpdates;
         }
     }
 
+    public static synchronized void toggleBotHealth() {
+        boolean nextBotHealth = !showBotHealth;
+        if (persist(FILE, showHints, checkUpdates, nextBotHealth, showReachIndicator, updateFeedUrl)) {
+            showBotHealth = nextBotHealth;
+        }
+    }
+
+    public static synchronized void toggleReachIndicator() {
+        boolean nextReach = !showReachIndicator;
+        if (persist(FILE, showHints, checkUpdates, showBotHealth, nextReach, updateFeedUrl)) {
+            showReachIndicator = nextReach;
+        }
+    }
+
     static boolean persist(Path path, boolean hints, boolean updates, String feedUrl) {
+        return persist(path, hints, updates, showBotHealth, showReachIndicator, feedUrl);
+    }
+
+    static boolean persist(Path path, boolean hints, boolean updates, boolean botHealth, boolean reachIndicator, String feedUrl) {
         if (path == null) {
             return true;
         }
         var values = new Properties();
         values.setProperty("showHints", Boolean.toString(hints));
         values.setProperty("checkUpdates", Boolean.toString(updates));
+        values.setProperty("showBotHealth", Boolean.toString(botHealth));
+        values.setProperty("showReachIndicator", Boolean.toString(reachIndicator));
         if (feedUrl != null && !feedUrl.isBlank()) {
             values.setProperty("updateFeedUrl", feedUrl.trim());
         }

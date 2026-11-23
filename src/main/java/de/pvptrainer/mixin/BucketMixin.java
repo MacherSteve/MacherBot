@@ -28,8 +28,12 @@ abstract class BucketMixin {
    )
    private boolean pvptrainer$lava(Level var1, BlockPos var2, BlockState var3, int var4, Operation<Boolean> var5, LivingEntity var6) {
       boolean var7 = (Boolean)var5.call(new Object[]{var1, var2, var3, var4});
-      if (var7 && var3.is(Blocks.LAVA) && var6 instanceof ServerPlayer var8) {
-         ArenaSignals.lava(var8, var2);
+      if (var7 && var6 instanceof ServerPlayer var8) {
+         if (var3.is(Blocks.LAVA)) {
+            ArenaSignals.lava(var8, var2);
+         } else if (var3.is(Blocks.WATER)) {
+            ArenaSignals.waterPlaced(var8, var2);
+         }
       }
 
       return var7;

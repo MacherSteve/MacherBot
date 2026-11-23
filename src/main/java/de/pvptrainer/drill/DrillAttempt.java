@@ -77,6 +77,28 @@ public final class DrillAttempt {
     private boolean cornerShieldBroken;
     private int cornerCrystalPops;
     private int lastCornerCrystalAt = NEVER;
+    private boolean selfWebbed;
+    private int selfWebPops;
+    private int lastSelfWebPopAt = NEVER;
+    private boolean hadGlide;
+    private int pendingSlamLaunchAt = NEVER;
+    private double pendingSlamStartY;
+    private int pendingSlamAxeGap;
+    private int lastPlayerShieldBlock = NEVER;
+    private boolean pendingShieldReset;
+    private int shieldCounters;
+    private int autoHitLandedAt = NEVER;
+    private int momentumResetAt = NEVER;
+    private int dunkCritAt = NEVER;
+    private boolean dunkWebCaught;
+    private boolean dunkLavaCaught;
+    private int antiDrainPushedAt = NEVER;
+    private int playerWaterAt = NEVER;
+    private BlockPos playerWaterPos;
+    private int healPunishCrits;
+    private boolean botHealing;
+    private int pcritBreakFirst = NEVER;
+    private boolean critThisTick;
 
     public DrillAttempt(DrillOptions options, double control, int variant) {
         this.options = options;
@@ -163,7 +185,7 @@ public final class DrillAttempt {
 
     public void finish(boolean success, String reason) {
         if (!done) {
-            if (!success && lastTimingFault == null && drill == Drill.STUN_SLAM && !reason.contains("Mace") && !reason.contains("Axt")) {
+            if (!success && lastTimingFault == null && (drill == Drill.STUN_SLAM || drill == Drill.ELY_STUN_SLAM) && !reason.contains("Mace") && !reason.contains("Axt")) {
                 reason = reason + " · " + slam.slamFailure();
             }
             if (!success && lastTimingFault != null && !reason.contains(lastTimingFault)) {
@@ -182,6 +204,9 @@ public final class DrillAttempt {
 
     public void tick(int currentTick, ServerPlayer owner, LivingEntity bot) {
         this.tick = currentTick;
+        if (done) return;
+
+        settleStunSlamLaunch(currentTick, owner);
         if (done) return;
 
         slam.observeFall(currentTick, owner.fallDistance);
@@ -213,6 +238,21 @@ public final class DrillAttempt {
                 return;
             }
         }
+        if (drill == Drill.SELF_WEB_CRYSTAL) {
+            if (!selfWebbed && inWeb(bot)) {
+                selfWebbed = true;
+                clearTimingFault();
+                step("Bot steht im Cobweb · 2 Boden-Crystal-Pops landen");
+            }
+            if (selfWebPops > 0 && tick - lastSelfWebPopAt > options.windowTicks()) {
+                finish(false, "Boden-Crystal 2 zu spät (" + (tick - lastSelfWebPopAt) + " Ticks, Fenster bis " + options.windowTicks() + ")");
+                return;
+            }
+            if (selfWebPops > 0 && !inWeb(bot)) {
+                finish(false, "Der Bot hat das Cobweb vor dem zweiten Pop verlassen.");
+                return;
+            }
+        }
 
         if (firstSmash != NEVER && owner.getDeltaMovement().y > 0.1) {
             burstLifted = true;
@@ -241,6 +281,9 @@ public final class DrillAttempt {
             }
             hadAir = false;
             firstSmash = caught = flightEnded = launched = NEVER;
+            if (pendingSlamLaunchAt == NEVER) {
+                hadGlide = false;
+            }
         }
 
         if (displacementAt != NEVER && tick - displacementAt >= 4) {
@@ -280,18 +323,42 @@ public final class DrillAttempt {
         if (drill == Drill.RE_LAVA) {
             uhc.tickReLava(this, tick, bot);
         }
+        if (drill == Drill.MOMENTUM_BREAK) {
+            if (autoHitLandedAt != NEVER && momentumResetAt == NEVER && tick - autoHitLandedAt > 4) {
+                finish(false, "Auto-Hit ohne Jump-Reset genommen · beim Auto-Hit springen");
+                return;
+            }
+            if (slam.axeStunAt() != NEVER && !slam.shieldWindowOpen(tick)) {
+                finish(false, "Schildfenster abgelaufen · schneller aufs Schwert wechseln");
+                return;
+            }
+        }
+        if (drill == Drill.WEB_DUNK && dunkCritAt != NEVER) {
+            tickWebDunk(bot);
+            if (done) return;
+        }
+        if (drill == Drill.ANTI_DRAIN) {
+            if (playerWaterAt != NEVER && !inWeb(owner)) {
+                if (antiDrainPushedAt != NEVER) {
+                    finish(true, "Anti-Drain gelungen · Bot weggeschlagen & sicher aus dem Cobweb entkommen");
+                } else {
+                    finish(true, "Anti-Drain gelungen · sicher außer Reichweite gewatert & entkommen");
+                }
+                return;
+            }
+        }
         if (drill == Drill.DOUBLE_HAND) {
             defense.tickDoubleHand(this, tick, owner);
         }
 
         if (drill.series() && !drill.centeredMaceDrill() && drill != Drill.PERFECT_WIND_CHARGE
-            && drill != Drill.RETOTEM && drill != Drill.STUN_SLAM && tick >= 1200) {
+            && drill != Drill.RETOTEM && drill != Drill.STUN_SLAM && drill != Drill.ELY_STUN_SLAM && tick >= 1200) {
             finish(false, "Zeit abgelaufen");
         }
     }
 
     private void tickSwordCrystalSequence(LivingEntity bot) {
-        if (bot.onGround() && (drill.requiresAirPopChain() && airborneTarget || !(bot.getDeltaMovement().y > 0.05))) {
+        if (bot.onGround() && !(bot.getDeltaMovement().y > 0.05)) {
             if (airborneTarget && !openingLanded) {
                 openingLanded = true;
                 if (drill.requiresAirPopChain()) {
@@ -312,7 +379,11 @@ public final class DrillAttempt {
         }
 
         int elapsed = tick - (crystalHits == 0 ? swordAt : lastCrystal);
-        int maxWindow = crystalHits == 0 ? (drill == Drill.HIT_CRYSTAL ? 10 : 9) : options.windowTicks();
+        int maxWindow = crystalHits == 0
+            ? (drill == Drill.D_TAP || drill == Drill.TRIPLE_TAP
+                ? Math.max(14, options.windowTicks())
+                : (drill == Drill.HIT_CRYSTAL ? 10 : 12))
+            : options.windowTicks();
         if (elapsed > maxWindow && !done) {
             String nextStep = needsAirSword()
                 ? (drill == Drill.SHIELD_TRIPLE_TAP ? "Axt-Schildbruch" : "Nahkampftreffer 2")
@@ -393,10 +464,18 @@ public final class DrillAttempt {
     }
 
     public void lavaPlaced(BlockPos pos) {
+        if (drill == Drill.WEB_DUNK && dunkCritAt == NEVER) {
+            timingFault("Zuerst einen kritischen Treffer landen");
+            return;
+        }
         uhc.lavaPlaced(this, drill, tick, pos);
     }
 
     public void webPlaced(BlockPos pos) {
+        if (drill == Drill.WEB_DUNK && dunkCritAt == NEVER) {
+            timingFault("Zuerst einen kritischen Treffer landen");
+            return;
+        }
         uhc.webPlaced(this, drill, tick, slam.stunUntil(), pos);
     }
 
@@ -473,14 +552,20 @@ public final class DrillAttempt {
 
     public void jump() {
         jumpAt = tick;
-        if (drill == Drill.JUMP_RESET || drill == Drill.PUNISH_CRIT) {
+        if (drill == Drill.JUMP_RESET || drill == Drill.PUNISH_CRIT || drill == Drill.MOMENTUM_BREAK) {
             event("Eigener Sprung");
+        }
+        if (drill == Drill.MOMENTUM_BREAK && autoHitLandedAt != NEVER && Math.abs(tick - autoHitLandedAt) <= 2 && momentumResetAt == NEVER) {
+            momentumResetAt = tick;
+            clearTimingFault();
+            step("Jump-Reset auf Auto-Hit · jetzt Schwert-Anschluss landen!");
         }
     }
 
     public void glideStarted() {
-        if (drill == Drill.ELYTRA_SMASH && !done) {
+        if ((drill == Drill.ELYTRA_SMASH || drill == Drill.ELY_STUN_SLAM) && !done) {
             wasGliding = true;
+            hadGlide = true;
             flightEnded = NEVER;
             swappedArmor = false;
             hadAir = true;
@@ -506,20 +591,145 @@ public final class DrillAttempt {
     public void playerHit(ServerPlayer owner, float damage) {
         damageOnOwner += damage;
         event("Gegentreffer " + decimal(damage) + " LP");
+        if (drill == Drill.HEAL && options.cleanHeal() && owner != null && owner.isUsingItem() && UhcUtilityTracker.heals(owner.getUseItem())) {
+            finish(false, "Treffer während des Essens · erst Abstand schaffen (Sauberer Heal)");
+            return;
+        }
         if (drill == Drill.SPACING) {
             finish(false, "Bot landete den Gegentreffer");
         }
         if (drill == Drill.HIT_SELECT && swordHits > 0) {
             finish(false, "Gegentreffer vor dem Anschluss");
         }
+        if (drill == Drill.PCRIT_BREAK && pcritBreakFirst != NEVER) {
+            finish(false, "Gegentreffer vor dem Anschluss nach Sprint-KB-Break");
+        }
+        if (drill == Drill.SHIELD_TIMING) {
+            pendingShieldReset = true;
+            lastPlayerShieldBlock = NEVER;
+            step("Zwischentreffer kassiert · erst Schild halten bis der Bot dein Schild trifft");
+        }
+        if (drill == Drill.MOMENTUM_BREAK && slam.axeStunAt() != NEVER && autoHitLandedAt == NEVER) {
+            autoHitLandedAt = tick;
+            if (Math.abs(jumpAt - tick) <= 2) {
+                momentumResetAt = tick;
+                clearTimingFault();
+                step("Jump-Reset auf Auto-Hit · jetzt Schwert-Anschluss landen!");
+            } else {
+                step("Bot Auto-Hit · jetzt Jump-Reset & Schwert!");
+            }
+        }
         if (drill != Drill.JUMP_RESET || ownerKnockback == null) {
             lastOwnerHit = tick;
-            ownerKnockback = owner.position();
+            ownerKnockback = owner == null ? Vec3.ZERO : owner.position();
+        }
+    }
+
+    public void playerShieldBlocked() {
+        if (done || drill != Drill.SHIELD_TIMING) return;
+        lastPlayerShieldBlock = tick;
+        pendingShieldReset = false;
+        clearTimingFault();
+        if (swordAt != NEVER && tick - swordAt <= 4) {
+            step("Insta-Shield nach " + (tick - swordAt) + " Ticks · jetzt kontern!");
+        } else {
+            step("Schildblock sauber · jetzt kontern!");
+        }
+    }
+
+    public void axeNotAllowedInShieldTiming() {
+        if (!done && drill == Drill.SHIELD_TIMING) {
+            timingFault("Nur Schwert & Schild – ohne Axt üben!");
+        }
+    }
+
+    public void playerWaterPlaced(BlockPos pos) {
+        if (done) return;
+        playerWaterAt = tick;
+        playerWaterPos = pos == null ? null : pos.immutable();
+        event("Spieler setzt Wasser");
+    }
+
+    public BlockPos playerWaterPos() {
+        return playerWaterPos;
+    }
+
+    public int playerWaterAt() {
+        return playerWaterAt;
+    }
+
+    public boolean antiDrainPushed() {
+        return antiDrainPushedAt != NEVER;
+    }
+
+    public void antiDrainDrained() {
+        if (!done && drill == Drill.ANTI_DRAIN) {
+            finish(false, "Wasser vom Bot gedraint · im Cobweb erst wegschlagen, dann 180° hinter dir watern!");
+        }
+    }
+
+    public void botStartedHealing() {
+        if (!done && drill == Drill.HEAL_PUNISH && !botHealing) {
+            botHealing = true;
+            step("Bot isst Goldapfel · mit 2 Crits bestrafen!");
+        }
+    }
+
+    public void botHealFinished() {
+        if (!done && drill == Drill.HEAL_PUNISH) {
+            finish(false, "Bot hat ungestört gegappt (" + healPunishCrits + "/2 Crits) · aggressiver bestrafen");
+        }
+    }
+
+    public int healPunishCrits() {
+        return healPunishCrits;
+    }
+
+    private void tickWebDunk(LivingEntity bot) {
+        if (tick - dunkCritAt > options.windowTicks()) {
+            finish(false, "Dunk-Fenster nach Crit abgelaufen (" + options.windowTicks() + " Ticks)");
+            return;
+        }
+        boolean webCaught = uhc.lastWebAt() >= dunkCritAt && bot != null && inWeb(bot);
+        boolean lavaCaught = uhc.lastLavaAt() >= dunkCritAt && bot != null && UhcUtilityTracker.touchesLava(bot);
+        if (webCaught) dunkWebCaught = true;
+        if (lavaCaught) dunkLavaCaught = true;
+        switch (options.dunkType()) {
+            case WEB -> {
+                if (dunkWebCaught) finish(true, "Web Dunk nach Crit gelungen (" + (tick - dunkCritAt) + " Ticks)");
+            }
+            case LAVA -> {
+                if (dunkLavaCaught) finish(true, "Lava Dunk nach Crit gelungen (" + (tick - dunkCritAt) + " Ticks)");
+            }
+            case WEB_LAVA -> {
+                if (dunkWebCaught && dunkLavaCaught) {
+                    finish(true, "Web + Lava Dunk gelungen (" + (tick - dunkCritAt) + " Ticks)");
+                } else if (dunkWebCaught) {
+                    step("Bot im Cobweb · jetzt Lava darüber setzen!");
+                }
+            }
         }
     }
 
     public boolean needsAirSword() {
-        return (drill == Drill.TRIPLE_TAP || drill == Drill.SHIELD_TRIPLE_TAP) && crystalHits == 1 && airSwordAt == NEVER;
+        return drill == Drill.SHIELD_TRIPLE_TAP && crystalHits == 1 && airSwordAt == NEVER;
+    }
+
+    public boolean acceptsAirComboTap() {
+        return (drill == Drill.D_TAP || drill == Drill.TRIPLE_TAP || drill == Drill.SHIELD_TRIPLE_TAP || drill == Drill.MACE_COUNTER_DTAP)
+            && crystalHits > 0 && !openingLanded;
+    }
+
+    public void confirmSelfWeb() {
+        if (drill == Drill.SELF_WEB_CRYSTAL && !selfWebbed) {
+            selfWebbed = true;
+            clearTimingFault();
+            step("Bot hat sich eingewebt · 2 Boden-Crystal-Pops landen");
+        }
+    }
+
+    public boolean isSelfWebbed() {
+        return selfWebbed;
     }
 
     public boolean maceCounterBlocked() {
@@ -571,27 +781,24 @@ public final class DrillAttempt {
             timingFault("Zuerst den Mace-Smash mit dem Schild blocken");
             return;
         }
-        if (drill.requiresAirPopChain() && swordAt != NEVER && airborneTarget && bot.onGround()) {
+        if (drill.requiresAirPopChain() && swordAt != NEVER && airborneTarget && bot != null && bot.onGround() && !(bot.getDeltaMovement().y > 0.05)) {
             finish(false, "Der Bot ist vor dem letzten Pop gelandet.");
             return;
         }
         if (needsAirSword()) {
-            if (drill == Drill.SHIELD_TRIPLE_TAP) {
-                timingFault("Schild nach Pop aktiv · in der Luft mit der Axt brechen");
-                return;
-            }
-            if (airborne && recent(lastCrystal) && !openingLanded) {
-                airSwordAt = tick;
-                airSwordStartedWindow = dealtDamage && hurtWindowOpen;
-                clearTimingFault();
-                int gap = tick - lastCrystal;
-                step("Nahkampftreffer 2 in der Luft · "
-                    + (owner.getMainHandItem().is(Items.TOTEM_OF_UNDYING) ? "Totem · " : "Schwert · ")
-                    + gap + (gap == 1 ? " Tick" : " Ticks") + " nach Kristall 1 · "
-                    + (dealtDamage ? decimal(damage) + " LP" : "Kontakt im Trefferschutz"));
-            } else {
-                timingFault("Nahkampftreffer 2 zu spät: Ziel bereits gelandet oder Kombofenster vorbei");
-            }
+            timingFault("Schild nach Pop aktiv · in der Luft mit der Axt brechen");
+            return;
+        }
+        if ((drill == Drill.D_TAP || drill == Drill.TRIPLE_TAP || drill == Drill.SHIELD_TRIPLE_TAP || drill == Drill.MACE_COUNTER_DTAP)
+            && crystalHits > 0 && airborne && recent(lastCrystal) && !openingLanded) {
+            airSwordAt = tick;
+            airSwordStartedWindow = dealtDamage && hurtWindowOpen;
+            clearTimingFault();
+            int gap = tick - lastCrystal;
+            step("Nahkampftreffer " + (crystalHits + 1) + " in der Luft · "
+                + (owner != null && owner.getMainHandItem().is(Items.TOTEM_OF_UNDYING) ? "Totem · " : "Schwert · ")
+                + gap + (gap == 1 ? " Tick" : " Ticks") + " nach Kristall " + crystalHits + " · "
+                + (dealtDamage ? decimal(damage) + " LP" : "Kontakt im Trefferschutz"));
             return;
         }
         if (!dealtDamage) {
@@ -600,8 +807,8 @@ public final class DrillAttempt {
             }
             return;
         }
-        boolean withTotem = owner.getMainHandItem().is(Items.TOTEM_OF_UNDYING);
-        if (isSwordCrystalSequence() && withTotem && (!owner.isSprinting() || charge <= 0.9F)) {
+        boolean withTotem = owner != null && owner.getMainHandItem().is(Items.TOTEM_OF_UNDYING);
+        if (isSwordCrystalSequence() && drill != Drill.D_TAP && drill != Drill.TRIPLE_TAP && withTotem && (!owner.isSprinting() || charge <= 0.9F)) {
             timingFault("Eröffnung mit Totem: ansprinten und über 90 % aufladen oder das Schwert nehmen");
             return;
         }
@@ -632,12 +839,98 @@ public final class DrillAttempt {
                 finish(true, "Konter im Rückstoß und Anschluss nach Landung");
             }
         }
+        if (drill == Drill.UPPERCUT) {
+            boolean fromLower = owner != null && bot != null && owner.getY() < bot.getY() - 0.15;
+            boolean inKnockback = lastOwnerHit != NEVER && tick - lastOwnerHit <= 12;
+            if (fromLower) {
+                finish(true, "Uppercut aus tieferer Position gelungen");
+            } else if (inKnockback) {
+                finish(true, "Uppercut-Konter im Rückstoß gelungen (" + (tick - lastOwnerHit) + " Ticks)");
+            } else if (lastOwnerHit == NEVER) {
+                finish(false, "Erst den Rückstoß annehmen oder von tieferer Position unterhalb des Bots treffen");
+            } else {
+                finish(false, "Uppercut außerhalb des Rückstoßfensters oder nicht unterhalb des Bots");
+            }
+        }
+        if (drill == Drill.SHIELD_TIMING) {
+            if (pendingShieldReset) {
+                finish(false, "Nach Zwischentreffer nicht panisch schlagen · erst Schild halten bis der Bot dein Schild trifft");
+            } else if (lastPlayerShieldBlock != NEVER && tick - lastPlayerShieldBlock <= 14) {
+                shieldCounters++;
+                lastPlayerShieldBlock = NEVER;
+                if (shieldCounters >= 3) {
+                    finish(true, "Shield Timing gelungen · 3 saubere Schild-Konter");
+                } else {
+                    step("Sauberer Schild-Konter " + shieldCounters + "/3");
+                }
+            } else {
+                step("Treffer gelandet · jetzt Schild-Timing gegen den Bot halten");
+            }
+        }
+        if (drill == Drill.MOMENTUM_BREAK) {
+            if (slam.axeStunAt() == NEVER) {
+                timingFault("Zuerst das Schild des Bots mit der Axt brechen");
+            } else if (!slam.shieldWindowOpen(tick)) {
+                finish(false, "Schildfenster abgelaufen · schneller aufs Schwert wechseln");
+            } else if (owner != null && !owner.getMainHandItem().is(net.minecraft.tags.ItemTags.SWORDS)) {
+                timingFault("Direkt nach dem Stun aufs Schwert (1) wechseln");
+            } else if (momentumResetAt != NEVER || (autoHitLandedAt != NEVER && Math.abs(jumpAt - autoHitLandedAt) <= 2)) {
+                finish(true, "Momentum Break gelungen · Axt-Stun + Jump-Reset + Schwert-Anschluss");
+            } else if (autoHitLandedAt != NEVER) {
+                finish(false, "Jump-Reset auf den Bot-Auto-Hit fehlte");
+            } else {
+                step("Schwert-Anschluss vor Auto-Hit · beim Auto-Hit Jump-Reset ausführen");
+            }
+        }
+        if (drill == Drill.ANTI_DRAIN) {
+            antiDrainPushedAt = tick;
+            clearTimingFault();
+            step("Bot weggeschlagen · jetzt 180° hinter dir watern!");
+        }
+        if (drill == Drill.PCRIT_BREAK) {
+            if (lastOwnerHit == NEVER) {
+                finish(false, "Erst den Bot-Treffer annehmen und die Serie dann brechen");
+            } else if (pcritBreakFirst == NEVER) {
+                boolean sprintKb = (owner == null || owner.isSprinting()) && charge > 0.848F;
+                if (sprintKb && tick - lastOwnerHit <= 16) {
+                    pcritBreakFirst = tick;
+                    clearTimingFault();
+                    step("Sprint-KB-Break 1/2 · jetzt Anschluss landen");
+                } else {
+                    timingFault("Kein Sprint-KB-Treffer · kurz Abstand schaffen und voll ansprinten (>85 %)");
+                }
+            } else if (tick - pcritBreakFirst <= options.windowTicks()) {
+                finish(true, "P-Crit Break gelungen · Serie per Sprint-KB gebrochen");
+            } else {
+                finish(false, "Anschluss nach Sprint-KB-Break zu spät");
+            }
+        }
     }
 
     public void critical() {
         event("Kritischer Treffer");
         if (drill == Drill.PUNISH_CRIT && recent(lastOwnerHit) && jumpAt < lastOwnerHit && swordAt == tick) {
             finish(true, "Kritischer Konter aus gegnerischem Rückstoß");
+        }
+        if (drill == Drill.WEB_DUNK && !done) {
+            dunkCritAt = tick;
+            dunkWebCaught = false;
+            dunkLavaCaught = false;
+            clearTimingFault();
+            step("Crit gelandet · jetzt " + switch (options.dunkType()) {
+                case WEB -> "Cobweb";
+                case LAVA -> "Lava";
+                case WEB_LAVA -> "Cobweb + Lava";
+            } + " platzieren!");
+        }
+        if (drill == Drill.HEAL_PUNISH && !done) {
+            healPunishCrits++;
+            clearTimingFault();
+            if (healPunishCrits >= 2) {
+                finish(true, "Heal-Punish gelungen · " + healPunishCrits + " Crits gegen den Heal");
+            } else {
+                step("Heal-Punish Crit " + healPunishCrits + "/2");
+            }
         }
     }
 
@@ -693,14 +986,58 @@ public final class DrillAttempt {
         slam.observeFall(currentTick, fallDistance);
     }
 
-    public boolean acceptStunSlam(double fallDistance, boolean targetBlocking) {
-        if (done || drill != Drill.STUN_SLAM) return false;
-        if (!targetBlocking && slam.shieldWindowOpen(tick)) {
-            event("Stun Slam · Fallstrecke " + decimal(fallDistance) + " Bl.");
-            finish(true, "Stun Slam im offenen Schildfenster · " + SlamWindowTracker.ticksText(tick - slam.axeStunAt()) + " nach der Axt");
-            return true;
+    public boolean awaitingSlamLaunch() {
+        return pendingSlamLaunchAt != NEVER && !done;
+    }
+
+    public boolean beginStunSlamLaunch(ServerPlayer owner, boolean targetBlocking) {
+        if (owner == null) return false;
+        boolean hasWindBurst = owner.getMainHandItem().getEnchantments().keySet().stream().anyMatch(e -> e.is(Enchantments.WIND_BURST));
+        return beginStunSlamLaunch(owner.fallDistance, owner.getY(), owner.onGround(), targetBlocking, hasWindBurst);
+    }
+
+    public boolean beginStunSlamLaunch(double fallDistance, double startY, boolean onGround, boolean targetBlocking, boolean hasWindBurst) {
+        if (done || (drill != Drill.STUN_SLAM && drill != Drill.ELY_STUN_SLAM)) return false;
+        if (targetBlocking || !slam.shieldWindowOpen(tick)) {
+            maceContact(fallDistance, onGround, fallDistance > 1.5);
+            return false;
         }
-        return false;
+        if (fallDistance <= 1.5) {
+            maceContact(fallDistance, onGround, false);
+            return false;
+        }
+        if (drill == Drill.ELY_STUN_SLAM && !hadGlide && !wasGliding && flightEnded == NEVER) {
+            timingFault("Ely-Stun-Slam: zuerst den Elytra-Gleitflug starten und beenden");
+            return false;
+        }
+        if (!hasWindBurst) {
+            timingFault("Voller Stun Slam braucht Wind Burst · nutze die Wind-Burst-Mace für den Auftrieb");
+            return false;
+        }
+        pendingSlamLaunchAt = tick;
+        pendingSlamStartY = startY;
+        pendingSlamAxeGap = Math.max(0, tick - slam.axeStunAt());
+        clearTimingFault();
+        event("Mace-Smash · Fallstrecke " + decimal(fallDistance) + " Bl. · prüfe Wind-Burst-Auftrieb");
+        return true;
+    }
+
+    public void settleStunSlamLaunch(int currentTick, ServerPlayer owner) {
+        if (owner == null) return;
+        settleStunSlamLaunch(currentTick, owner.getDeltaMovement().y, owner.getY());
+    }
+
+    public void settleStunSlamLaunch(int currentTick, double velocityY, double currentY) {
+        if (done || pendingSlamLaunchAt == NEVER) return;
+        this.tick = currentTick;
+        if (velocityY > 0.25 || currentY > pendingSlamStartY + 0.45) {
+            pendingSlamLaunchAt = NEVER;
+            String prefix = drill == Drill.ELY_STUN_SLAM ? "Ely-Stun-Slam" : "Stun Slam";
+            finish(true, prefix + " + Wind Burst gelungen · " + SlamWindowTracker.ticksText(pendingSlamAxeGap) + " nach der Axt");
+        } else if (currentTick - pendingSlamLaunchAt > 5) {
+            pendingSlamLaunchAt = NEVER;
+            timingFault("Kein Wind-Burst-Auftrieb · Spieler nicht wieder in die Luft katapultiert");
+        }
     }
 
     public void axeContact(boolean targetBlocking, int blockDelayRemaining) {
@@ -854,6 +1191,10 @@ public final class DrillAttempt {
             handleCornerWebCrystal(bot, hurtWindowOpen, remainingHurtTicks, poppedByThisBlast);
             return;
         }
+        if (drill == Drill.SELF_WEB_CRYSTAL) {
+            handleSelfWebCrystal(bot, origin, botPos, botDamage, hurtWindowOpen, remainingHurtTicks, poppedByThisBlast);
+            return;
+        }
         if (!isSwordCrystalSequence()) return;
         if (drill == Drill.MACE_COUNTER_DTAP) {
             if (!maceCounterBlocked) {
@@ -868,27 +1209,40 @@ public final class DrillAttempt {
             }
         }
         boolean firstCrystal = crystalHits == 0;
+        boolean relaxedPopChain = drill == Drill.D_TAP || drill == Drill.TRIPLE_TAP;
+        if (relaxedPopChain && firstCrystal && swordAt == NEVER && poppedByThisBlast) {
+            swordAt = tick;
+            airborneTarget = airborne || bot == null || !bot.onGround() || bot.getDeltaMovement().y > 0.02;
+            openingLanded = false;
+        }
         String label = "Kristall " + (crystalHits + 1);
         int gap = tick - (firstCrystal ? swordAt : lastCrystal);
+        boolean liftedByOpeningPop = firstCrystal && relaxedPopChain && poppedByThisBlast
+            && (airborne || bot == null || !bot.onGround() || bot.getDeltaMovement().y > 0.02);
+        boolean firstGapAllowed = relaxedPopChain && poppedByThisBlast
+            ? gap <= Math.max(14, options.windowTicks())
+            : (drill == Drill.HIT_CRYSTAL || drill == Drill.MACE_COUNTER_DTAP && swordAt == tick
+                ? gap <= 10
+                : gap < 10 && !hurtWindowOpen);
         if (swordAt == NEVER) {
             timingFault(label + " zu früh: Nahkampftreffer 1 fehlt");
         } else if (needsAirSword()) {
-            timingFault(drill == Drill.SHIELD_TRIPLE_TAP
-                ? "Kristall 2 zu früh: Schild nach Pop zuerst mit der Axt brechen"
-                : "Kristall 2 zu früh: Nahkampftreffer 2 in der Luft fehlt");
+            timingFault("Kristall 2 zu früh: Schild nach Pop zuerst mit der Axt brechen");
         } else if (gap > options.windowTicks()) {
             timingFault(label + " zu spät: " + gap + " Ticks seit dem letzten Treffer");
-        } else if (firstCrystal && !(drill == Drill.HIT_CRYSTAL || drill == Drill.MACE_COUNTER_DTAP && swordAt == tick ? gap <= 10 : gap < 10 && !hurtWindowOpen)) {
+        } else if (firstCrystal && !firstGapAllowed) {
             timingFault("Erster Kristall zu spät nach dem Nahkampftreffer (" + gap + " Ticks)");
-        } else if (!(airborne && !openingLanded || !firstCrystal && !options.airborneFollowups())) {
+        } else if (!(airborne && !openingLanded || liftedByOpeningPop || !firstCrystal && !options.airborneFollowups())) {
             if (drill.requiresAirPopChain()) {
                 finish(false, label + " traf nach dem Bodenkontakt.");
             } else {
                 timingFault(label + " zu spät: Ziel bereits gelandet");
             }
         } else {
-            boolean airSwordWindow = drill == Drill.TRIPLE_TAP && crystalHits == 1 && airSwordStartedWindow && tick - airSwordAt < 10;
-            if (!firstCrystal && !hurtWindowOpen && !airSwordWindow) {
+            boolean airSwordWindow = (drill == Drill.TRIPLE_TAP || drill == Drill.SHIELD_TRIPLE_TAP || drill == Drill.D_TAP)
+                && crystalHits >= 1
+                && airSwordStartedWindow && airSwordAt >= lastCrystal && tick - airSwordAt < 10;
+            if (!firstCrystal && !hurtWindowOpen && !airSwordWindow && !(relaxedPopChain && poppedByThisBlast)) {
                 String waitHint = remainingHurtTicks > 0 ? " · noch " + remainingHurtTicks + " Ticks warten" : " · Schadensfenster geschlossen";
                 timingFault(label + " zu früh nach " + gap + " Ticks" + waitHint);
             } else if (drill.requiresAirPopChain() && !poppedByThisBlast) {
@@ -904,6 +1258,9 @@ public final class DrillAttempt {
                     firstCrystalSide = side;
                     crystalHits++;
                     lastCrystal = tick;
+                    if (liftedByOpeningPop) {
+                        airborneTarget = true;
+                    }
                     if (drill == Drill.SHIELD_TRIPLE_TAP && crystalHits == 1) {
                         step("Pop 1 · Bot hebt Schild! Mit der Axt brechen");
                     } else {
@@ -915,12 +1272,63 @@ public final class DrillAttempt {
                         String doneText = switch (drill) {
                             case MACE_COUNTER_DTAP -> "Mace geblockt + D-Tap gelungen · 2 Pops";
                             case SHIELD_TRIPLE_TAP -> "Shield-Triple-Tap gelungen · 3 Pops";
+                            case D_TAP -> "D-Tap gelungen · 2 Pops";
+                            case TRIPLE_TAP -> "Triple Tap gelungen · 3 Pops";
                             default -> "Kristallfolge gelungen · " + crystalHits + " Treffer";
                         };
                         finish(true, doneText);
                     }
                 }
             }
+        }
+    }
+
+    private void handleSelfWebCrystal(
+        LivingEntity bot,
+        Vec3 origin,
+        Vec3 botPos,
+        float botDamage,
+        boolean hurtWindowOpen,
+        int remainingHurtTicks,
+        boolean poppedByThisBlast
+    ) {
+        boolean webbed = bot != null ? inWeb(bot) : selfWebbed;
+        if (webbed && !selfWebbed) {
+            selfWebbed = true;
+        }
+        if (!webbed) {
+            if (selfWebPops > 0) {
+                finish(false, "Der Bot steht nicht mehr im Cobweb.");
+            } else {
+                timingFault("Warte kurz, bis der Bot im Cobweb steht");
+            }
+            return;
+        }
+        boolean floorLevel = origin == null || botPos == null || origin.y <= botPos.y + 0.5;
+        if (!floorLevel) {
+            timingFault("Boden-Crystal nötig: Obsidian in den Boden auf Fußhöhe des Bots setzen");
+            return;
+        }
+        if (selfWebPops > 0 && !hurtWindowOpen && !poppedByThisBlast) {
+            String waitHint = remainingHurtTicks > 0 ? " · noch " + remainingHurtTicks + " Ticks warten" : " · Schadensfenster geschlossen";
+            timingFault("Boden-Crystal 2 zu früh" + waitHint);
+            return;
+        }
+        if (!poppedByThisBlast) {
+            if (selfWebPops > 0) {
+                finish(false, "Boden-Crystal 2 hat kein Bot-Totem ausgelöst.");
+            } else {
+                step("Boden-Crystal traf (" + decimal(botDamage) + " LP) · Pop 1 noch offen");
+            }
+            return;
+        }
+        selfWebPops++;
+        lastSelfWebPopAt = tick;
+        clearTimingFault();
+        if (selfWebPops >= 2) {
+            finish(true, "Self-Web Boden-Crystal gelungen · 2 Pops");
+        } else {
+            step("Boden-Crystal Pop 1/2 · Zweiten Pop landen");
         }
     }
 
