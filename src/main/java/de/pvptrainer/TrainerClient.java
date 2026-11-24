@@ -13,12 +13,12 @@ import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.TrainingStatus;
 
+import de.pvptrainer.compat.McCompat;
 import com.mojang.logging.LogUtils;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.ServerStarted;
@@ -46,8 +46,8 @@ public final class TrainerClient implements ClientModInitializer {
    public void onInitializeClient() {
       profiles = new TrainingProfiles(FabricLoader.getInstance().getConfigDir().resolve("pvptrainer.json"));
       Category var1 = Category.register(Identifier.fromNamespaceAndPath("pvptrainer", "training"));
-      KeyMapping var2 = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.pvptrainer.menu", 75, var1));
-      restartKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.pvptrainer.restart", 74, var1));
+      KeyMapping var2 = McCompat.registerKeyMapping(new KeyMapping("key.pvptrainer.menu", 75, var1));
+      restartKey = McCompat.registerKeyMapping(new KeyMapping("key.pvptrainer.restart", 74, var1));
       TrainingInventoryHint.register();
       ReadyGate.register();
       TrainingKit.register();
@@ -93,15 +93,15 @@ public final class TrainerClient implements ClientModInitializer {
          }
 
          while (restartKey.consumeClick()) {
-            if (var1x.player != null && var1x.gui.screen() == null) {
+            if (var1x.player != null && McCompat.screen(var1x) == null) {
                restart();
             }
          }
 
          while (var2.consumeClick()) {
-            if (var1x.player != null && var1x.gui.screen() == null) {
+            if (var1x.player != null && McCompat.screen(var1x) == null) {
                feedback = "";
-               var1x.gui.setScreen(new TrainingScreen());
+               McCompat.setScreen(var1x, new TrainingScreen());
             }
          }
       });
@@ -193,7 +193,7 @@ public final class TrainerClient implements ClientModInitializer {
          feedback = "";
          pending.set(new TrainerClient.RoundRequest(var4, var3.player.getUUID(), var0, var1, var2));
          Screen var6;
-         if ((var6 = var3.gui.screen()) instanceof TrainingScreen) {
+         if ((var6 = McCompat.screen(var3)) instanceof TrainingScreen) {
             TrainingScreen var5 = (TrainingScreen)var6;
             var5.onClose();
          }

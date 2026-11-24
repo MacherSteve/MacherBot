@@ -64,11 +64,32 @@ public final class CobwebFlightTracker {
         DrillOptions options,
         Runnable finishLanding
     ) {
-        boolean supported = grounded && feetSupported(owner);
+        observeGroundState(
+            grounded && feetSupported(owner),
+            owner.getY(),
+            owner.fallDistance,
+            owner.getMainHandItem().is(Items.MACE),
+            roundTick,
+            options,
+            finishLanding
+        );
+    }
+
+    public void observeGroundState(
+        boolean supported,
+        double playerY,
+        double fallDistance,
+        boolean holdingMace,
+        int roundTick,
+        DrillOptions options,
+        Runnable finishLanding
+    ) {
         int settle = settleTicks(options.playerPing(), options.tickRate());
         if (landingTick >= 0) {
-            // A near-floor smash can send a ground packet before the Wind Burst motion arrives.
-            if (!supported && chainActive && lastSmashTick >= landingTick - settle && owner.getY() > landingY + 0.02) {
+            // A near-floor smash or wind-charge launch can send a stale ground packet before the upward motion arrives.
+            boolean recentBoost = (chainActive && lastSmashTick >= landingTick - settle)
+                || (windPrimed && launchTick >= landingTick - settle);
+            if (!supported && recentBoost && playerY > landingY + 0.02) {
                 landingTick = -1;
             } else if (roundTick - landingTick >= settle) {
                 finishLanding.run();
@@ -76,13 +97,13 @@ public final class CobwebFlightTracker {
         }
         if (!supported) {
             if (windPrimed) windAirborne = true;
-            if (windAirborne || owner.fallDistance > 1.5 && owner.getMainHandItem().is(Items.MACE)) {
+            if (windAirborne || fallDistance > 1.5 && holdingMace) {
                 flightAttempted = true;
             }
         } else if (landingTick < 0 && (flightAttempted || flightJudged
             || windPrimed && (windAirborne || roundTick - launchTick > 8))) {
             landingTick = roundTick;
-            landingY = owner.getY();
+            landingY = playerY;
         }
     }
 

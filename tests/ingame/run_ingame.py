@@ -1,7 +1,8 @@
-"""Zentraler In-Game-Teststarter fuer MacherBot (Minecraft 26.2 + Fabric).
+"""Zentraler In-Game-Teststarter fuer MacherBot (Minecraft 26.2 & 1.21.11 + Fabric).
 
 Beispiele:
     python Entwicklung/Trainer/tests/ingame/run_ingame.py --suite smoke --profile isolated
+    python Entwicklung/Trainer/tests/ingame/run_ingame.py --mc 1.21.11 --suite all
     python Entwicklung/Trainer/tests/ingame/run_ingame.py --suite all --profile modpack
     python Entwicklung/Trainer/tests/ingame/run_ingame.py --suite cobweb --jar Versionen/1.11.6/MacherBot-1.11.6+26.2.jar --expect-fail
 """
@@ -46,19 +47,26 @@ def find_norisk_root(explicit: Path | None) -> Path:
     raise FileNotFoundError("NoRiskClientV3-Ordner nicht gefunden. Setze NORISK_ROOT oder --norisk-root.")
 
 
-def find_world_template(norisk_root: Path, explicit: Path | None) -> Path:
+def find_world_template(norisk_root: Path, explicit: Path | None, mc_version: str = "26.2") -> Path:
     if explicit:
         return explicit
     env = os.environ.get("MACHER_TEST_WORLD")
     if env:
         return Path(env)
-    for candidate in (
-        norisk_root / "data" / "profiles" / "MACHER(1)" / "saves" / "New World (10)",
-        TRAINER_ROOT.parents[1] / "Privat" / "Profil" / "saves" / "New World (10)",
-    ):
+    if mc_version == "1.21.11":
+        candidates = (
+            norisk_root / "data" / "profiles" / "FABRIC 1.21.11" / "saves" / "New World",
+            norisk_root / "data" / "profiles" / "FABRIC 1.21.11" / "saves" / "New World (1)",
+        )
+    else:
+        candidates = (
+            norisk_root / "data" / "profiles" / "MACHER(1)" / "saves" / "New World (10)",
+            TRAINER_ROOT.parents[1] / "Privat" / "Profil" / "saves" / "New World (10)",
+        )
+    for candidate in candidates:
         if (candidate / "level.dat").is_file():
             return candidate
-    raise FileNotFoundError("Keine Testwelt mit level.dat gefunden. Setze MACHER_TEST_WORLD oder --world.")
+    raise FileNotFoundError(f"Keine Testwelt mit level.dat fuer MC {mc_version} gefunden. Setze MACHER_TEST_WORLD oder --world.")
 
 
 def allowed_windows(lib: dict) -> bool:
@@ -72,30 +80,44 @@ def allowed_windows(lib: dict) -> bool:
     return result
 
 
-def resolve_minecraft_cp(meta: Path) -> tuple[list[Path], str]:
+def resolve_minecraft_cp(meta: Path, mc_version: str = "26.2") -> tuple[list[Path], str, str]:
     mc_jsons = sorted((meta / "minecraft_cache").glob("piston_meta_*.json"))
     if not mc_jsons:
         raise FileNotFoundError(f"Kein piston_meta_*.json unter {meta / 'minecraft_cache'}")
-    vanilla = json.loads(mc_jsons[0].read_text(encoding="utf-8"))
-    fabric_list = json.loads((meta / "fabric_cache" / "fabric_versions_26.2.json").read_text(encoding="utf-8"))
-    fabric = next(v for v in fabric_list if v["loader"]["version"] == "0.20.1")
+    vanilla = None
+    for p in mc_jsons:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if data.get("id") == mc_version:
+            vanilla = data
+            break
+    if vanilla is None:
+        raise FileNotFoundError(f"Kein piston_meta fuer MC {mc_version} unter {meta / 'minecraft_cache'}")
+
+    fabric_list = json.loads((meta / "fabric_cache" / f"fabric_versions_{mc_version}.json").read_text(encoding="utf-8"))
+    fabric = next((v for v in fabric_list if v["loader"]["version"] == "0.20.1"), fabric_list[0])
 
     def maven_jar(coord: str) -> Path:
         g, n, v = coord.split(":")
         return meta / "libraries" / g.replace(".", "/") / n / v / f"{n}-{v}.jar"
 
     cp = [maven_jar(fabric["loader"]["maven"])]
+    intermediary_maven = fabric.get("intermediary", {}).get("maven")
+    if intermediary_maven:
+        intermediary_jar = maven_jar(intermediary_maven)
+        if intermediary_jar.is_file():
+            cp.append(intermediary_jar)
     cp += [maven_jar(lib["name"]) for lib in fabric["launcherMeta"]["libraries"]["common"]]
     cp += [
         meta / "libraries" / lib["downloads"]["artifact"]["path"]
         for lib in vanilla["libraries"]
         if allowed_windows(lib) and "artifact" in lib.get("downloads", {})
     ]
-    cp.append(meta / "versions" / "26.2" / "26.2.jar")
+    cp.append(meta / "versions" / mc_version / f"{mc_version}.jar")
     missing = [str(p) for p in cp if not p.is_file()]
     if missing:
-        raise FileNotFoundError(f"Fehlende Minecraft-Bibliotheken: {missing[:5]}")
-    return cp, fabric["launcherMeta"]["mainClass"]["client"]
+        raise FileNotFoundError(f"Fehlende Minecraft-Bibliotheken ({mc_version}): {missing[:5]}")
+    asset_index = str(vanilla["assetIndex"]["id"])
+    return cp, fabric["launcherMeta"]["mainClass"]["client"], asset_index
 
 
 def run_single(
@@ -108,28 +130,45 @@ def run_single(
     expected_version: str,
     timeout_sec: int,
     expect_fail: bool,
+    mc_version: str = "26.2",
 ) -> tuple[bool, Path]:
-    javac, java = trainer_build.find_jdk()
+    if mc_version == "1.21.11":
+        javac, java = trainer_build.find_jdk(min_major=21, prefer_exact=21)
+    else:
+        javac, java = trainer_build.find_jdk(min_major=25)
+
     meta = norisk_root / "meta"
-    cp, main_class = resolve_minecraft_cp(meta)
+    cp, main_class, asset_index = resolve_minecraft_cp(meta, mc_version)
 
     if run_dir.exists():
         shutil.rmtree(run_dir)
     mods = run_dir / "mods"
     mods.mkdir(parents=True)
 
-    fapi = meta / "mod_cache" / "fabric-api-0.161.0+26.2.jar"
-    worldthreader = meta / "mod_cache" / "Worldthreader-3.1.0.jar"
-    for f in (jar, fapi, worldthreader):
+    extra_mods: list[str] = []
+    if mc_version == "1.21.11":
+        fapi_jars = sorted((meta / "mod_cache").glob("fabric-api-*+1.21.11.jar"))
+        if not fapi_jars:
+            raise FileNotFoundError(f"Kein fabric-api-*+1.21.11.jar unter {meta / 'mod_cache'}")
+        fapi = fapi_jars[-1]
+        base_mods = (jar, fapi)
+        live_profile_mods = norisk_root / "data" / "profiles" / "FABRIC 1.21.11" / "mods"
+        options_version = 4671
+    else:
+        fapi = meta / "mod_cache" / "fabric-api-0.161.0+26.2.jar"
+        worldthreader = meta / "mod_cache" / "Worldthreader-3.1.0.jar"
+        base_mods = (jar, fapi, worldthreader)
+        live_profile_mods = norisk_root / "data" / "profiles" / "MACHER(1)" / "mods"
+        options_version = 4903
+
+    for f in base_mods:
         if not f.is_file():
             raise FileNotFoundError(f"Benoetigte Mod fehlt: {f}")
         dest = mods / ("trainer.jar" if f == jar else f.name)
         shutil.copyfile(f, dest)
 
-    extra_mods: list[str] = []
-    if profile_mode == "modpack":
-        live_mods = norisk_root / "data" / "profiles" / "MACHER(1)" / "mods"
-        for mod_jar in sorted(live_mods.glob("*.jar")):
+    if profile_mode == "modpack" and live_profile_mods.is_dir():
+        for mod_jar in sorted(live_profile_mods.glob("*.jar")):
             if mod_jar.name.lower().startswith("macherbot"):
                 continue
             shutil.copyfile(mod_jar, mods / mod_jar.name)
@@ -138,32 +177,77 @@ def run_single(
     world = run_dir / "saves" / "Probe"
     shutil.copytree(world_template, world, ignore=shutil.ignore_patterns("session.lock"))
     (run_dir / "options.txt").write_text(
-        "version:4903\npauseOnLostFocus:false\nonboardAccessibility:false\ntutorialStep:none\n"
+        f"version:{options_version}\npauseOnLostFocus:false\nonboardAccessibility:false\ntutorialStep:none\n"
         "renderDistance:3\nsimulationDistance:5\nmaxFps:30\nsoundCategory_master:0.0\n",
         encoding="utf-8",
     )
 
-    # Extract fabric-api-base & fabric-lifecycle-events-v1 from bundled Fabric API for compiling probe
-    probe_libs = [jar]
-    with zipfile.ZipFile(fapi) as z:
-        for prefix in ("fabric-api-base-", "fabric-lifecycle-events-v1-"):
-            entry = next(n for n in z.namelist() if f"/{prefix}" in n and n.endswith(".jar"))
-            extracted = run_dir / Path(entry).name
-            extracted.write_bytes(z.read(entry))
-            probe_libs.append(extracted)
-
     probe_file, probe_class = SUITES[suite_name]
     probe_classes = run_dir / "probe-classes"
     probe_classes.mkdir()
-    compile_cp = [p.as_posix() for p in cp + probe_libs]
-    compile_args = run_dir / "probe.javac.args"
-    compile_args.write_text(
-        "\n".join(["-encoding", "UTF-8", "-proc:none", "--release", "25", "-cp", f'"{os.pathsep.join(compile_cp)}"']) + "\n",
-        encoding="utf-8",
-    )
-    comp = subprocess.run([str(javac), f"@{compile_args}", "-d", str(probe_classes), str(HERE / probe_file)], capture_output=True)
-    if comp.returncode != 0:
-        raise RuntimeError(f"Probe-Kompilierung fehlgeschlagen:\n{comp.stderr.decode('cp1252', errors='replace')}")
+
+    if mc_version == "1.21.11":
+        env = trainer_build.resolve_mc12111_env(javac, java)
+        trainer_named = run_dir / "trainer-named.jar"
+        trainer_build.run_remap_tool(
+            java=java,
+            tool_classes=env["tool_classes"],
+            remapper_cp=env["remapper_cp"],
+            input_path=jar,
+            output_path=trainer_named,
+            mappings=env["mappings"],
+            from_ns="intermediary",
+            to_ns="named",
+            classpath=[env["mc_common_int"], env["mc_client_int"], fapi, *env["base_libs"]],
+            mixins=False,
+        )
+        probe_named = run_dir / "probe-classes-named"
+        probe_named.mkdir()
+        compile_cp = [p.as_posix() for p in [*env["compile_cp"], trainer_named]]
+        compile_args = run_dir / "probe.javac.args"
+        compile_args.write_text(
+            "\n".join(["-encoding", "UTF-8", "-proc:none", "--release", "21", "-cp", f'"{os.pathsep.join(compile_cp)}"']) + "\n",
+            encoding="utf-8",
+        )
+        comp = subprocess.run(
+            [str(javac), f"@{compile_args}", "-d", str(probe_named), str(HERE / "mc12111" / "ProbeCompat.java"), str(HERE / probe_file)],
+            capture_output=True,
+        )
+        if comp.returncode != 0:
+            raise RuntimeError(f"Probe-Kompilierung (1.21.11) fehlgeschlagen:\n{comp.stderr.decode('cp1252', errors='replace')}")
+        trainer_build.run_remap_tool(
+            java=java,
+            tool_classes=env["tool_classes"],
+            remapper_cp=env["remapper_cp"],
+            input_path=probe_named,
+            output_path=probe_classes,
+            mappings=env["mappings"],
+            from_ns="named",
+            to_ns="intermediary",
+            classpath=[*env["compile_cp"], trainer_named],
+            mixins=False,
+        )
+    else:
+        # Extract fabric-api-base & fabric-lifecycle-events-v1 from bundled Fabric API for compiling probe
+        probe_libs = [jar]
+        with zipfile.ZipFile(fapi) as z:
+            for prefix in ("fabric-api-base-", "fabric-lifecycle-events-v1-"):
+                entry = next(n for n in z.namelist() if f"/{prefix}" in n and n.endswith(".jar"))
+                extracted = run_dir / Path(entry).name
+                extracted.write_bytes(z.read(entry))
+                probe_libs.append(extracted)
+        compile_cp = [p.as_posix() for p in cp + probe_libs]
+        compile_args = run_dir / "probe.javac.args"
+        compile_args.write_text(
+            "\n".join(["-encoding", "UTF-8", "-proc:none", "--release", "25", "-cp", f'"{os.pathsep.join(compile_cp)}"']) + "\n",
+            encoding="utf-8",
+        )
+        comp = subprocess.run(
+            [str(javac), f"@{compile_args}", "-d", str(probe_classes), str(HERE / "ProbeCompat.java"), str(HERE / probe_file)],
+            capture_output=True,
+        )
+        if comp.returncode != 0:
+            raise RuntimeError(f"Probe-Kompilierung fehlgeschlagen:\n{comp.stderr.decode('cp1252', errors='replace')}")
 
     modmeta = {
         "schemaVersion": 1,
@@ -190,18 +274,18 @@ def run_single(
         f"-Dmacherbot.expectedVersion={expected_version}",
         f"-Dfabric.gameJarPath={cp[-1]}",
         "--enable-native-access=ALL-UNNAMED",
-        f"-Djava.library.path={meta / 'natives' / '26.2'}",
+        f"-Djava.library.path={meta / 'natives' / mc_version}",
         "-cp",
         os.pathsep.join(str(p) for p in cp),
         main_class,
         "--version",
-        "26.2",
+        mc_version,
         "--gameDir",
         str(run_dir),
         "--assetsDir",
         str(meta / "assets"),
         "--assetIndex",
-        "32",
+        asset_index,
         "--username",
         "TrainerTest",
         "--uuid",
@@ -221,7 +305,7 @@ def run_single(
     args_file.write_text("\n".join('"' + s.replace("\\", "/") + '"' for s in jargs), encoding="utf-8")
 
     jar_sha = hashlib.sha256(jar.read_bytes()).hexdigest()
-    print(f"Starte In-Game-Suite '{suite_name}' ({profile_mode}) gegen {jar.name} (SHA-256: {jar_sha[:16]}...)")
+    print(f"Starte In-Game-Suite '{suite_name}' ({profile_mode}, MC {mc_version}) gegen {jar.name} (SHA-256: {jar_sha[:16]}...)")
     if extra_mods:
         print(f"  Zusaetzliche Profil-Mods: {', '.join(extra_mods)}")
 
@@ -245,18 +329,18 @@ def run_single(
 
     ok = (not passed) if expect_fail else passed
     status = "OK (erwarteter Fehler in Gegenprobe)" if (expect_fail and ok) else ("PASS" if ok else "FEHLGESCHLAGEN")
-    print(f"Ergebnis [{suite_name}/{profile_mode}]: {status}\n")
+    print(f"Ergebnis [{suite_name}/{profile_mode}/MC {mc_version}]: {status}\n")
     return ok, checks_path
 
 
 def main() -> None:
     meta = trainer_build.read_metadata()
-    default_jar = TRAINER_ROOT / "build" / f"MacherBot-{meta['version']}+26.2.jar"
 
     parser = argparse.ArgumentParser(description="Fuehrt MacherBot In-Game-Regressionstests in einem isolierten Spielprofil aus.")
+    parser.add_argument("--mc", choices=trainer_build.SUPPORTED_MC, default="26.2", help="Ziel-Minecraft-Version (Standard: 26.2)")
     parser.add_argument("--suite", choices=["smoke", "cobweb", "obi", "recovery", "features", "all"], default="all")
     parser.add_argument("--profile", choices=["isolated", "modpack"], default="isolated")
-    parser.add_argument("--jar", type=Path, default=default_jar)
+    parser.add_argument("--jar", type=Path, default=None)
     parser.add_argument("--expected-version", default=meta["version"])
     parser.add_argument("--norisk-root", type=Path)
     parser.add_argument("--world", type=Path)
@@ -265,23 +349,26 @@ def main() -> None:
     parser.add_argument("--expect-fail", action="store_true", help="Fuer Gegenproben mit aelteren Releases")
     args = parser.parse_args()
 
+    jar = args.jar if args.jar is not None else (TRAINER_ROOT / "build" / f"MacherBot-{meta['version']}+{args.mc}.jar")
     norisk_root = find_norisk_root(args.norisk_root)
-    world_template = find_world_template(norisk_root, args.world)
+    world_template = find_world_template(norisk_root, args.world, mc_version=args.mc)
     suites = list(SUITES.keys()) if args.suite == "all" else [args.suite]
+    suffix = "" if args.mc == "26.2" else f"-{args.mc}"
 
     all_ok = True
     for s in suites:
-        run_dir = args.run_root / f"{s}-{args.profile}"
+        run_dir = args.run_root / f"{s}-{args.profile}{suffix}"
         ok, _ = run_single(
             suite_name=s,
             profile_mode=args.profile,
-            jar=args.jar.resolve(),
+            jar=jar.resolve(),
             norisk_root=norisk_root,
             world_template=world_template,
             run_dir=run_dir,
             expected_version=args.expected_version,
             timeout_sec=args.timeout,
             expect_fail=args.expect_fail,
+            mc_version=args.mc,
         )
         all_ok = all_ok and ok
 

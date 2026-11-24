@@ -135,9 +135,10 @@ public final class RecoveryProbe implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            if (done || mc.player == null) return;
-            if (mc.gui.screen() != null && mc.gui.screen().isPauseScreen()) {
-                mc.gui.setScreen(null);
+            if (done) return;
+            if (mc.player == null) { ProbeCompat.dismissWorldConfirm(mc); return; }
+            if (ProbeCompat.screen(mc) != null && ProbeCompat.screen(mc).isPauseScreen()) {
+                ProbeCompat.setScreen(mc, null);
             }
         });
 

@@ -115,11 +115,11 @@ abstract class TrainerPanel extends Screen {
    }
 
    final void open(Screen screen) {
-      this.minecraft.gui.setScreen(screen);
+      de.pvptrainer.compat.McCompat.setScreen(this.minecraft, screen);
    }
 
    public void onClose() {
-      this.minecraft.gui.setScreen(this.parent);
+      de.pvptrainer.compat.McCompat.setScreen(this.minecraft, this.parent);
    }
 
    public boolean isInGameUi() {

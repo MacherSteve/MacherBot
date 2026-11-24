@@ -1,4 +1,5 @@
 package de.pvptrainer.arena;
+import de.pvptrainer.compat.McCompat;
 import de.pvptrainer.drill.Drill;
 import de.pvptrainer.TrainerClient;
 import de.pvptrainer.session.TrainingSession;
@@ -39,7 +40,7 @@ public final class ReadyGate {
                var session = TrainerClient.session(owner.level().getServer());
                if (session != null && session.owns(owner)
                      && session.status().waitingForStart()
-                     && owner.isWithinAttackRange(owner.getMainHandItem(), target.getBoundingBox(), 0)) {
+                     && McCompat.withinAttackRange(owner, target.getBoundingBox(), 0)) {
                   session.releaseStart(owner, session.status().startToken());
                }
             }
@@ -89,8 +90,8 @@ public final class ReadyGate {
 
    public static void click(com.mojang.blaze3d.platform.InputConstants.Key key) {
       Minecraft client = Minecraft.getInstance();
-      if (client.gui.screen() != null || client.gui.overlay() != null
-            || !(client.options.keyAttack.matches(key) || client.options.keyUse.matches(key))) return;
+      if (McCompat.screen(client) != null || McCompat.overlay(client) != null
+            || !(McCompat.keyMatches(client.options.keyAttack, key) || McCompat.keyMatches(client.options.keyUse, key))) return;
       long current = token();
       if (current == 0 || current == clickedToken) return;
       clickedToken = current;
@@ -103,7 +104,7 @@ public final class ReadyGate {
       if (current == 0) clickedToken = 0;
       var options = var0.options;
       if (!options.keyJump.isDown()) consumeJump = false;
-      if (current == 0 || var0.gui.screen() != null || var0.gui.overlay() != null) {
+      if (current == 0 || McCompat.screen(var0) != null || McCompat.overlay(var0) != null) {
          visibleToken = 0;
          return;
       }

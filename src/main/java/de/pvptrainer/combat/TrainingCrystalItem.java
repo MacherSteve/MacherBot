@@ -82,7 +82,7 @@ public final class TrainingCrystalItem {
       if (!var0.isSpectator() && var1.mayInteract(var0, var6) && (var0.mayBuild() || var4.canPlaceOnBlockInAdventureMode(new BlockInWorld(var1, var6, false)))) {
          if (var1.isClientSide()) {
             if (!Minecraft.getInstance().hasSingleplayerServer()) {
-               var0.sendOverlayMessage(INACTIVE);
+               de.pvptrainer.compat.McCompat.sendOverlay(var0, INACTIVE);
                return InteractionResult.FAIL;
             } else {
                // The integrated server checks the space, current round and inventory for this click.
@@ -91,7 +91,7 @@ public final class TrainingCrystalItem {
          } else if (var1 instanceof ServerLevel var7 && var0 instanceof ServerPlayer var8) {
             TrainingSession var9 = TrainerClient.session(var7.getServer());
             if (var9 == null || !var9.canPlaceCrystal(var8)) {
-               var8.sendOverlayMessage(INACTIVE);
+               de.pvptrainer.compat.McCompat.sendOverlay(var8, INACTIVE);
                return InteractionResult.FAIL;
             }
 

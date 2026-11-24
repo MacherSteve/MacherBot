@@ -39,7 +39,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
 
 /** Trainings-Gegner-Entitaet (Mannequin) mit Schild-, Treffer-, Totem- und Bewegungskontrolle. */
-final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTactics.MeleeReach {
+final class TrainingBot extends BotCompatBase implements MaceDuel.Glider, TrainingTactics.MeleeReach {
     private final TrainingSession session;
     private int reconsiderReachAt = -1;
     private double chosenReach;
@@ -104,7 +104,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
     @Override
     public void makeStuckInBlock(BlockState state, Vec3 motionMultiplier) {
         super.makeStuckInBlock(state, motionMultiplier);
-        this.tryResetCurrentImpulseContext();
+        this.resetImpulseInBlock();
     }
 
     @Override
@@ -225,7 +225,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
     }
 
     @Override
-    public void knockback(double strength, double x, double z, DamageSource source, float damage, boolean force) {
+    protected void onBotKnockback(double strength, double x, double z, DamageSource source, float damage, boolean force) {
         boolean webMelee = session.options != null && session.options.drill() == Drill.STUN_WEB
             && source != null && source.is(DamageTypes.PLAYER_ATTACK) && source.getDirectEntity() == session.owner;
         if (webMelee && this.stunImpulseAt == session.roundTick) return;
@@ -237,7 +237,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         }
         boolean keepGrounded = webMelee && this.onGround();
         double previousY = this.getDeltaMovement().y;
-        super.knockback(strength, x, z, source, damage, force);
+        this.superKnockback(strength, x, z, source, damage, force);
         if (keepGrounded) {
             Vec3 after = this.getDeltaMovement();
             this.setDeltaMovement(new Vec3(after.x, Math.min(previousY, after.y), after.z));
@@ -359,7 +359,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
             session.attempt.shieldStun(remaining);
             session.armSecondarySlam(remaining);
             stunImpulseAt = session.roundTick;
-            if (onGround()) super.knockback(0.4, session.owner.getX() - getX(), session.owner.getZ() - getZ(), source, amount, false);
+            if (onGround()) this.superKnockback(0.4, session.owner.getX() - getX(), session.owner.getZ() - getZ(), source, amount, false);
         }
 
         if (session.attempt == null || session.owner == null) {
@@ -573,8 +573,8 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
     }
 
     @Override
-    protected void blockUsingItem(ServerLevel level, LivingEntity attacker, DamageSource source, float amount) {
-        super.blockUsingItem(level, attacker, source, amount);
+    protected void onBotBlockUsingItem(ServerLevel level, LivingEntity attacker, DamageSource source, float amount) {
+        this.superBlockUsingItem(level, attacker, source, amount);
         ItemStack shieldStack = this.getItemBlockingWith();
         BlocksAttacks shield = shieldStack == null ? null : shieldStack.get(DataComponents.BLOCKS_ATTACKS);
         if (shield == null || session.attempt == null) return;
@@ -645,7 +645,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                 }
                 if (session.options.drill() == Drill.STUN_WEB && this.onGround()) {
                     this.stunImpulseAt = session.roundTick;
-                    super.knockback(0.4, attacker.getX() - this.getX(), attacker.getZ() - this.getZ(), source, amount, false);
+                    this.superKnockback(0.4, attacker.getX() - this.getX(), attacker.getZ() - this.getZ(), source, amount, false);
                 }
             }
         }

@@ -38,7 +38,7 @@ final class PearlCatchHud {
 
     static void draw(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.gui.hud.isHidden() || mc.player == null || mc.level == null
+        if (de.pvptrainer.compat.McCompat.hudHidden(mc) || mc.player == null || mc.level == null
             || mc.getCameraEntity() != mc.player
             || !TrainingArena.isArena(mc.player.level())) {
             return;
@@ -102,8 +102,8 @@ final class PearlCatchHud {
             && liveAimConf >= 0.55
             && angleDeg <= 1.35;
 
-        Camera camera = mc.gameRenderer.mainCamera();
-        Matrix4f viewProj = camera.getViewRotationProjectionMatrix(new Matrix4f());
+        Camera camera = de.pvptrainer.compat.McCompat.mainCamera(mc);
+        Matrix4f viewProj = de.pvptrainer.compat.McCompat.viewRotationProjection(mc, camera, pt);
 
         // Project required look direction onto sky/horizon (matches player look angle even when moving!)
         Vec3 aimTargetWorld = camera.position().add(sol.aimDirection().scale(Math.max(12.0, sol.distance())));

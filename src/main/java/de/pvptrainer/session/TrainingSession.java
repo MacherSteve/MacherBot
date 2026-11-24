@@ -1239,7 +1239,7 @@ public final class TrainingSession {
       TrainingProgress.record(history, historyKey, result, settings, options, ownerId, this.metrics.consumeSnapshot());
       if (options.drill() == Drill.LOW_WEB_SMASH) {
          cobwebFlight.onScored(result.won(), roundTick);
-         owner.sendOverlayMessage(Component.literal(result.won() ? "Geschafft" : "Fehlversuch · " + result.reason())
+         de.pvptrainer.compat.McCompat.sendOverlay(owner, Component.literal(result.won() ? "Geschafft" : "Fehlversuch · " + result.reason())
             .withStyle(result.won() ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED));
       }
       previousRepetitionAt = roundTick;
@@ -1253,7 +1253,7 @@ public final class TrainingSession {
       var result = new DrillHistory.Result(true, Math.max(1, roundTick - previousRepetitionAt), -1.0, attempt.progress(), attempt.timeline());
       TrainingProgress.record(history, historyKey, result, settings, options, ownerId, this.metrics.consumeSnapshot());
       if (owner != null) {
-         owner.sendOverlayMessage(Component.literal("Corner Hit-Crystal · Pop #" + pops + " gelungen!")
+         de.pvptrainer.compat.McCompat.sendOverlay(owner, Component.literal("Corner Hit-Crystal · Pop #" + pops + " gelungen!")
             .withStyle(net.minecraft.ChatFormatting.GREEN));
       }
       previousRepetitionAt = roundTick;
@@ -1420,7 +1420,7 @@ public final class TrainingSession {
    }
 
    private static void notifyPlayer(ServerPlayer var0, String var1) {
-      var0.sendOverlayMessage(Component.literal(var1));
+      de.pvptrainer.compat.McCompat.sendOverlay(var0, Component.literal(var1));
    }
 
    private record RoundSelection(TrainingSettings settings, DrillOptions options, KitLoadout playerKit, KitLoadout botKit) {

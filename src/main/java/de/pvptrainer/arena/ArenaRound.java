@@ -368,6 +368,6 @@ public final class ArenaRound {
     }
 
     public static void prompt(ServerPlayer player) {
-        player.sendOverlayMessage(Component.literal("Bewegen, angreifen oder benutzen, um zu starten"));
+        de.pvptrainer.compat.McCompat.sendOverlay(player, Component.literal("Bewegen, angreifen oder benutzen, um zu starten"));
     }
 }

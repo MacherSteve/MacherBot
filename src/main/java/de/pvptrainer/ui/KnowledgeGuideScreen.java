@@ -181,7 +181,7 @@ final class KnowledgeGuideScreen extends TrainerPanel {
                   TrainerClient.settings(targetMode).forDrill(targetDrill),
                   sticky
                );
-               this.minecraft.gui.setScreen(new TrainingScreen());
+               de.pvptrainer.compat.McCompat.setScreen(this.minecraft, new TrainingScreen());
             }
          ).tip("Wechselt direkt zu " + targetMode.label() + " · " + targetDrill.label());
       } else {

@@ -249,9 +249,10 @@ public final class FeaturesProbe implements ClientModInitializer {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            if (done || mc.player == null) return;
-            if (mc.gui.screen() != null && mc.gui.screen().isPauseScreen()) {
-                mc.gui.setScreen(null);
+            if (done) return;
+            if (mc.player == null) { ProbeCompat.dismissWorldConfirm(mc); return; }
+            if (ProbeCompat.screen(mc) != null && ProbeCompat.screen(mc).isPauseScreen()) {
+                ProbeCompat.setScreen(mc, null);
             }
             mc.options.keyUse.setDown(holdClientShield);
         });
@@ -313,7 +314,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                 var crystal = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL);
                 TrainerClient.saveSetup(crystal.forDrill(Drill.D_TAP), DrillOptions.forDrill(Drill.D_TAP));
                 var dtapScreen = new TrainingScreen();
-                mc.gui.setScreen(dtapScreen);
+                ProbeCompat.setScreen(mc, dtapScreen);
                 List<String> dtapLabels = dtapScreen.children().stream()
                     .filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget)
                     .map(c -> ((net.minecraft.client.gui.components.AbstractWidget) c).getMessage().getString())
@@ -328,7 +329,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                 // Counter-case: Triple Tap MUST show preset buttons
                 TrainerClient.saveSetup(crystal.forDrill(Drill.TRIPLE_TAP), DrillOptions.forDrill(Drill.TRIPLE_TAP));
                 var tripleScreen = new TrainingScreen();
-                mc.gui.setScreen(tripleScreen);
+                ProbeCompat.setScreen(mc, tripleScreen);
                 List<String> tripleLabels = tripleScreen.children().stream()
                     .filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget)
                     .map(c -> ((net.minecraft.client.gui.components.AbstractWidget) c).getMessage().getString())
@@ -350,7 +351,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                     .findFirst().orElse(null);
                 check(guideBtn != null, "Technik-Guide button missing in TrainingScreen: " + tripleLabels);
                 guideBtn.onPress(null);
-                var guideScreen = mc.gui.screen();
+                var guideScreen = ProbeCompat.screen(mc);
                 check(guideScreen != null && guideScreen.getTitle().getString().contains("Technik-Guide"),
                     "KnowledgeGuideScreen did not open: " + guideScreen);
                 List<String> guideLabels = guideScreen.children().stream()
@@ -370,7 +371,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                 check(tripleLabels.stream().anyMatch(l -> l.contains("Pearl Ground Hit")),
                     "Pearl Ground Hit icon chip missing in TrainingScreen: " + tripleLabels);
                 settingsBtn.onPress(null);
-                var settingsScreen = mc.gui.screen();
+                var settingsScreen = ProbeCompat.screen(mc);
                 check(settingsScreen != null && settingsScreen.getTitle().getString().contains("Einstellungen"),
                     "TrainingOptionsScreen did not open: " + settingsScreen);
                 List<String> settingsLabels = settingsScreen.children().stream()
@@ -390,8 +391,8 @@ public final class FeaturesProbe implements ClientModInitializer {
                     .findFirst().orElse(null);
                 check(kitsBtn != null, "Kits button missing in TrainingScreen");
                 kitsBtn.onPress(null);
-                check(mc.gui.screen() != null && mc.gui.screen().getTitle().getString().equals("Kits"),
-                    "Unified KitShelfScreen did not open: " + mc.gui.screen());
+                check(ProbeCompat.screen(mc) != null && ProbeCompat.screen(mc).getTitle().getString().equals("Kits"),
+                    "Unified KitShelfScreen did not open: " + ProbeCompat.screen(mc));
 
                 var statsBtn = tripleScreen.children().stream()
                     .filter(c -> c instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().equals("Statistik"))
@@ -399,7 +400,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                     .findFirst().orElse(null);
                 check(statsBtn != null, "Statistik button missing in TrainingScreen");
                 statsBtn.onPress(null);
-                var statsScreen = mc.gui.screen();
+                var statsScreen = ProbeCompat.screen(mc);
                 check(statsScreen != null && statsScreen.getTitle().getString().equals("Statistik"),
                     "Unified Statistik screen did not open: " + statsScreen);
                 List<String> statsLabels = statsScreen.children().stream()
@@ -415,7 +416,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                     && statsLabels.stream().anyMatch(l -> l.equals("Heute")),
                     "Statistik Übersicht missing mode/timeframe filters: " + statsLabels);
 
-                mc.gui.setScreen(null);
+                ProbeCompat.setScreen(mc, null);
                 uiFuture.complete("ok");
             } catch (Throwable err) {
                 uiFuture.completeExceptionally(err);
@@ -1046,9 +1047,7 @@ public final class FeaturesProbe implements ClientModInitializer {
             b.startUsingItem(InteractionHand.MAIN_HAND);
             b.zza = 1.0F;
             b.xxa = 0.0F;
-            var applyInputMethod = LivingEntity.class.getDeclaredMethod("applyInput");
-            applyInputMethod.setAccessible(true);
-            applyInputMethod.invoke(b);
+            ProbeCompat.invokeApplyInput(b);
             check(!b.isSprinting(), "Using shield must cancel sprint just like Vanilla LocalPlayer");
             check(Math.abs(b.zza - (0.98F * 0.2F)) < 1e-4F,
                 "Shield-use movement input must scale to 0.98*0.2=0.196, got " + b.zza);
@@ -1061,9 +1060,7 @@ public final class FeaturesProbe implements ClientModInitializer {
             b.setOnGround(true);
             b.setDeltaMovement(Vec3.ZERO);
             // Advance use ticks past 5-tick vanilla blockDelayTicks so shield is actively blocking
-            var useRemaining = LivingEntity.class.getDeclaredField("useItemRemaining");
-            useRemaining.setAccessible(true);
-            useRemaining.setInt(b, b.getUseItem().getUseDuration(b) - 10);
+            ProbeCompat.setUseItemRemaining(b, b.getUseItem().getUseDuration(b) - 10);
             check(b.isBlocking(), "Bot shield should be blocking after 10 ticks");
             p.teleportTo(p.level(), 0.5, ForgeArena.FLOOR + 1.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
             p.lookAt(Anchor.EYES, b.getEyePosition());

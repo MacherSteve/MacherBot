@@ -58,18 +58,17 @@ public final class ObiProbe implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            if (done || mc.player == null) return;
+            if (done) return;
+            if (mc.player == null) { ProbeCompat.dismissWorldConfirm(mc); return; }
             try {
-                if (mc.gui.screen() != null && mc.gui.screen().isPauseScreen()) {
-                    mc.gui.setScreen(null);
+                if (ProbeCompat.screen(mc) != null && ProbeCompat.screen(mc).isPauseScreen()) {
+                    ProbeCompat.setScreen(mc, null);
                 }
-                if (!armed || clicked || mc.gui.screen() != null) return;
+                if (!armed || clicked || ProbeCompat.screen(mc) != null) return;
                 var bot = mc.level.getEntity(target);
                 if (bot == null) return;
                 mc.player.lookAt(Anchor.EYES, bot.getBoundingBox().getCenter());
-                var pick = Minecraft.class.getDeclaredMethod("pick", float.class);
-                pick.setAccessible(true);
-                pick.invoke(mc, 1.0F);
+                ProbeCompat.pick(mc, 1.0F);
                 expect(
                     mc.hitResult instanceof EntityHitResult e && e.getEntity() == bot,
                     "ray missed bot; distance=" + mc.player.distanceTo(bot) + " result=" + mc.hitResult

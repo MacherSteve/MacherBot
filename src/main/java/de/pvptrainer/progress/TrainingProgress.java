@@ -216,7 +216,7 @@ public final class TrainingProgress {
     }
 
     public static void hideResultToast() {
-        SystemToast.forceHide(Minecraft.getInstance().gui.toastManager(), RESULT_TOAST);
+        SystemToast.forceHide(de.pvptrainer.compat.McCompat.toastManager(Minecraft.getInstance()), RESULT_TOAST);
     }
 
     /** Records real actions from passive/interrupted rounds without altering streaks or drill win rates. */
@@ -353,7 +353,7 @@ public final class TrainingProgress {
                 var title = Component.literal(result.won() ? "Geschafft" : "Fehlversuch")
                     .withStyle(result.won() ? ChatFormatting.GREEN : ChatFormatting.RED);
                 String detail = formatToastDetail(options.drill(), run);
-                SystemToast.addOrUpdate(client.gui.toastManager(), RESULT_TOAST, title, Component.literal(detail));
+                SystemToast.addOrUpdate(de.pvptrainer.compat.McCompat.toastManager(client), RESULT_TOAST, title, Component.literal(detail));
             }
             if (!milestone) {
                 client.getSoundManager().play(SimpleSoundInstance.forUI(

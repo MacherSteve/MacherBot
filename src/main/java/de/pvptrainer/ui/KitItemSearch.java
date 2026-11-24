@@ -56,7 +56,7 @@ final class KitItemSearch extends TrainerPanel {
          var2 = var2 + " " + (var3.getAmplifier() + 1);
       }
 
-      if (!((MobEffect)var3.getEffect().value()).isInstantaneous()) {
+      if (!de.pvptrainer.compat.McCompat.isInstantaneous((MobEffect)var3.getEffect().value())) {
          int var4 = var3.getDuration() / 20;
          var2 = var2 + " (Basis " + String.format(Locale.ROOT, "%d:%02d", var4 / 60, var4 % 60) + ")";
       }

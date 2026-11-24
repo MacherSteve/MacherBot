@@ -114,7 +114,7 @@ final class CrystalUtility {
         }
         if (arrow.isEmpty())return false;
         int count=EnchantmentHelper.processProjectileCount(level,bow,bot,1);
-        bow.set(DataComponents.CHARGED_PROJECTILES,ChargedProjectiles.ofNonEmpty(Collections.nCopies(count,arrow)));
+        bow.set(DataComponents.CHARGED_PROJECTILES,de.pvptrainer.compat.McCompat.chargedProjectiles(Collections.nCopies(count,arrow)));
         fire(level,bot,target,bow,trackAim,skill,reads);
         return true;
     }

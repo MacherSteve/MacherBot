@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
 public final class UpdateChecker {
     public static final String DEFAULT_FEED_URL = "https://api.github.com/repos/MacherSteve/MacherBot/releases/latest";
     public static final String DEFAULT_DOWNLOAD_PAGE = "https://github.com/MacherSteve/MacherBot/releases/latest";
-    public static final String TARGET_MINECRAFT = "26.2";
+    public static final String TARGET_MINECRAFT = de.pvptrainer.compat.McCompat.minecraftVersion();
 
     private static final Logger LOG = LoggerFactory.getLogger("pvptrainer-update");
     private static final int MAX_BODY_BYTES = 262_144;
@@ -133,7 +133,7 @@ public final class UpdateChecker {
             .append(Component.literal("Update " + info.latestVersion() + " verfügbar (installiert: " + info.currentVersion() + ") · ")
                 .withStyle(ChatFormatting.GRAY))
             .append(link);
-        player.sendSystemMessage(line);
+        de.pvptrainer.compat.McCompat.sendSystemMessage(player, line);
     }
 
     public static UpdateInfo fetchFrom(URI feedUri, String currentVersion, boolean allowLocalHttp) throws IOException, InterruptedException {

@@ -24,7 +24,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.EntityTypes;
+import de.pvptrainer.compat.McCompat;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.projectile.arrow.Arrow;
@@ -167,7 +167,7 @@ public final class TrainingTactics {
                }
                if (this.options.hints()) {
                   var5.announceSwing();
-                  var3.sendOverlayMessage(Component.literal("Schlag in 3 Ticks"));
+                  McCompat.sendOverlay(var3, Component.literal("Schlag in 3 Ticks"));
                }
                var1.playSound(null, var2.blockPosition(), (SoundEvent)SoundEvents.NOTE_BLOCK_HAT.value(), SoundSource.PLAYERS, 0.65F, 1.0F);
             }
@@ -400,7 +400,7 @@ public final class TrainingTactics {
          float enchantKb = EnchantmentHelper.modifyKnockback(var0, var5, var2, var3, 0.0F);
          float extraKb = enchantKb * 0.5F + (sprintHit ? 0.5F : 0.0F);
          if (extraKb > 0.0F) {
-            var1.causeExtraKnockback(var2, extraKb, beforeHit, var3, var8, true);
+            McCompat.causeExtraKnockback(var1, var2, extraKb, beforeHit, var3, var8);
             var1.setSprinting(false);
          }
          if (sprintHit && !critical) {
@@ -717,7 +717,7 @@ public final class TrainingTactics {
    }
 
    private static boolean reachableCrystal(ServerLevel level, LivingEntity bot, Vec3 origin) {
-      var shape = EntityTypes.END_CRYSTAL.getDimensions();
+      var shape = McCompat.endCrystalType().getDimensions();
       if (shape.makeBoundingBox(origin).distanceToSqr(bot.getEyePosition()) > 9.0) return false;
       Vec3 crystalEye = origin.add(0, shape.eyeHeight(), 0);
       return level.clip(new ClipContext(bot.getEyePosition(), crystalEye, Block.COLLIDER, Fluid.NONE, bot)).getType() == Type.MISS;

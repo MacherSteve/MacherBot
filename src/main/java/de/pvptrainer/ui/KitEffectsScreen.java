@@ -48,7 +48,7 @@ final class KitEffectsScreen extends TrainerPanel {
     }
 
     private static String durationLabel(Holder<MobEffect> type, int ticks) {
-        if (type.value().isInstantaneous()) return "Sofort";
+        if (de.pvptrainer.compat.McCompat.isInstantaneous(type.value())) return "Sofort";
         if (ticks == MobEffectInstance.INFINITE_DURATION) return "Ganze Runde";
         if (ticks % 20 != 0) return ticks + " Ticks";
         return (ticks / 20) + " s";
@@ -67,14 +67,14 @@ final class KitEffectsScreen extends TrainerPanel {
             this.type = type;
             this.original = original;
             level = original == null ? 1 : original.getAmplifier() + 1;
-            duration = type.value().isInstantaneous() ? 1 : (original == null ? MobEffectInstance.INFINITE_DURATION : original.getDuration());
+            duration = de.pvptrainer.compat.McCompat.isInstantaneous(type.value()) ? 1 : (original == null ? MobEffectInstance.INFINITE_DURATION : original.getDuration());
         }
 
         @Override void build() {
             subtitle = editor.bot ? "Bot-Kit" : "Spieler-Kit";
             addRenderableWidget(new SettingSlider(x, y, inner, 25, "Stufe", Math.max(5, level), level - 1,
                 step -> Integer.toString(step + 1), step -> level = step + 1));
-            if (!type.value().isInstantaneous()) {
+            if (!de.pvptrainer.compat.McCompat.isInstantaneous(type.value())) {
                 var durations = new ArrayList<>(List.of(100, 300, 600, 1200, 2400, 6000, 12000));
                 if (duration >= 0 && !durations.contains(duration)) { durations.add(duration); durations.sort(Integer::compare); }
                 durations.add(MobEffectInstance.INFINITE_DURATION);

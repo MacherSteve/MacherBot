@@ -62,7 +62,7 @@ public final class ForgeArena {
         static final BlockState SHROOMLIGHT = Blocks.SHROOMLIGHT.defaultBlockState();
         static final BlockState MAGMA_BLOCK = Blocks.MAGMA_BLOCK.defaultBlockState();
         static final BlockState IRON_CHAIN = Blocks.IRON_CHAIN.defaultBlockState();
-        static final BlockState RED_GLASS = ((Block) Blocks.STAINED_GLASS.red()).defaultBlockState();
+        static final BlockState RED_GLASS = de.pvptrainer.compat.McCompat.redStainedGlass().defaultBlockState();
         static final BlockState HANGING_LANTERN = Blocks.LANTERN.defaultBlockState().setValue(BlockStateProperties.HANGING, true);
         static final ForgeArena STANDARD = new ForgeArena();
         static final Map<Long, BlockState> LARGE_DETAILS = buildLargeDetails();
@@ -585,7 +585,7 @@ public final class ForgeArena {
                 for (int var10 = 0; var10 < EMBLEM.length; var10++) {
                     if (EMBLEM[var10].charAt(var2 + 4) == '#') {
                         this.facing(var1, var2, 24, 10 - var10, Blocks.SHROOMLIGHT);
-                        this.facing(var1, var2, 23, 10 - var10, (Block) Blocks.STAINED_GLASS.red());
+                        this.facing(var1, var2, 23, 10 - var10, de.pvptrainer.compat.McCompat.redStainedGlass());
                     }
                 }
             }
@@ -614,7 +614,7 @@ public final class ForgeArena {
 
                 if (var3 == 8 && var5 >= 4 && var5 <= 12 && var5 != 8) {
                     this.facing(var1, var2 * var3, var6 + 1, var5, Blocks.SHROOMLIGHT);
-                    this.facing(var1, var2 * var3, var6, var5, (Block) Blocks.STAINED_GLASS.red());
+                    this.facing(var1, var2 * var3, var6, var5, de.pvptrainer.compat.McCompat.redStainedGlass());
                 }
             }
         }
@@ -628,7 +628,7 @@ public final class ForgeArena {
                 this.facing(var1, var2 * var3, 21, var4, Blocks.POLISHED_BLACKSTONE_BRICKS);
                 if (var4 == 3 || var4 == 4) {
                     this.facing(var1, var2 * var3, 21, var4, Blocks.SHROOMLIGHT);
-                    this.facing(var1, var2 * var3, 20, var4, var3 == 11 ? Blocks.IRON_CHAIN : (Block) Blocks.STAINED_GLASS.red());
+                    this.facing(var1, var2 * var3, 20, var4, var3 == 11 ? Blocks.IRON_CHAIN : de.pvptrainer.compat.McCompat.redStainedGlass());
                 }
             }
 

@@ -358,7 +358,7 @@ final class UhcUtility {
          ItemStack ammo=takeArrow(bot,kit);
          if (ammo.isEmpty()) {bot.stopUsingItem();return false;}
          int count=net.minecraft.world.item.enchantment.EnchantmentHelper.processProjectileCount(level,bow,bot,1);
-         bow.set(DataComponents.CHARGED_PROJECTILES,ChargedProjectiles.ofNonEmpty(java.util.Collections.nCopies(Math.max(1,count),ammo)));
+         bow.set(DataComponents.CHARGED_PROJECTILES,de.pvptrainer.compat.McCompat.chargedProjectiles(java.util.Collections.nCopies(Math.max(1,count),ammo)));
       }
       bot.stopUsingItem();
       DuelAim.ranged(bot,opponent,3.15,tracking,skill,reads);

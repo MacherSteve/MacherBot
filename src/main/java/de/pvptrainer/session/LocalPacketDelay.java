@@ -26,7 +26,7 @@ public final class LocalPacketDelay extends ChannelInboundHandlerAdapter {
         },Math.max(0,lastDue-now),TimeUnit.NANOSECONDS);
     }
     private static boolean trainingInput(Object packet){
-        return packet instanceof ServerboundMovePlayerPacket || packet instanceof ServerboundAttackPacket
+        return packet instanceof ServerboundMovePlayerPacket || de.pvptrainer.compat.McCompat.isAttackPacket(packet)
             || packet instanceof ServerboundUseItemPacket || packet instanceof ServerboundUseItemOnPacket
             || packet instanceof ServerboundPlayerActionPacket || packet instanceof ServerboundSetCarriedItemPacket
             || packet instanceof ServerboundInteractPacket || packet instanceof ServerboundSwingPacket

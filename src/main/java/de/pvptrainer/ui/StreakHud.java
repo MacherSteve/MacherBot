@@ -23,7 +23,7 @@ final class StreakHud {
     private static final ItemStack SLAM_ICON = new ItemStack(Items.MACE);
     static void draw(GuiGraphicsExtractor g, DeltaTracker delta) {
         var client = Minecraft.getInstance();
-        if (client.gui.hud.isHidden() || client.player == null || client.getCameraEntity() != client.player || client.gameMode == null
+        if (de.pvptrainer.compat.McCompat.hudHidden(client) || client.player == null || client.getCameraEntity() != client.player || client.gameMode == null
             || !client.gameMode.canHurtPlayer() || client.getSingleplayerServer() == null
             || !TrainingArena.isArena(client.player.level())) return;
         var status = TrainerClient.status();

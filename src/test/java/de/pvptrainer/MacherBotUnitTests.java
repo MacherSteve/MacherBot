@@ -252,6 +252,26 @@ public final class MacherBotUnitTests {
             tracker.onScored(true, 10);
             check(tracker.isChainActive() && tracker.isFlightJudged(), "Gewonnener Smash aktiviert Flugkette");
             check(!tracker.shouldRecordMissOnLanding(false), "Bereits gewerteter Flug darf keinen Miss ausloesen");
+
+            // Positivfall: Verzoegertes Bodenpaket direkt beim Wind-Charge-Start darf keinen Fehlversuch ausloesen, sobald der Spieler abhebt
+            var launchRace = new CobwebFlightTracker();
+            var opts = DrillOptions.forDrill(Drill.LOW_WEB_SMASH);
+            boolean[] finished = {false};
+            launchRace.onPlayerLaunch(7, false, () -> finished[0] = true);
+            launchRace.observeGroundState(true, 65.0, 0.0, false, 7, opts, () -> finished[0] = true);
+            check(launchRace.hasPendingLanding(), "Verzoegertes Bodenpaket setzt pending landing");
+            launchRace.observeGroundState(false, 65.8, 0.0, true, 8, opts, () -> finished[0] = true);
+            check(!launchRace.hasPendingLanding() && !finished[0], "Abheben nach Wind-Charge-Start muss falsches landingTick abbrechen");
+            launchRace.observeGroundState(false, 67.5, 0.0, true, 11, opts, () -> finished[0] = true);
+            check(!finished[0], "Kein Fehlversuch waehrend des echten Wind-Charge-Flugs");
+
+            // Gegenfall: Echte Landung spaeter im Flug muss trotz sofortigem Sprung weiterhin als Landung werten
+            launchRace.observeGroundState(true, 65.0, 0.0, true, 30, opts, () -> finished[0] = true);
+            check(launchRace.hasPendingLanding(), "Echte Landung setzt landingTick");
+            launchRace.observeGroundState(false, 65.4, 0.0, true, 31, opts, () -> finished[0] = true);
+            check(launchRace.hasPendingLanding(), "Normaler Sprung weit nach Wind-Charge-Start darf landingTick nicht loeschen");
+            launchRace.observeGroundState(false, 66.0, 0.0, true, 33, opts, () -> finished[0] = true);
+            check(finished[0], "Echte Landung muss nach Settle-Fenster abgeschlossen werden");
         });
     }
 
@@ -326,9 +346,9 @@ public final class MacherBotUnitTests {
             check(UpdateChecker.parseResponse(ghPre, "1.12.0", false) == null, "Prerelease ignorieren");
 
             // Einfaches latest.json + Minecraft-Versionsfilter
-            String simpleOk = """
-                {"version":"1.12.5","minecraft":"26.2","url":"https://example.com/macherbot","notes":"Stabilitaetsupdate"}
-                """;
+            String mcVer = UpdateChecker.TARGET_MINECRAFT;
+            String simpleOk = "{\"version\":\"1.12.5\",\"minecraft\":\"" + mcVer
+                + "\",\"url\":\"https://example.com/macherbot\",\"notes\":\"Stabilitaetsupdate\"}";
             var simple = UpdateChecker.parseResponse(simpleOk, "1.12.0", false);
             check(simple != null && "1.12.5".equals(simple.latestVersion()) && "Stabilitaetsupdate".equals(simple.summary()), "latest.json erkannt");
             String simpleWrongMc = """
@@ -337,12 +357,10 @@ public final class MacherBotUnitTests {
             check(UpdateChecker.parseResponse(simpleWrongMc, "1.12.0", false) == null, "Falsche MC-Version ignorieren");
 
             // Modrinth Versions API Array
-            String modrinth = """
-                [
-                  {"id":"b1","project_id":"macherbot","version_number":"1.14.0-beta.1","version_type":"beta","game_versions":["26.2"]},
-                  {"id":"ver42","project_id":"macherbot","version_number":"1.13.1+26.2","version_type":"release","game_versions":["26.2"],"changelog":"- Modrinth Release"}
-                ]
-                """;
+            String modrinth = "["
+                + "{\"id\":\"b1\",\"project_id\":\"macherbot\",\"version_number\":\"1.14.0-beta.1\",\"version_type\":\"beta\",\"game_versions\":[\"" + mcVer + "\"]},"
+                + "{\"id\":\"ver42\",\"project_id\":\"macherbot\",\"version_number\":\"1.13.1+" + mcVer + "\",\"version_type\":\"release\",\"game_versions\":[\"" + mcVer + "\"],\"changelog\":\"- Modrinth Release\"}"
+                + "]";
             var mr = UpdateChecker.parseResponse(modrinth, "1.12.0", false);
             check(mr != null && "1.13.1".equals(mr.latestVersion()), "Modrinth-Release erkannt");
             check("https://modrinth.com/mod/macherbot/version/ver42".equals(mr.downloadUri().toString()), "Modrinth-URL gebaut");

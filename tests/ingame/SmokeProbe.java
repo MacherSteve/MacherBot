@@ -72,10 +72,11 @@ public class SmokeProbe implements ClientModInitializer {
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            if (done || mc.player == null) return;
+            if (done) return;
+            if (mc.player == null) { ProbeCompat.dismissWorldConfirm(mc); return; }
             try {
-                if (mc.gui.screen() != null && mc.gui.screen().isPauseScreen()) mc.gui.setScreen(null);
-                if (!armed || clicked || mc.gui.screen() != null) return;
+                if (ProbeCompat.screen(mc) != null && ProbeCompat.screen(mc).isPauseScreen()) ProbeCompat.setScreen(mc, null);
+                if (!armed || clicked || ProbeCompat.screen(mc) != null) return;
                 var bot = mc.level.getEntity(target);
                 if (bot == null) return;
                 boolean hit = scene == 8;
@@ -88,9 +89,7 @@ public class SmokeProbe implements ClientModInitializer {
                     check(slot < 9, "no wind charge");
                     mc.player.getInventory().setSelectedSlot(slot);
                 }
-                var pick = Minecraft.class.getDeclaredMethod("pick", float.class);
-                pick.setAccessible(true);
-                pick.invoke(mc, 1f);
+                ProbeCompat.pick(mc, 1f);
                 check(
                     hit ? mc.hitResult instanceof EntityHitResult e && e.getEntity() == bot
                         : mc.hitResult.getType() == HitResult.Type.MISS,
@@ -149,7 +148,7 @@ public class SmokeProbe implements ClientModInitializer {
                             try {
                                 var mc = Minecraft.getInstance();
                                 var screen = new TrainingScreen();
-                                mc.gui.setScreen(screen);
+                                ProbeCompat.setScreen(mc, screen);
                                 boolean foundBadge = screen.children().stream().anyMatch(
                                     child -> child instanceof net.minecraft.client.gui.components.AbstractWidget w
                                         && w.getMessage().getString().contains("Update 99.0.0")
@@ -194,12 +193,12 @@ public class SmokeProbe implements ClientModInitializer {
                                         ctor.setAccessible(true);
                                         sub = (net.minecraft.client.gui.screens.Screen) ctor.newInstance(screen, TrainingSettings.Mode.CRYSTAL);
                                     }
-                                    mc.gui.setScreen(sub);
+                                    ProbeCompat.setScreen(mc, sub);
                                     if (pwF.getInt(sub) != baseW || phF.getInt(sub) != baseH) {
                                         uniformSize = false;
                                     }
                                 }
-                                mc.gui.setScreen(null);
+                                ProbeCompat.setScreen(mc, null);
                                 UpdateChecker.clear();
                                 uiCheck.complete(foundBadge && uniformSize);
                             } catch (Throwable err) {

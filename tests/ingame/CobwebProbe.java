@@ -15,7 +15,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.arguments.EntityAnchorArgument.Anchor;
-import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
@@ -72,13 +71,11 @@ public class CobwebProbe implements ClientModInitializer {
         p.setItemInHand(InteractionHand.MAIN_HAND, mace);
         bot.invulnerableTime = 20;
         try {
-            var last = LivingEntity.class.getDeclaredField("lastHurt");
-            last.setAccessible(true);
-            last.setFloat(bot, 1000f);
+            ProbeCompat.setLastHurt(bot, 1000f);
         } catch (Exception e) {
             throw new AssertionError(e);
         }
-        p.connection.handleAttack(new ServerboundAttackPacket(bot.getId()));
+        ProbeCompat.sendPlayerAttack(p, bot);
     }
 
     static List<String> outcomes(ServerPlayer p, String key) throws Exception {
@@ -94,10 +91,11 @@ public class CobwebProbe implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            if (done || mc.player == null) return;
+            if (done) return;
+            if (mc.player == null) { ProbeCompat.dismissWorldConfirm(mc); return; }
             try {
-                if (mc.gui.screen() != null && mc.gui.screen().isPauseScreen()) mc.gui.setScreen(null);
-                if (flight == 0 || mc.gui.screen() != null) return;
+                if (ProbeCompat.screen(mc) != null && ProbeCompat.screen(mc).isPauseScreen()) ProbeCompat.setScreen(mc, null);
+                if (flight == 0 || ProbeCompat.screen(mc) != null) return;
                 var p = mc.player;
                 var bot = mc.level.getEntity(botId);
                 if (bot == null) return;
@@ -126,13 +124,9 @@ public class CobwebProbe implements ClientModInitializer {
                 Vec3 foot = bot.position().add(0, .96, -.501);
                 p.lookAt(Anchor.EYES, foot);
                 if (p.onGround() || p.getDeltaMovement().y >= 0 || p.getY() > ground + 1.85 || p.fallDistance < 2) return;
-                var pick = Minecraft.class.getDeclaredMethod("pick", float.class);
-                pick.setAccessible(true);
-                pick.invoke(mc, 1f);
+                ProbeCompat.pick(mc, 1f);
                 if (!(mc.hitResult instanceof EntityHitResult e && e.getEntity() == bot)) return;
-                var click = Minecraft.class.getDeclaredMethod("startAttack");
-                click.setAccessible(true);
-                click.invoke(mc);
+                ProbeCompat.startAttack(mc);
                 log("LIVE click=" + (++clicks) + " clientFeet=" + (p.getY() - ground) + " fallDistance=" + p.fallDistance
                     + " rayHeight=" + (mc.hitResult.getLocation().y - ground));
                 if (clicks == 2) flight = 0;

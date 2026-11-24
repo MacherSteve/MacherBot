@@ -1,5 +1,6 @@
 # Lokale Offline-Bibliotheken (gehoeren zur lokalen Build-Umgebung, nicht ins Git-Repo)
 Bibliotheken/
+Bibliotheken-1.21.11/
 
 # Build- und Testausgaben
 build/
