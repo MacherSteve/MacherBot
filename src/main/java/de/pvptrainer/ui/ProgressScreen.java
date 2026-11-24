@@ -20,7 +20,7 @@ import net.minecraft.util.FormattedCharSequence;
 
 /** Unified Apple-style Statistics screen combining Verlauf (progress charts), Rundenlog (live/recent runs), and Bot-Analyse. */
 final class ProgressScreen extends TrainerPanel {
-    private static final int CANVAS = 0xFF191920, CARD_BG = 0xFF22222A, GRID = 0x26FFFFFF;
+    private static final int CANVAS = 0xFF101015, CARD_BG = 0xFF18181F, GRID = 0x20FFFFFF;
     private static final int MINT = 0xFF5AD9A0, CORAL = 0xFFFF7A85, AMBER = 0xFFFFC266, NEUTRAL = 0xFFAEAEB6;
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm").withZone(ZoneId.systemDefault());
     private static final int[] LIMITS = {10, 30, Integer.MAX_VALUE};

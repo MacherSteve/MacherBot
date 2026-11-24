@@ -330,6 +330,12 @@ public final class FeaturesProbe implements ClientModInitializer {
                     .map(pr -> pr.label(Drill.TRIPLE_TAP))
                     .allMatch(presetLabel -> tripleLabels.stream().anyMatch(l -> l.equals(presetLabel)));
                 check(tripleHasPresets, "Triple Tap counter-case missing preset buttons: " + tripleLabels);
+                check(tripleLabels.stream().anyMatch(l -> l.startsWith("Arena ·")),
+                    "Arena toggle switch missing in TrainingScreen: " + tripleLabels);
+                check(tripleLabels.stream().anyMatch(l -> l.startsWith("Spieltempo ·")),
+                    "TPS hover-slider chip missing in TrainingScreen: " + tripleLabels);
+                check(tripleLabels.stream().anyMatch(l -> l.startsWith("Ping ·") && l.contains("Bot")),
+                    "Dual Ping (Player + Bot) hover-slider chip missing in TrainingScreen: " + tripleLabels);
                 // Verify "Technik-Guide" button opens KnowledgeGuideScreen cleanly with categories & CTA
                 var guideBtn = tripleScreen.children().stream()
                     .filter(c -> c instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().contains("Technik-Guide"))

@@ -422,10 +422,10 @@ final class TrainingOptionsScreen extends TrainerPanel {
                && my >= by && my < by + this.advancedBar.h;
             fillRounded(graphics, this.advancedBar.x, by, this.advancedBar.w, this.advancedBar.h, hovered ? HOVER : SURFACE);
             outlineRounded(graphics, this.advancedBar.x, by, this.advancedBar.w, this.advancedBar.h,
-               this.advancedBar.hasModified ? withAlpha(EMBER, 0x80) : (hovered ? 0x45FFFFFF : LINE));
+               this.advancedBar.hasModified ? BORDER_SELECTED : (hovered ? BORDER_HOVER : LINE));
             UiIcons.draw(graphics, this.showAdvanced ? UiIcons.CHEVRON_DOWN : UiIcons.CHEVRON_RIGHT,
                this.advancedBar.x + 6, by + (this.advancedBar.h - 12) / 2,
-               this.advancedBar.hasModified ? EMBER : MUTED);
+               this.advancedBar.hasModified ? TEXT : MUTED);
             this.line(graphics, this.advancedBar.title, this.advancedBar.x + 22, by + (this.advancedBar.h - 8) / 2,
                this.advancedBar.w - 28, this.advancedBar.hasModified ? TEXT : MUTED);
          }
@@ -440,13 +440,13 @@ final class TrainingOptionsScreen extends TrainerPanel {
          switch (item.kind) {
             case TOGGLE -> {
                fillRounded(graphics, item.x, iy, item.w, item.h, hovered ? HOVER : CELL);
-               outlineRounded(graphics, item.x, iy, item.w, item.h, hovered ? 0x48FFFFFF : LINE);
+               outlineRounded(graphics, item.x, iy, item.w, item.h, hovered ? BORDER_HOVER : LINE);
                this.line(graphics, item.label, item.x + 8, iy + (item.h - 8) / 2, item.w - 40, TEXT);
                drawToggleSwitch(graphics, item.x + item.w - 29, iy + (item.h - 12) / 2, item.checked, hovered);
             }
             case CHOICE -> {
                fillRounded(graphics, item.x, iy, item.w, item.h, hovered ? HOVER : CELL);
-               outlineRounded(graphics, item.x, iy, item.w, item.h, hovered ? 0x48FFFFFF : LINE);
+               outlineRounded(graphics, item.x, iy, item.w, item.h, hovered ? BORDER_HOVER : LINE);
                String valText = item.value + " ▸";
                int valW = Math.min(item.w / 2, this.font.width(valText));
                this.line(graphics, item.label, item.x + 8, iy + (item.h - 8) / 2, item.w - valW - 18, TEXT);
@@ -454,7 +454,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
             }
             case CARD -> {
                fillRounded(graphics, item.x, iy, item.w, item.h, item.checked ? SELECTED : (hovered ? HOVER : CELL));
-               outlineRounded(graphics, item.x, iy, item.w, item.h, item.checked ? withAlpha(EMBER, 0xC8) : (hovered ? 0x48FFFFFF : LINE));
+               outlineRounded(graphics, item.x, iy, item.w, item.h, item.checked ? BORDER_SELECTED : (hovered ? BORDER_HOVER : LINE));
                String fitted = this.fit(item.label, item.w - 10);
                graphics.text(this.font, fitted, item.x + (item.w - this.font.width(fitted)) / 2, iy + (item.h - 8) / 2, TEXT, false);
             }

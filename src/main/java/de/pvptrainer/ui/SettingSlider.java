@@ -39,25 +39,33 @@ final class SettingSlider extends AbstractSliderButton {
 
     static void drawAppleSlider(GuiGraphicsExtractor graphics, int x, int y, int w, int h,
                                 String label, String displayedValue, double progress, boolean active, boolean hovered) {
-        TrainerPanel.fillRounded(graphics, x, y, w, h, hovered && active ? TrainerPanel.HOVER : TrainerPanel.CELL);
-        TrainerPanel.outlineRounded(graphics, x, y, w, h, hovered && active ? 0x50FFFFFF : TrainerPanel.LINE);
+        drawAppleSlider(graphics, x, y, w, h, label, displayedValue, progress, active, hovered, TrainerPanel.ACCENT_LINE, true);
+    }
+
+    static void drawAppleSlider(GuiGraphicsExtractor graphics, int x, int y, int w, int h,
+                                String label, String displayedValue, double progress, boolean active, boolean hovered,
+                                int fillColor, boolean drawCard) {
+        if (drawCard) {
+            TrainerPanel.fillRounded(graphics, x, y, w, h, hovered && active ? TrainerPanel.HOVER : TrainerPanel.CELL);
+            TrainerPanel.outlineRounded(graphics, x, y, w, h, hovered && active ? TrainerPanel.BORDER_HOVER : TrainerPanel.LINE);
+        }
         var font = net.minecraft.client.Minecraft.getInstance().font;
-        int left = x + 7;
-        int right = x + w - 7;
+        int left = x + (drawCard ? 7 : 0);
+        int right = x + w - (drawCard ? 7 : 0);
         int valueWidth = font.width(displayedValue);
         int available = Math.max(0, right - left - valueWidth - 6);
         String heading = font.width(label) <= available ? label : font.plainSubstrByWidth(label, Math.max(0, available - font.width("…"))) + "…";
-        int textY = y + Math.max(3, (h - 15) / 2);
+        int textY = y + (drawCard ? Math.max(3, (h - 15) / 2) : 0);
         graphics.text(font, heading, left, textY, active ? TrainerPanel.TEXT : TrainerPanel.OFF, false);
         graphics.text(font, displayedValue, right - valueWidth, textY, active ? TrainerPanel.MUTED : TrainerPanel.OFF, false);
 
         // Sleek Apple-style rounded track + circular white knob
-        int trackY = y + h - 6;
+        int trackY = y + h - (drawCard ? 6 : 5);
         int trackW = Math.max(12, right - left);
         int clamped = (int) Math.round(Math.clamp(progress, 0.0, 1.0) * trackW);
-        TrainerPanel.fillRounded(graphics, left, trackY, trackW, 2, 0xFF383842);
+        TrainerPanel.fillRounded(graphics, left, trackY, trackW, 2, 0xFF2C2C35);
         if (clamped > 0) {
-            TrainerPanel.fillRounded(graphics, left, trackY, Math.max(2, clamped), 2, active ? TrainerPanel.EMBER : TrainerPanel.OFF);
+            TrainerPanel.fillRounded(graphics, left, trackY, Math.max(2, clamped), 2, active ? fillColor : TrainerPanel.OFF);
         }
         int knobX = Math.clamp(left + clamped - 3, left, right - 6);
         TrainerPanel.fillRounded(graphics, knobX, trackY - 2, 6, 6, active ? TrainerPanel.TEXT : TrainerPanel.OFF);

@@ -257,7 +257,7 @@ final class KnowledgeGuideScreen extends TrainerPanel {
       outlineRounded2(graphics, this.x, this.y, this.inner, 22, LINE);
       fillRounded2(graphics, this.detailX, this.detailY, this.detailW, this.detailH, SURFACE);
       outlineRounded2(graphics, this.detailX, this.detailY, this.detailW, this.detailH, BORDER);
-      graphics.fill(this.detailX + 1, this.detailY + 5, this.detailX + 3, this.detailY + this.detailH - 5, EMBER);
+      graphics.fill(this.detailX + 1, this.detailY + 5, this.detailX + 3, this.detailY + this.detailH - 5, BORDER_SELECTED);
 
       if (this.activeEntry == null) {
          this.line(graphics, "Kein Eintrag verfügbar.", this.detailX + 10, this.detailY + 10, this.detailW - 20, MUTED);

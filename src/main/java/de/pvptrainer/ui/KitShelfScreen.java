@@ -240,23 +240,23 @@ final class KitShelfScreen extends TrainerPanel {
             boolean hoverDel = inView && mx >= delX && mx < delX + row.delW && my >= ry && my < ry + row.h;
 
             // Main kit row card
-            fillRounded(graphics, row.x, ry, row.mainW, row.h, row.inUse ? (hoverMain ? 0xFF3E2A30 : SELECTED) : (hoverMain ? HOVER : CELL));
-            outlineRounded(graphics, row.x, ry, row.mainW, row.h, row.inUse ? withAlpha(EMBER, 0xC0) : (hoverMain ? 0x48FFFFFF : LINE));
+            fillRounded(graphics, row.x, ry, row.mainW, row.h, row.inUse ? (hoverMain ? 0xFF2E2E3A : SELECTED) : (hoverMain ? HOVER : CELL));
+            outlineRounded(graphics, row.x, ry, row.mainW, row.h, row.inUse ? BORDER_SELECTED : (hoverMain ? BORDER_HOVER : LINE));
             graphics.item(bookIcon, row.x + 6, ry + (row.h - 16) / 2);
             this.line(graphics, row.kit.name(), row.x + 26, ry + 4, row.mainW - 34, TEXT);
-            this.line(graphics, row.inUse ? "Ausgerüstet" : "Klicken zum Ausrüsten", row.x + 26, ry + 15, row.mainW - 34, row.inUse ? EMBER : MUTED);
+            this.line(graphics, row.inUse ? "Ausgerüstet" : "Klicken zum Ausrüsten", row.x + 26, ry + 15, row.mainW - 34, row.inUse ? APPLE_GREEN : MUTED);
 
             // Edit button
             fillRounded(graphics, editX, ry, row.editW, row.h, hoverEdit ? HOVER : CELL);
-            outlineRounded(graphics, editX, ry, row.editW, row.h, hoverEdit ? 0x48FFFFFF : LINE);
+            outlineRounded(graphics, editX, ry, row.editW, row.h, hoverEdit ? BORDER_HOVER : LINE);
             String editLbl = this.fit("Bearbeiten", row.editW - 6);
             graphics.text(this.font, editLbl, editX + (row.editW - this.font.width(editLbl)) / 2, ry + (row.h - 8) / 2, TEXT, false);
 
             // Delete button
-            fillRounded(graphics, delX, ry, row.delW, row.h, hoverDel ? 0xFF472529 : CELL);
-            outlineRounded(graphics, delX, ry, row.delW, row.h, hoverDel ? withAlpha(EMBER, 0xA0) : LINE);
+            fillRounded(graphics, delX, ry, row.delW, row.h, hoverDel ? HOVER : CELL);
+            outlineRounded(graphics, delX, ry, row.delW, row.h, hoverDel ? BORDER_HOVER : LINE);
             String delLbl = this.fit("Löschen", row.delW - 6);
-            graphics.text(this.font, delLbl, delX + (row.delW - this.font.width(delLbl)) / 2, ry + (row.h - 8) / 2, hoverDel ? EMBER : MUTED, false);
+            graphics.text(this.font, delLbl, delX + (row.delW - this.font.width(delLbl)) / 2, ry + (row.h - 8) / 2, hoverDel ? TEXT : MUTED, false);
          }
       }
       graphics.disableScissor();

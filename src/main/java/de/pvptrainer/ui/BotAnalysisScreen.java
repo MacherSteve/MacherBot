@@ -21,7 +21,7 @@ import net.minecraft.util.Util;
 
 /** Bot-Analyse tab inside the unified Apple-style Statistik view. */
 final class BotAnalysisScreen extends TrainerPanel {
-    private static final int CARD_BG = 0xFF22222A, CANVAS = 0xFF191920, MINT = 0xFF5AD9A0, AMBER = 0xFFFFC266;
+    private static final int CARD_BG = 0xFF18181F, CANVAS = 0xFF101015, MINT = 0xFF5AD9A0, AMBER = 0xFFFFC266;
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM. HH:mm").withZone(ZoneId.systemDefault());
 
     private final String preferred;

@@ -11,22 +11,26 @@ import de.pvptrainer.progress.DrillHistory;
 import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.TrainingStatus;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 
 public final class TrainingScreen extends TrainerPanel {
-   private static final int[] TPS_STEPS = {20, 15, 10, 5};
-   private static final int[] PING_STEPS = {0, 30, 60, 100};
+   private enum PopoverKind { NONE, TPS, PING }
 
    private boolean running;
    private boolean available;
@@ -62,6 +66,21 @@ public final class TrainingScreen extends TrainerPanel {
    private int failureY;
    private int failureW;
    private int failureH;
+
+   // Hover-Popover state for precise TPS (1..20) & Ping (Player + Bot 0..300 ms) sliders
+   private PopoverKind openPopover = PopoverKind.NONE;
+   private int draggingPopoverSlider; // 0 = none, 1 = TPS, 2 = Player Ping, 3 = Bot Ping
+   private int tpsChipX, tpsChipY, tpsChipW, tpsChipH;
+   private int pingChipX, pingChipY, pingChipW, pingChipH;
+   private int popX, popY, popW, popH;
+   private int popResetX, popResetY, popResetW, popResetH;
+   private int popSlider1X, popSlider1Y, popSlider1W, popSlider1H;
+   private int popSlider2X, popSlider2Y, popSlider2W, popSlider2H;
+
+   // Remember last non-default values so 1-click on Clock/Ping icon toggles cleanly
+   private static int lastSlowMoTps = 10;
+   private static int lastPlayerPing = 30;
+   private static int lastBotPing = 0;
 
    public TrainingScreen() {
       super(null, "MacherBot", TrainerClient.selected().mode());
@@ -102,6 +121,12 @@ public final class TrainingScreen extends TrainerPanel {
       this.shownFailure = this.latestFailure(status);
       this.shownUpdate = UpdateChecker.available();
 
+      if (options.tickRate() < 20) lastSlowMoTps = options.tickRate();
+      if (options.playerPing() > 0 || options.botPing() > 0) {
+         lastPlayerPing = options.playerPing();
+         lastBotPing = options.botPing();
+      }
+
       boolean compact = this.panelWidth < 510 || this.panelHeight < 292;
 
       // Calm live subtitle in header
@@ -121,19 +146,19 @@ public final class TrainingScreen extends TrainerPanel {
       }
 
       // --- Apple-style Header Toolbar (right to left before ×) ---
-      int cursorRight = this.right - 24; // leaves room for default × button (20px + 4px gap)
+      int cursorRight = this.right - 24;
       int headerBtnY = this.top + 6;
       int headerBtnH = 17;
 
       // Settings Gear Icon
       int gearW = 22;
       cursorRight -= gearW;
-      IconChip gearBtn = this.iconChip(cursorRight, headerBtnY, gearW, headerBtnH, UiIcons.GEAR, "", false, EMBER,
+      IconChip gearBtn = this.iconChip(cursorRight, headerBtnY, gearW, headerBtnH, UiIcons.GEAR, "", false, ACCENT_LINE,
          () -> this.open(new TrainingOptionsScreen(this, this.mode)), null, null)
          .tip("Einstellungen · Übung, Bot, Arena & Anzeige");
       gearBtn.setMessage(Component.literal("Einstellungen"));
 
-      cursorRight -= 8; // visual hairline divider space
+      cursorRight -= 8;
 
       // Flat Header Navigation: Statistik · Guide · Kits
       int statsW = this.font.width("Statistik") + (compact ? 8 : 12);
@@ -212,14 +237,14 @@ public final class TrainingScreen extends TrainerPanel {
       this.mode = nextMode;
       this.scrollOffset = 0;
       this.lastClickedDrill = null;
+      this.openPopover = PopoverKind.NONE;
       TrainerClient.saveSetup(targetSettings, targetOpts);
       this.refresh();
    }
 
    private void selectDrill(Drill drill, boolean launch) {
       DrillOptions current = TrainerClient.options(this.mode);
-      boolean changed = drill != current.drill();
-      if (changed) {
+      if (drill != current.drill()) {
          DrillOptions next = current.carryModifiersTo(DrillOptions.forDrill(drill), this.mode);
          TrainingSettings nextSettings = TrainerClient.settings(this.mode).forDrill(drill);
          TrainerClient.saveSetup(nextSettings, next);
@@ -292,7 +317,7 @@ public final class TrainingScreen extends TrainerPanel {
       // --- Dock Line 1: Title + guide hint + [?] Guide icon ---
       int line1Y = this.dockTop + (compact ? 5 : 6);
       int helpSize = 16;
-      this.iconChip(dRight - helpSize, line1Y - 1, helpSize, helpSize, UiIcons.HELP, "", false, EMBER,
+      this.iconChip(dRight - helpSize, line1Y - 1, helpSize, helpSize, UiIcons.HELP, "", false, ACCENT_LINE,
          () -> this.open(new KnowledgeGuideScreen(this, this.mode, drill)), null, null)
          .tip("Technik-Guide zu " + drill.label() + " öffnen");
 
@@ -300,7 +325,6 @@ public final class TrainingScreen extends TrainerPanel {
       this.dockTitleY = line1Y + 2;
       this.dockTitleMaxW = dInner - helpSize - 6;
 
-      // Optional clickable failure note replaces extra space on line 1 right before [?]
       this.failureW = 0;
       if (this.shownFailure != null) {
          String shortFail = "⚠ " + this.fit(this.shownFailure.reason(), Math.min(180, dInner / 2));
@@ -311,7 +335,7 @@ public final class TrainingScreen extends TrainerPanel {
          this.dockTitleMaxW = Math.max(60, this.failureX - dx - 6);
       }
 
-      // --- Dock Line 2: Context Setup (Variants / Duel Tier / Flight) + Active Kit Pill ---
+      // --- Dock Line 2: Context Setup + Active Kit Pill ---
       int line2Y = this.dockTop + (compact ? 24 : 26);
       int line2H = compact ? 18 : 19;
 
@@ -325,12 +349,12 @@ public final class TrainingScreen extends TrainerPanel {
       int setupMaxW = dInner - kitPillW - 6;
       this.buildSetupStrip(options, drill, dx, line2Y, setupMaxW, line2H, compact);
 
-      // --- Dock Line 3: 6 Sticky Quick-Modifier Icons (left) + Primary Start / Stop CTA (right) ---
+      // --- Dock Line 3: Quick Modifiers (TPS hover-slider, Arena switch, Ping hover-slider, Zero-DMG, Infinite, Fall) + CTA ---
       int line3Y = this.dockTop + this.dockH - (compact ? 26 : 28);
       int line3H = compact ? 21 : 22;
 
-      int stopW = this.running ? (compact ? 64 : 74) : 0;
-      int startW = compact ? 112 : 136;
+      int stopW = this.running ? (compact ? 62 : 72) : 0;
+      int startW = compact ? 106 : 130;
       int ctaRight = dRight;
 
       if (this.running) {
@@ -348,7 +372,7 @@ public final class TrainingScreen extends TrainerPanel {
          + " · Doppelklick auf Übung startet direkt\nNeustart im Spiel: " + TrainerClient.restartKeyLabel().getString());
 
       int iconsMaxRight = ctaRight - startW - 8;
-      this.buildQuickIcons(options, dx, line3Y, line3H, iconsMaxRight, compact);
+      this.buildQuickModifiers(options, dx, line3Y, line3H, iconsMaxRight, compact);
    }
 
    private void buildSetupStrip(DrillOptions options, Drill drill, int sx, int sy, int maxW, int sh, boolean compact) {
@@ -356,7 +380,6 @@ public final class TrainingScreen extends TrainerPanel {
       TrainingSettings settings = TrainerClient.settings(this.mode);
 
       if (drill == Drill.DUEL) {
-         // Tier T1–T5 + Band LT–HT / LT / HT cleanly in one row
          int bandW = compact ? 96 : 114;
          int tiersW = Math.max(90, maxW - bandW - 6);
          TrainingSettings.DuelTier[] tiers = TrainingSettings.DuelTier.values();
@@ -417,7 +440,6 @@ public final class TrainingScreen extends TrainerPanel {
       }
 
       if (drill == Drill.WIND_STUN_SLAM) {
-         // Air start presets + Wind flight mode side by side in ONE clean row
          int leftW = (maxW - 6) * 48 / 100;
          int rightX = sx + leftW + 6;
          int rightW = maxW - leftW - 6;
@@ -467,7 +489,6 @@ public final class TrainingScreen extends TrainerPanel {
          return;
       }
 
-      // Standard 3 contextual drill variants (presets keep sticky modifiers!)
       TrainingPreset[] presets = TrainingPreset.values();
       for (int i = 0; i < presets.length; i++) {
          TrainingPreset preset = presets[i];
@@ -483,42 +504,70 @@ public final class TrainingScreen extends TrainerPanel {
       }
    }
 
-   private void buildQuickIcons(DrillOptions options, int startX, int y, int h, int maxRight, boolean compact) {
+   private void buildQuickModifiers(DrillOptions options, int startX, int y, int h, int maxRight, boolean compact) {
       int cx = startX;
       int chipGap = compact ? 3 : 4;
       int baseW = compact ? 22 : 24;
 
-      // 1. Spieltempo (TPS): gray at 20 TPS, Amber + value when Slow-Mo
+      // 1. Spieltempo (TPS): Hover opens precision 1–20 TPS slider; click toggles 20 <-> last Slow-Mo
       int tps = options.tickRate();
       boolean slowMo = tps != 20;
       String tpsLabel = slowMo ? (compact ? Integer.toString(tps) : tps + " TPS") : "";
       int tpsW = slowMo ? Math.max(baseW + 14, 18 + this.font.width(tpsLabel) + 6) : baseW;
+      this.tpsChipX = cx; this.tpsChipY = y; this.tpsChipW = tpsW; this.tpsChipH = h;
       if (cx + tpsW <= maxRight) {
-         this.iconChip(cx, y, tpsW, h, UiIcons.CLOCK, tpsLabel, slowMo, ACCENT_AMBER,
-            () -> this.setTickRate(nextPreset(TPS_STEPS, tps)),
-            () -> this.setTickRate(tps <= 1 ? 20 : tps - 1),
-            dir -> this.setTickRate(Math.clamp(tps + dir, 1, 20)))
-            .tip("Spieltempo: " + tps + " TPS" + (slowMo ? " (Slow-Mo aktiv)" : " (Normal)")
-               + "\nLinksklick: 20 → 15 → 10 → 5 TPS\nRechtsklick / Mausrad: fein ±1 TPS");
-         cx += tpsW + chipGap;
-      }
-
-      // 2. Arena-Größe: gray at Standard, Green + "Groß" when Large Arena
-      boolean large = options.largeArena();
-      String arenaLabel = large ? (compact ? "Gr." : "Groß") : "";
-      int arenaW = large ? Math.max(baseW + 14, 18 + this.font.width(arenaLabel) + 6) : baseW;
-      if (cx + arenaW <= maxRight) {
-         this.iconChip(cx, y, arenaW, h, UiIcons.ARENA, arenaLabel, large, ACCENT_GREEN,
+         IconChip tpsChip = this.iconChip(cx, y, tpsW, h, UiIcons.CLOCK, tpsLabel, slowMo, ACCENT_AMBER,
             () -> {
-               TrainerClient.saveOptions(this.mode, options.withIndex(DrillOptions.Field.ARENA_SIZE, large ? 0 : 1));
-               this.refresh();
-            }, null, null)
-            .tip("Arena: " + (large ? "Groß (Hügel, 80 Bl. Tiefe)" : "Standard (Forge-Arena)")
-               + "\nKlicken zum Wechseln (bleibt beim Übungswechsel aktiv)");
-         cx += arenaW + chipGap;
+               int target = tps == 20 ? lastSlowMoTps : 20;
+               this.setTickRate(target, true);
+            },
+            () -> this.setTickRate(20, true),
+            dir -> this.setTickRate(Math.clamp(TrainerClient.options(this.mode).tickRate() + dir, 1, 20), true));
+         tpsChip.setMessage(Component.literal("Spieltempo · " + tps + " TPS"));
+         cx += tpsW + chipGap;
+      } else {
+         this.tpsChipW = 0;
       }
 
-      // 3. Zero-Damage: gray when OFF, Sky Blue (Player) / Cyan (Both) when active
+      // 2. Arena-Größe Toggle-Switch: Links = Kleine Arena (Standard), Rechts = Große Arena
+      boolean large = options.largeArena();
+      String leftLbl = compact ? "Kl." : "Klein";
+      String rightLbl = compact ? "Gr." : "Groß";
+      int arenaSwitchW = this.font.width(leftLbl) + this.font.width(rightLbl) + 22 + 18;
+      if (cx + arenaSwitchW <= maxRight) {
+         this.addRenderableWidget(new ArenaSwitch(cx, y, arenaSwitchW, h, leftLbl, rightLbl, large, () -> {
+            TrainerClient.saveOptions(this.mode, TrainerClient.options(this.mode).withIndex(DrillOptions.Field.ARENA_SIZE, large ? 0 : 1));
+            this.refresh();
+         }));
+         cx += arenaSwitchW + chipGap;
+      }
+
+      // 3. Ping-Simulation (Dein Ping + Bot-Ping): Hover opens dual-slider popover!
+      int playerPing = options.playerPing();
+      int botPing = options.botPing();
+      boolean pingActive = playerPing > 0 || botPing > 0;
+      String pingLabel = formatPingChip(playerPing, botPing, compact);
+      int pingW = pingActive ? Math.max(baseW + 14, 18 + this.font.width(pingLabel) + 6) : baseW;
+      this.pingChipX = cx; this.pingChipY = y; this.pingChipW = pingW; this.pingChipH = h;
+      if (cx + pingW <= maxRight) {
+         IconChip pingChip = this.iconChip(cx, y, pingW, h, UiIcons.PING, pingLabel, pingActive, ACCENT_CORAL,
+            () -> {
+               if (pingActive) {
+                  this.setPings(0, 0, true);
+               } else {
+                  int pTarget = (lastPlayerPing == 0 && lastBotPing == 0) ? 30 : lastPlayerPing;
+                  this.setPings(pTarget, lastBotPing, true);
+               }
+            },
+            () -> this.setPings(0, 0, true),
+            dir -> this.setPlayerPing(Math.clamp(TrainerClient.options(this.mode).playerPing() + dir * 5, 0, 300), true));
+         pingChip.setMessage(Component.literal("Ping · Du " + playerPing + " ms / Bot " + botPing + " ms"));
+         cx += pingW + chipGap;
+      } else {
+         this.pingChipW = 0;
+      }
+
+      // 4. Zero-Damage: gray when OFF, Sky Blue (Du) / Cyan (2×) when active
       DrillOptions.ZeroDamage zd = options.zeroDamage();
       boolean zdActive = zd != DrillOptions.ZeroDamage.OFF;
       String zdLabel = switch (zd) {
@@ -549,21 +598,6 @@ public final class TrainingScreen extends TrainerPanel {
          cx += zdW + chipGap;
       }
 
-      // 4. Ping-Simulation: gray at 0 ms, Coral + ms when active
-      int ping = options.playerPing();
-      boolean pingActive = ping > 0;
-      String pingLabel = pingActive ? (compact ? Integer.toString(ping) : ping + " ms") : "";
-      int pingW = pingActive ? Math.max(baseW + 14, 18 + this.font.width(pingLabel) + 6) : baseW;
-      if (cx + pingW <= maxRight) {
-         this.iconChip(cx, y, pingW, h, UiIcons.PING, pingLabel, pingActive, ACCENT_CORAL,
-            () -> this.setPlayerPing(nextPreset(PING_STEPS, ping)),
-            () -> this.setPlayerPing(ping <= 0 ? 100 : Math.max(0, ping - 5)),
-            dir -> this.setPlayerPing(Math.clamp(ping + dir * 5, 0, 300)))
-            .tip("Dein Ping: " + ping + " ms" + (pingActive ? " (simuliert)" : " (lokal)")
-               + "\nLinksklick: 0 → 30 → 60 → 100 ms\nRechtsklick / Mausrad: fein ±5 ms");
-         cx += pingW + chipGap;
-      }
-
       // 5. Unendliche Items: gray when consuming items, Violet when Infinite Items ON
       boolean infinite = !options.itemConsumption(this.mode);
       if (cx + baseW <= maxRight) {
@@ -590,28 +624,207 @@ public final class TrainingScreen extends TrainerPanel {
       }
    }
 
-   private void setTickRate(int tps) {
+   private static String formatPingChip(int playerPing, int botPing, boolean compact) {
+      if (playerPing == 0 && botPing == 0) return "";
+      if (botPing == 0) return compact ? Integer.toString(playerPing) : playerPing + " ms";
+      if (playerPing == 0) return "B " + botPing;
+      return playerPing + "/" + botPing;
+   }
+
+   private void setTickRate(int tps, boolean rebuild) {
+      int clamped = Math.clamp(tps, 1, 20);
+      if (clamped < 20) lastSlowMoTps = clamped;
       DrillOptions current = TrainerClient.options(this.mode);
+      if (current.tickRate() == clamped) return;
       DrillOptions.Field field = DrillOptions.Field.TICK_RATE;
-      TrainerClient.saveOptions(this.mode, current.withIndex(field, field.indexOfNumber(Math.clamp(tps, 1, 20))));
-      this.refresh();
+      TrainerClient.saveOptions(this.mode, current.withIndex(field, field.indexOfNumber(clamped)));
+      if (rebuild) this.refresh();
    }
 
-   private void setPlayerPing(int ms) {
+   private void setPlayerPing(int ms, boolean rebuild) {
+      int snapped = Math.clamp((int)(Math.round(ms / 5.0) * 5), 0, 300);
       DrillOptions current = TrainerClient.options(this.mode);
+      if (current.playerPing() == snapped) return;
+      if (snapped > 0 || current.botPing() > 0) {
+         lastPlayerPing = snapped;
+         lastBotPing = current.botPing();
+      }
       DrillOptions.Field field = DrillOptions.Field.PLAYER_PING;
-      int snapped = Math.clamp((ms / 5) * 5, 0, 300);
       TrainerClient.saveOptions(this.mode, current.withIndex(field, field.indexOfNumber(snapped)));
-      this.refresh();
+      if (rebuild) this.refresh();
    }
 
-   private static int nextPreset(int[] presets, int current) {
-      for (int i = 0; i < presets.length; i++) {
-         if (presets[i] == current) {
-            return presets[(i + 1) % presets.length];
+   private void setBotPing(int ms, boolean rebuild) {
+      int snapped = Math.clamp((int)(Math.round(ms / 5.0) * 5), 0, 300);
+      DrillOptions current = TrainerClient.options(this.mode);
+      if (current.botPing() == snapped) return;
+      if (current.playerPing() > 0 || snapped > 0) {
+         lastPlayerPing = current.playerPing();
+         lastBotPing = snapped;
+      }
+      DrillOptions.Field field = DrillOptions.Field.BOT_PING;
+      TrainerClient.saveOptions(this.mode, current.withIndex(field, field.indexOfNumber(snapped)));
+      if (rebuild) this.refresh();
+   }
+
+   private void setPings(int playerMs, int botMs, boolean rebuild) {
+      int pSnapped = Math.clamp((int)(Math.round(playerMs / 5.0) * 5), 0, 300);
+      int bSnapped = Math.clamp((int)(Math.round(botMs / 5.0) * 5), 0, 300);
+      if (pSnapped > 0 || bSnapped > 0) {
+         lastPlayerPing = pSnapped;
+         lastBotPing = bSnapped;
+      }
+      DrillOptions current = TrainerClient.options(this.mode);
+      DrillOptions updated = current
+         .withIndex(DrillOptions.Field.PLAYER_PING, DrillOptions.Field.PLAYER_PING.indexOfNumber(pSnapped))
+         .withIndex(DrillOptions.Field.BOT_PING, DrillOptions.Field.BOT_PING.indexOfNumber(bSnapped));
+      TrainerClient.saveOptions(this.mode, updated);
+      if (rebuild) this.refresh();
+   }
+
+   // --- Hover-Popover geometry & lifecycle ---
+
+   private void updatePopoverState(double mx, double my) {
+      if (this.draggingPopoverSlider != 0) {
+         this.computePopoverGeometry(this.openPopover);
+         return;
+      }
+      boolean overTpsChip = this.tpsChipW > 0 && inRect(mx, my, this.tpsChipX, this.tpsChipY, this.tpsChipW, this.tpsChipH);
+      boolean overPingChip = this.pingChipW > 0 && inRect(mx, my, this.pingChipX, this.pingChipY, this.pingChipW, this.pingChipH);
+
+      if (overTpsChip) {
+         this.openPopover = PopoverKind.TPS;
+         this.computePopoverGeometry(PopoverKind.TPS);
+         return;
+      }
+      if (overPingChip) {
+         this.openPopover = PopoverKind.PING;
+         this.computePopoverGeometry(PopoverKind.PING);
+         return;
+      }
+
+      if (this.openPopover != PopoverKind.NONE) {
+         this.computePopoverGeometry(this.openPopover);
+         int tx = this.openPopover == PopoverKind.TPS ? this.tpsChipX : this.pingChipX;
+         int ty = this.openPopover == PopoverKind.TPS ? this.tpsChipY : this.pingChipY;
+         int tw = this.openPopover == PopoverKind.TPS ? this.tpsChipW : this.pingChipW;
+         int bridgeLeft = Math.min(tx, this.popX) - 2;
+         int bridgeRight = Math.max(tx + tw, this.popX + this.popW) + 2;
+         boolean inPop = inRect(mx, my, this.popX - 2, this.popY - 2, this.popW + 4, this.popH + 4);
+         boolean inBridge = mx >= bridgeLeft && mx <= bridgeRight && my >= this.popY + this.popH - 2 && my <= ty + 2;
+         if (!inPop && !inBridge) {
+            this.openPopover = PopoverKind.NONE;
          }
       }
-      return presets[0];
+   }
+
+   private void computePopoverGeometry(PopoverKind kind) {
+      if (kind == PopoverKind.TPS) {
+         this.popW = 186;
+         this.popH = 48;
+         int anchorCenter = this.tpsChipX + this.tpsChipW / 2;
+         this.popX = Math.clamp(anchorCenter - this.popW / 2, this.x, this.right - this.popW);
+         this.popY = this.tpsChipY - this.popH - 5;
+         this.popSlider1X = this.popX + 9;
+         this.popSlider1Y = this.popY + 19;
+         this.popSlider1W = this.popW - 18;
+         this.popSlider1H = 22;
+         this.popSlider2W = 0;
+         this.popResetW = 24;
+         this.popResetH = 12;
+         this.popResetX = this.popX + this.popW - 9 - this.popResetW;
+         this.popResetY = this.popY + 6;
+      } else if (kind == PopoverKind.PING) {
+         this.popW = 200;
+         this.popH = 78;
+         int anchorCenter = this.pingChipX + this.pingChipW / 2;
+         this.popX = Math.clamp(anchorCenter - this.popW / 2, this.x, this.right - this.popW);
+         this.popY = this.pingChipY - this.popH - 5;
+         this.popSlider1X = this.popX + 9;
+         this.popSlider1Y = this.popY + 21;
+         this.popSlider1W = this.popW - 18;
+         this.popSlider1H = 22;
+         this.popSlider2X = this.popX + 9;
+         this.popSlider2Y = this.popY + 49;
+         this.popSlider2W = this.popW - 18;
+         this.popSlider2H = 22;
+         this.popResetW = 30;
+         this.popResetH = 12;
+         this.popResetX = this.popX + this.popW - 9 - this.popResetW;
+         this.popResetY = this.popY + 6;
+      }
+   }
+
+   private void drawActivePopover(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+      if (this.openPopover == PopoverKind.NONE) return;
+      DrillOptions opts = TrainerClient.options(this.mode);
+
+      // Soft Apple drop shadow + deep elevated surface + clean gray border
+      fillRounded2(g, this.popX + 2, this.popY + 3, this.popW, this.popH, 0x88000000);
+      fillRounded2(g, this.popX, this.popY, this.popW, this.popH, 0xFC14141A);
+      outlineRounded2(g, this.popX, this.popY, this.popW, this.popH, BORDER_SELECTED);
+
+      if (this.openPopover == PopoverKind.TPS) {
+         int tps = opts.tickRate();
+         boolean slowMo = tps < 20;
+         g.text(this.font, "Spieltempo", this.popX + 9, this.popY + 7, TEXT, false);
+         if (slowMo) {
+            boolean hoverReset = inRect(mouseX, mouseY, this.popResetX, this.popResetY, this.popResetW, this.popResetH);
+            fillRounded(g, this.popResetX, this.popResetY, this.popResetW, this.popResetH, hoverReset ? HOVER : CELL);
+            outlineRounded(g, this.popResetX, this.popResetY, this.popResetW, this.popResetH, hoverReset ? BORDER_HOVER : LINE);
+            String rst = "20";
+            g.text(this.font, rst, this.popResetX + (this.popResetW - this.font.width(rst)) / 2, this.popResetY + 2, TEXT, false);
+         } else {
+            String note = "Normal";
+            g.text(this.font, note, this.popX + this.popW - 9 - this.font.width(note), this.popY + 7, MUTED, false);
+         }
+         double progress = (tps - 1) / 19.0;
+         boolean hoverSlider = this.draggingPopoverSlider == 1 || inRect(mouseX, mouseY, this.popSlider1X, this.popSlider1Y, this.popSlider1W, this.popSlider1H);
+         SettingSlider.drawAppleSlider(g, this.popSlider1X, this.popSlider1Y, this.popSlider1W, this.popSlider1H,
+            "1 – 20 TPS", tps + " TPS", progress, true, hoverSlider, slowMo ? ACCENT_AMBER : ACCENT_LINE, false);
+      } else if (this.openPopover == PopoverKind.PING) {
+         int pPing = opts.playerPing();
+         int bPing = opts.botPing();
+         boolean anyPing = pPing > 0 || bPing > 0;
+         g.text(this.font, "Ping-Simulation", this.popX + 9, this.popY + 7, TEXT, false);
+         if (anyPing) {
+            boolean hoverReset = inRect(mouseX, mouseY, this.popResetX, this.popResetY, this.popResetW, this.popResetH);
+            fillRounded(g, this.popResetX, this.popResetY, this.popResetW, this.popResetH, hoverReset ? HOVER : CELL);
+            outlineRounded(g, this.popResetX, this.popResetY, this.popResetW, this.popResetH, hoverReset ? BORDER_HOVER : LINE);
+            String rst = "0 ms";
+            g.text(this.font, rst, this.popResetX + (this.popResetW - this.font.width(rst)) / 2, this.popResetY + 2, TEXT, false);
+         } else {
+            String note = "Lokal";
+            g.text(this.font, note, this.popX + this.popW - 9 - this.font.width(note), this.popY + 7, MUTED, false);
+         }
+         boolean hover1 = this.draggingPopoverSlider == 2 || inRect(mouseX, mouseY, this.popSlider1X, this.popSlider1Y, this.popSlider1W, this.popSlider1H);
+         SettingSlider.drawAppleSlider(g, this.popSlider1X, this.popSlider1Y, this.popSlider1W, this.popSlider1H,
+            "Dein Ping", pPing + " ms", pPing / 300.0, true, hover1, pPing > 0 ? ACCENT_CORAL : ACCENT_LINE, false);
+
+         boolean hover2 = this.draggingPopoverSlider == 3 || inRect(mouseX, mouseY, this.popSlider2X, this.popSlider2Y, this.popSlider2W, this.popSlider2H);
+         SettingSlider.drawAppleSlider(g, this.popSlider2X, this.popSlider2Y, this.popSlider2W, this.popSlider2H,
+            "Bot-Ping", bPing + " ms", bPing / 300.0, true, hover2, bPing > 0 ? ACCENT_CORAL : ACCENT_LINE, false);
+      }
+   }
+
+   private void applyPopoverDrag(double mx) {
+      if (this.draggingPopoverSlider == 1) {
+         double norm = Math.clamp((mx - this.popSlider1X) / Math.max(12, this.popSlider1W), 0.0, 1.0);
+         int tps = 1 + (int)Math.round(norm * 19.0);
+         this.setTickRate(tps, false);
+      } else if (this.draggingPopoverSlider == 2) {
+         double norm = Math.clamp((mx - this.popSlider1X) / Math.max(12, this.popSlider1W), 0.0, 1.0);
+         int ms = (int)Math.round(norm * 60.0) * 5;
+         this.setPlayerPing(ms, false);
+      } else if (this.draggingPopoverSlider == 3) {
+         double norm = Math.clamp((mx - this.popSlider2X) / Math.max(12, this.popSlider2W), 0.0, 1.0);
+         int ms = (int)Math.round(norm * 60.0) * 5;
+         this.setBotPing(ms, false);
+      }
+   }
+
+   private static boolean inRect(double mx, double my, int x, int y, int w, int h) {
+      return w > 0 && h > 0 && mx >= x && mx < x + w && my >= y && my < y + h;
    }
 
    private String activeKitName() {
@@ -651,30 +864,37 @@ public final class TrainingScreen extends TrainerPanel {
 
    @Override
    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-      super.extractRenderState(graphics, mouseX, mouseY, delta);
+      this.updatePopoverState(mouseX, mouseY);
+      boolean overPopover = this.openPopover != PopoverKind.NONE && inRect(mouseX, mouseY, this.popX, this.popY, this.popW, this.popH);
+      boolean maskBackground = overPopover || this.draggingPopoverSlider != 0;
+      super.extractRenderState(graphics, maskBackground ? -1000 : mouseX, maskBackground ? -1000 : mouseY, delta);
 
-      // Tooltips rendered AFTER widgets & scissor clipping so they never get cut off
-      if (mouseX >= this.x && mouseX <= this.right && mouseY >= this.viewTop && mouseY <= this.viewBottom) {
-         DrillTile hovered = this.tileAt(mouseX, mouseY);
-         if (hovered != null) {
-            DrillOptions opts = hovered.drill == TrainerClient.options(this.mode).drill()
-               ? TrainerClient.options(this.mode) : DrillOptions.forDrill(hovered.drill);
-            String desc = hovered.drill.hint();
-            String startNote = this.available ? "Klick: auswählen · Doppelklick: direkt starten" : "Zum Trainieren eine eigene Welt öffnen";
+      if (this.openPopover != PopoverKind.NONE) {
+         this.drawActivePopover(graphics, mouseX, mouseY);
+      }
+
+      // Suppress background tooltips when interacting with a floating slider popover
+      if (!maskBackground) {
+         if (mouseX >= this.x && mouseX <= this.right && mouseY >= this.viewTop && mouseY <= this.viewBottom) {
+            DrillTile hovered = this.tileAt(mouseX, mouseY);
+            if (hovered != null) {
+               String desc = hovered.drill.hint();
+               String startNote = this.available ? "Klick: auswählen · Doppelklick: direkt starten" : "Zum Trainieren eine eigene Welt öffnen";
+               graphics.setComponentTooltipForNextFrame(this.font, List.of(
+                  Component.literal(hovered.drill.label()).withStyle(ChatFormatting.BOLD),
+                  Component.literal(desc),
+                  Component.literal(startNote).withStyle(ChatFormatting.GRAY)
+               ), mouseX, mouseY);
+            }
+         } else if (this.shownFailure != null && this.failureW > 0
+            && mouseX >= this.failureX && mouseX <= this.failureX + this.failureW
+            && mouseY >= this.failureY && mouseY <= this.failureY + this.failureH) {
             graphics.setComponentTooltipForNextFrame(this.font, List.of(
-               Component.literal(hovered.drill.label()).withStyle(ChatFormatting.BOLD),
-               Component.literal(desc),
-               Component.literal(startNote).withStyle(ChatFormatting.GRAY)
+               Component.literal("Letzter Fehlversuch").withStyle(ChatFormatting.GOLD),
+               Component.literal(this.shownFailure.reason()),
+               Component.literal("Klicken für Rundenlog").withStyle(ChatFormatting.GRAY)
             ), mouseX, mouseY);
          }
-      } else if (this.shownFailure != null && this.failureW > 0
-         && mouseX >= this.failureX && mouseX <= this.failureX + this.failureW
-         && mouseY >= this.failureY && mouseY <= this.failureY + this.failureH) {
-         graphics.setComponentTooltipForNextFrame(this.font, List.of(
-            Component.literal("Letzter Fehlversuch").withStyle(ChatFormatting.GOLD),
-            Component.literal(this.shownFailure.reason()),
-            Component.literal("Klicken für Rundenlog").withStyle(ChatFormatting.GRAY)
-         ), mouseX, mouseY);
       }
    }
 
@@ -688,11 +908,12 @@ public final class TrainingScreen extends TrainerPanel {
       fillRounded2(graphics, this.x, this.modeBarY, this.inner, this.modeBarH, TRACK);
       outlineRounded2(graphics, this.x, this.modeBarY, this.inner, this.modeBarH, LINE);
 
-      // --- Aimlabs Exercise Grid (scissor-clipped) ---
+      // --- Aimlabs Exercise Grid (scissor-clipped, pure neutral gray contours) ---
       Drill activeDrill = TrainerClient.options(this.mode).drill();
       double mx = this.minecraft.mouseHandler.xpos() * this.width / Math.max(1, this.minecraft.getWindow().getScreenWidth());
       double my = this.minecraft.mouseHandler.ypos() * this.height / Math.max(1, this.minecraft.getWindow().getScreenHeight());
-      boolean inView = mx >= this.x && mx <= this.right && my >= this.viewTop && my <= this.viewBottom;
+      boolean blockedByPopover = this.openPopover != PopoverKind.NONE && inRect(mx, my, this.popX, this.popY, this.popW, this.popH);
+      boolean inView = !blockedByPopover && mx >= this.x && mx <= this.right && my >= this.viewTop && my <= this.viewBottom;
 
       graphics.enableScissor(this.x - 1, this.viewTop, this.right + 1, this.viewBottom);
       for (SectionLabel sec : this.sectionLabels) {
@@ -709,16 +930,15 @@ public final class TrainingScreen extends TrainerPanel {
          boolean selected = tile.drill == activeDrill;
          boolean hovered = inView && mx >= tile.x && mx < tile.x + tile.w && my >= ty && my < ty + tile.h;
 
-         int bg = selected ? (hovered ? 0xFF3E2A30 : SELECTED) : (hovered ? HOVER : (tile.freeMode ? 0xFF26262F : CELL));
+         int bg = selected ? (hovered ? 0xFF2D2D39 : SELECTED) : (hovered ? HOVER : (tile.freeMode ? 0xFF1C1C24 : CELL));
          fillRounded(graphics, tile.x, ty, tile.w, tile.h, bg);
          if (selected) {
-            outlineRounded(graphics, tile.x, ty, tile.w, tile.h, withAlpha(EMBER, 0xC8));
-            graphics.fill(tile.x + 1, ty + 4, tile.x + 3, ty + tile.h - 4, EMBER);
+            outlineRounded(graphics, tile.x, ty, tile.w, tile.h, hovered ? 0xFF8C8C9E : BORDER_SELECTED);
+            graphics.fill(tile.x + 1, ty + 4, tile.x + 3, ty + tile.h - 4, ACCENT_LINE);
          } else {
-            outlineRounded(graphics, tile.x, ty, tile.w, tile.h, hovered ? 0x48FFFFFF : LINE);
+            outlineRounded(graphics, tile.x, ty, tile.w, tile.h, hovered ? BORDER_HOVER : LINE);
          }
 
-         // Scaled crisp 12x12 Minecraft item icon
          ItemStack stack = UiIcons.drillIcon(tile.drill, this.mode);
          int iconX = tile.x + (selected ? 6 : 5);
          int iconY = ty + (tile.h - 12) / 2;
@@ -732,11 +952,10 @@ public final class TrainingScreen extends TrainerPanel {
          int textX = iconX + 15;
          int textMaxW = tile.x + tile.w - textX - 5;
          int textY = ty + (tile.h - 8) / 2;
-         this.line(graphics, tile.drill.label(), textX, textY, textMaxW, selected ? TEXT : (hovered ? TEXT : 0xFFE5E5EA));
+         this.line(graphics, tile.drill.label(), textX, textY, textMaxW, selected ? TEXT : (hovered ? TEXT : 0xFFE2E2E8));
       }
       graphics.disableScissor();
 
-      // Subtle Apple scrollbar when scrolling is needed
       if (this.maxScroll > 0) {
          drawScrollbar(graphics, this.right - 3, this.viewTop, this.viewBottom - this.viewTop,
             this.scrollOffset, this.maxScroll, this.contentHeight);
@@ -746,7 +965,6 @@ public final class TrainingScreen extends TrainerPanel {
       fillRounded2(graphics, this.x, this.dockTop, this.inner, this.dockH, SURFACE);
       outlineRounded2(graphics, this.x, this.dockTop, this.inner, this.dockH, BORDER);
 
-      // Dock Line 1: Selected Drill Icon + Bold Title + short guide inline
       ItemStack activeIcon = UiIcons.drillIcon(activeDrill, this.mode);
       var pose = graphics.pose();
       pose.pushMatrix();
@@ -765,18 +983,14 @@ public final class TrainingScreen extends TrainerPanel {
          this.line(graphics, "·  " + guideText, guideX, this.dockTitleY, guideW, MUTED);
       }
 
-      // Clickable Failure Pill (when last attempt failed)
       if (this.shownFailure != null && this.failureW > 0) {
          boolean hoverFail = mx >= this.failureX && mx <= this.failureX + this.failureW
             && my >= this.failureY && my <= this.failureY + this.failureH;
-         fillRounded(graphics, this.failureX, this.failureY, this.failureW, this.failureH,
-            withAlpha(ACCENT_AMBER, hoverFail ? 0x3A : 0x22));
-         outlineRounded(graphics, this.failureX, this.failureY, this.failureW, this.failureH,
-            withAlpha(ACCENT_AMBER, hoverFail ? 0xCC : 0x80));
+         fillRounded(graphics, this.failureX, this.failureY, this.failureW, this.failureH, hoverFail ? HOVER : CELL);
+         outlineRounded(graphics, this.failureX, this.failureY, this.failureW, this.failureH, hoverFail ? BORDER_HOVER : BORDER);
          this.line(graphics, "⚠ " + this.shownFailure.reason(), this.failureX + 5, this.failureY + 4, this.failureW - 10, ACCENT_AMBER);
       }
 
-      // If drill hides presets, show calm hint on Line 2 left
       if (activeDrill.hidesPresets()) {
          int line2Y = this.dockTop + (this.panelWidth < 510 || this.panelHeight < 292 ? 24 : 26);
          this.line(graphics, activeDrill.hint(), this.dockTitleX, line2Y + 5, Math.max(40, this.inner - 165), MUTED);
@@ -799,6 +1013,42 @@ public final class TrainingScreen extends TrainerPanel {
       double mx = event.x();
       double my = event.y();
 
+      // Priority 1: Active floating Hover-Popover intercepts clicks so nothing underneath gets triggered
+      if (this.openPopover != PopoverKind.NONE && inRect(mx, my, this.popX, this.popY, this.popW, this.popH)) {
+         if (event.button() == 0) {
+            DrillOptions opts = TrainerClient.options(this.mode);
+            if (this.openPopover == PopoverKind.TPS) {
+               if (opts.tickRate() < 20 && inRect(mx, my, this.popResetX, this.popResetY, this.popResetW, this.popResetH)) {
+                  this.playClick();
+                  this.setTickRate(20, true);
+                  return true;
+               }
+               if (inRect(mx, my, this.popSlider1X - 4, this.popSlider1Y - 2, this.popSlider1W + 8, this.popSlider1H + 4)) {
+                  this.draggingPopoverSlider = 1;
+                  this.applyPopoverDrag(mx);
+                  return true;
+               }
+            } else if (this.openPopover == PopoverKind.PING) {
+               if ((opts.playerPing() > 0 || opts.botPing() > 0) && inRect(mx, my, this.popResetX, this.popResetY, this.popResetW, this.popResetH)) {
+                  this.playClick();
+                  this.setPings(0, 0, true);
+                  return true;
+               }
+               if (inRect(mx, my, this.popSlider1X - 4, this.popSlider1Y - 2, this.popSlider1W + 8, this.popSlider1H + 4)) {
+                  this.draggingPopoverSlider = 2;
+                  this.applyPopoverDrag(mx);
+                  return true;
+               }
+               if (inRect(mx, my, this.popSlider2X - 4, this.popSlider2Y - 2, this.popSlider2W + 8, this.popSlider2H + 4)) {
+                  this.draggingPopoverSlider = 3;
+                  this.applyPopoverDrag(mx);
+                  return true;
+               }
+            }
+         }
+         return true;
+      }
+
       if (event.button() == 0) {
          // Scrollbar drag start
          if (this.maxScroll > 0 && mx >= this.right - 7 && mx <= this.right + 1 && my >= this.viewTop && my <= this.viewBottom) {
@@ -811,7 +1061,7 @@ public final class TrainingScreen extends TrainerPanel {
          // Click on Aimlabs drill card (single click selects, double click starts immediately!)
          DrillTile hit = this.tileAt(mx, my);
          if (hit != null) {
-            this.minecraft.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            this.playClick();
             long now = System.currentTimeMillis();
             boolean doubleClick = twice || (hit.drill == this.lastClickedDrill && now - this.lastClickMillis <= 360L);
             this.lastClickedDrill = hit.drill;
@@ -834,6 +1084,10 @@ public final class TrainingScreen extends TrainerPanel {
 
    @Override
    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+      if (this.draggingPopoverSlider != 0) {
+         this.applyPopoverDrag(event.x());
+         return true;
+      }
       if (this.draggingScrollbar && this.maxScroll > 0) {
          int viewH = Math.max(16, this.viewBottom - this.viewTop);
          int thumbH = Math.max(18, (int)Math.round((double)viewH * viewH / Math.max(viewH + 1, this.contentHeight)));
@@ -847,6 +1101,11 @@ public final class TrainingScreen extends TrainerPanel {
 
    @Override
    public boolean mouseReleased(MouseButtonEvent event) {
+      if (this.draggingPopoverSlider != 0) {
+         this.draggingPopoverSlider = 0;
+         this.refresh();
+         return true;
+      }
       if (this.draggingScrollbar) {
          this.draggingScrollbar = false;
          return true;
@@ -856,6 +1115,20 @@ public final class TrainingScreen extends TrainerPanel {
 
    @Override
    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+      if (this.openPopover != PopoverKind.NONE && inRect(mouseX, mouseY, this.popX, this.popY, this.popW, this.popH) && scrollY != 0) {
+         int dir = scrollY > 0 ? 1 : -1;
+         DrillOptions opts = TrainerClient.options(this.mode);
+         if (this.openPopover == PopoverKind.TPS) {
+            this.setTickRate(opts.tickRate() + dir, true);
+         } else if (this.openPopover == PopoverKind.PING) {
+            if (mouseY >= this.popSlider2Y - 2) {
+               this.setBotPing(opts.botPing() + dir * 5, true);
+            } else {
+               this.setPlayerPing(opts.playerPing() + dir * 5, true);
+            }
+         }
+         return true;
+      }
       if (this.maxScroll > 0 && mouseX >= this.x && mouseX <= this.right && mouseY >= this.viewTop && mouseY <= this.viewBottom) {
          int next = Math.clamp(this.scrollOffset - (int)Math.round(scrollY * 22.0), 0, this.maxScroll);
          if (next != this.scrollOffset) {
@@ -866,6 +1139,10 @@ public final class TrainingScreen extends TrainerPanel {
       return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
    }
 
+   private void playClick() {
+      this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+   }
+
    @Override
    public void tick() {
       if (this.running != TrainerClient.status().active()
@@ -874,6 +1151,47 @@ public final class TrainingScreen extends TrainerPanel {
          || !Objects.equals(this.shownFailure, this.latestFailure(TrainerClient.status()))
          || !Objects.equals(this.shownUpdate, UpdateChecker.available())) {
          this.refresh();
+      }
+   }
+
+   /** Clean Apple Toggle-Switch capsule for Arena Size (left = Klein/Standard, right = Groß). */
+   private final class ArenaSwitch extends Button {
+      private final String leftLabel;
+      private final String rightLabel;
+      private final boolean large;
+
+      ArenaSwitch(int x, int y, int w, int h, String leftLabel, String rightLabel, boolean large, Runnable onToggle) {
+         super(x, y, w, h, Component.literal("Arena · " + (large ? "Groß" : "Klein")), btn -> onToggle.run(), DEFAULT_NARRATION);
+         this.leftLabel = leftLabel;
+         this.rightLabel = rightLabel;
+         this.large = large;
+         this.setTooltip(Tooltip.create(Component.literal(
+            "Arena-Größe: " + (large ? "Groß (Hügel, 80 Bl. Tiefe)" : "Klein / Standard (Forge-Arena)")
+               + "\nLinks = Kleine Arena · Rechts = Große Arena")));
+         this.setTooltipDelay(Duration.ofMillis(240L));
+      }
+
+      @Override
+      protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+         boolean hover = this.active && this.isHoveredOrFocused();
+         int x = this.getX();
+         int y = this.getY();
+         int w = this.getWidth();
+         int h = this.getHeight();
+
+         fillRounded(graphics, x, y, w, h, hover ? HOVER : CELL);
+         outlineRounded(graphics, x, y, w, h, hover ? BORDER_HOVER : (this.large ? BORDER_SELECTED : LINE));
+
+         int leftW = TrainingScreen.this.font.width(this.leftLabel);
+         int rightW = TrainingScreen.this.font.width(this.rightLabel);
+         int switchW = 22;
+         int total = leftW + 4 + switchW + 4 + rightW;
+         int sx = x + Math.max(4, (w - total) / 2);
+         int textY = y + (h - 8) / 2;
+
+         graphics.text(TrainingScreen.this.font, this.leftLabel, sx, textY, this.large ? OFF : TEXT, false);
+         drawToggleSwitch(graphics, sx + leftW + 4, y + (h - 12) / 2, this.large, hover);
+         graphics.text(TrainingScreen.this.font, this.rightLabel, sx + leftW + 4 + switchW + 4, textY, this.large ? ACCENT_GREEN : OFF, false);
       }
    }
 

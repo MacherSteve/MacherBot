@@ -22,22 +22,25 @@ import net.minecraft.world.item.Items;
 abstract class TrainerPanel extends Screen {
    private static final Identifier BOT_SKIN = Identifier.fromNamespaceAndPath("pvptrainer", "textures/entity/macher_steve.png");
 
-   // Apple Dark-Mode inspired surface & typography palette
-   static final int PANEL = 0xF216161A;
-   static final int TRACK = 0xFF101014;
-   static final int SURFACE = 0xFF1E1E24;
-   static final int CELL = 0xFF24242C;
-   static final int HOVER = 0xFF2F2F39;
-   static final int SEGMENT_ACTIVE = 0xFF33333E;
-   static final int LINE = 0x24FFFFFF;
-   static final int BORDER = 0x2EFFFFFF;
+   // Apple Obsidian Dark-Mode palette (deep dark surfaces, neutral gray contours)
+   static final int PANEL = 0xF70C0C10;
+   static final int TRACK = 0xFF07070A;
+   static final int SURFACE = 0xFF121217;
+   static final int CELL = 0xFF18181F;
+   static final int HOVER = 0xFF22222B;
+   static final int SEGMENT_ACTIVE = 0xFF262630;
+   static final int LINE = 0xFF262630;
+   static final int BORDER = 0xFF343440;
+   static final int BORDER_HOVER = 0xFF525262;
+   static final int BORDER_SELECTED = 0xFF747486;
+   static final int ACCENT_LINE = 0xFFC8C8D4;
    static final int TEXT = 0xFFF5F5F7;
    static final int MUTED = 0xFF98989F;
    static final int OFF = 0xFF636368;
-   static final int EMBER = 0xFFFF6E63;
-   static final int CRIMSON = 0xFFD93E46;
-   static final int CRIMSON_HOVER = 0xFFEA4F57;
-   static final int SELECTED = 0xFF342429;
+   static final int EMBER = 0xFFC8C8D4;
+   static final int CRIMSON = 0xFFD43B44;
+   static final int CRIMSON_HOVER = 0xFFE54D56;
+   static final int SELECTED = 0xFF25252F;
    static final int APPLE_GREEN = 0xFF34C759;
 
    // Quick-Modifier semantic colors (active state; inactive is always OFF)
@@ -313,27 +316,27 @@ abstract class TrainerPanel extends Screen {
       }
       if (style == Style.SEGMENT) {
          if (hover) {
-            fillRounded(graphics, x, y, w, h, 0xFF282831);
+            fillRounded(graphics, x, y, w, h, 0xFF1D1D25);
          }
          return;
       }
       if (style == Style.SEGMENT_SELECTED) {
-         fillRounded(graphics, x, y, w, h, hover ? 0xFF3A3A47 : SEGMENT_ACTIVE);
-         outlineRounded(graphics, x, y, w, h, 0x33FFFFFF);
+         fillRounded(graphics, x, y, w, h, hover ? 0xFF2E2E3A : SEGMENT_ACTIVE);
+         outlineRounded(graphics, x, y, w, h, BORDER_HOVER);
          return;
       }
       boolean primary = widget.active && style == Style.PRIMARY;
       if (primary) {
          fillRounded2(graphics, x, y, w, h, hover ? CRIMSON_HOVER : CRIMSON);
-         outlineRounded2(graphics, x, y, w, h, 0x30FFFFFF);
+         outlineRounded2(graphics, x, y, w, h, 0x26FFFFFF);
          return;
       }
       int fill = hover ? HOVER : (style == Style.SELECTED ? selectedColor : CELL);
       fillRounded(graphics, x, y, w, h, fill);
-      if (hover) {
-         outlineRounded(graphics, x, y, w, h, 0x60FFFFFF);
-      } else if (style == Style.SELECTED && widget.active) {
-         outlineRounded(graphics, x, y, w, h, withAlpha(accentColor, 0xB8));
+      if (style == Style.SELECTED && widget.active) {
+         outlineRounded(graphics, x, y, w, h, hover ? 0xFF8A8A9C : BORDER_SELECTED);
+      } else if (hover) {
+         outlineRounded(graphics, x, y, w, h, BORDER_HOVER);
       } else {
          outlineRounded(graphics, x, y, w, h, LINE);
       }
@@ -459,11 +462,11 @@ abstract class TrainerPanel extends Screen {
          int w = this.getWidth();
          int h = this.getHeight();
          if (this.activeState) {
-            fillRounded(graphics, x, y, w, h, hover ? withAlpha(this.activeColor, 0x42) : withAlpha(this.activeColor, 0x29));
-            outlineRounded(graphics, x, y, w, h, withAlpha(this.activeColor, hover ? 0xE0 : 0x99));
+            fillRounded(graphics, x, y, w, h, hover ? HOVER : SELECTED);
+            outlineRounded(graphics, x, y, w, h, hover ? 0xFF8A8A9C : BORDER_SELECTED);
          } else {
             fillRounded(graphics, x, y, w, h, hover ? HOVER : CELL);
-            outlineRounded(graphics, x, y, w, h, hover ? 0x48FFFFFF : LINE);
+            outlineRounded(graphics, x, y, w, h, hover ? BORDER_HOVER : LINE);
          }
 
          int iconTint = !this.active ? 0xFF48484D : (this.activeState ? this.activeColor : (hover ? MUTED : OFF));
