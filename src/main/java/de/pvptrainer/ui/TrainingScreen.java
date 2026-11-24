@@ -165,7 +165,7 @@ public final class TrainingScreen extends TrainerPanel {
       cursorRight -= statsW;
       this.action(cursorRight, headerBtnY, statsW, headerBtnH, "Statistik", Style.GHOST,
          () -> this.open(new ProgressScreen(this, this.mode)))
-         .tip("Verlauf, Rundenlog & Bot-Analyse");
+         .tip("Übersicht, Übungen, Rundenlog & Bot-Analyse");
 
       cursorRight -= 2;
       int guideW = this.font.width("Guide") + (compact ? 8 : 12);

@@ -327,13 +327,24 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
             && !wasBlocking && session.attempt != null && session.attempt.shieldWindowOpen();
         if ((webSmash || stunSlamMaceOpen || validSmash) && invulnerableTime > 10) invulnerableTime = 10;
 
+        double attackerFall = (session.owner != null && maceAttack) ? Math.max(0.0, session.owner.fallDistance) : 0.0;
         boolean hurt = super.hurtServer(level, source, amount);
+        if (hurt && source.getEntity() == session.owner) {
+            if (realMaceSmash || webSmash) {
+                session.metrics.recordMaceSmash(attackerFall, this.damageThisHit);
+            } else if (source.is(DamageTypes.PLAYER_ATTACK) && source.getDirectEntity() == session.owner) {
+                session.metrics.recordMeleeHit(session.swingCharge);
+            }
+        }
         if (webContact) {
             if (webSmash || !session.cobwebFlight.isFlightJudged()) {
                 session.attempt.finish(webSmash, webSmash ? "Smash unter der Netzkante gelandet!" : "Zu wenig Fallhöhe");
                 session.storeMaceRepetition();
             }
         } else if (drillSmash && hurt && !session.attempt.done() && !session.windTarget.isScoredWindFlight()) {
+            if (validSmash && session.options.drill() == Drill.WIND_STUN_SLAM) {
+                session.metrics.recordStunSlam();
+            }
             session.attempt.finish(validSmash, validSmash
                 ? "Axt-Stun und Smash im selben Flug!"
                 : "Brich das Schild in der Luft und triff den Bot vor seiner Landung.");
@@ -342,6 +353,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         if (confirmWeb && !session.attempt.done()) {
             pendingWebClick = 0;
             int remaining = Math.max(1, pendingWebDuration - (session.roundTick - pendingWebTick));
+            session.metrics.recordShieldStun();
             session.attempt.shieldStun(remaining);
             session.armSecondarySlam(remaining);
             stunImpulseAt = session.roundTick;
@@ -367,7 +379,10 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
             session.hits++;
             if (session.secondarySlam != null && realMaceSmash) {
                 session.secondarySlam.smash(session.owner, wasBlocking);
-                if (session.secondarySlam.won()) session.finishSecondarySlam();
+                if (session.secondarySlam.won()) {
+                    session.metrics.recordStunSlam();
+                    session.finishSecondarySlam();
+                }
             }
             if (!drillSmash && !isStunSlamDrill && source.is(DamageTypes.MACE_SMASH) && !session.airStartLanded()) {
                 session.attempt.smash(session.owner, wasBlocking);
@@ -392,8 +407,10 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
             : (offTotem && offHand.getCount() < offCount ? InteractionHand.OFF_HAND : null);
         if (poppedHand != null && this.isAlive()) {
             session.pops++;
+            session.metrics.recordBotPop();
             session.attempt.botPop();
             if (source.is(DamageTypes.BAD_RESPAWN_POINT)) {
+                session.metrics.recordAnchorPop();
                 session.attempt.anchorPop();
             }
             if (session.options.drill() == Drill.TOTEM_POPS) {
@@ -453,6 +470,9 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         float before = hpBefore + absBefore;
         super.actuallyHurt(level, source, amount);
         this.damageThisHit = Math.max(0.0F, before - DrillAttempt.health(this));
+        if (this.damageThisHit > 0.0F) {
+            session.metrics.recordDamageDealt(this.damageThisHit);
+        }
         if (TrainingResources.zeroDamageFor(this)) {
             boolean allowPop = session.options != null
                 && (session.options.drill().requiresPopChain() || session.options.drill() == Drill.TOTEM_POPS)
@@ -529,6 +549,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                     session.recordRepetition();
                 }
                 if (broken) {
+                    session.metrics.recordShieldBreak();
                     session.attempt.shieldBreak();
                     if (session.options.drill() == Drill.STUN_WEB && this.stunImpulseAt != session.roundTick) {
                         session.attempt.finish(false, "Schild ohne gültigen Stun verbraucht");
@@ -596,6 +617,7 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
                 int raiseTicks = (options.drill() == Drill.STUN_SLAM || options.drill() == Drill.ELY_STUN_SLAM)
                     && configured < 0 && !options.instantReblock()
                     ? shield.blockDelayTicks() : 0;
+                session.metrics.recordShieldStun();
                 session.attempt.shieldStun(pause + raiseTicks);
                 if (options.drill() == Drill.WIND_STUN_SLAM && !session.windTarget.isScoredWindFlight()
                     && session.windTarget.isAirborne(this) && pause > 0

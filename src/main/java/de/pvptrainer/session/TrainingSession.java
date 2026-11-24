@@ -14,6 +14,7 @@ import de.pvptrainer.kits.KitLoadout;
 import de.pvptrainer.arena.TrainingArena;
 import de.pvptrainer.combat.TrainingCrystal;
 import de.pvptrainer.kits.TrainingKit;
+import de.pvptrainer.progress.RoundMetricsCollector;
 import de.pvptrainer.progress.TrainingProgress;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.combat.TrainingTactics;
@@ -119,6 +120,7 @@ public final class TrainingSession {
    final CobwebFlightTracker cobwebFlight = new CobwebFlightTracker();
    final WindTargetController windTarget = new WindTargetController();
    final MaceCounterController maceCounter = new MaceCounterController();
+   final RoundMetricsCollector metrics = new RoundMetricsCollector();
 
    void rememberStartedRound() {
       this.lastPlayed = this.selection;
@@ -210,6 +212,7 @@ public final class TrainingSession {
       this.displayedFault = null;
       secondarySlam = null;
       secondaryPopAt = 0;
+      this.metrics.reset();
 
       try {
          TrainingSettings arenaSettings = options.drill().centeredMaceDrill()
@@ -424,9 +427,10 @@ public final class TrainingSession {
                         if (options.drill() == Drill.LOW_WEB_SMASH) observeWebGround(var4.onGround());
                         if (windHeight != null && windHeight.sample(var4, roundTick)) {
                            double height = windHeight.meters();
+                           this.metrics.recordWindHeight(height);
                            var result = new DrillHistory.Result(height >= WindHeight.PERFECT, windHeight.duration(roundTick), -1,
                               "Windladung · " + WindHeight.text(height), List.of("Scheitelhöhe " + WindHeight.text(height)));
-                           TrainingProgress.record(history, historyKey, result, settings, options, ownerId);
+                           TrainingProgress.record(history, historyKey, result, settings, options, ownerId, this.metrics.consumeSnapshot());
                            refreshSeries();
                         }
                         boolean continuous = options.drill().centeredMaceDrill();
@@ -569,10 +573,17 @@ public final class TrainingSession {
 
    public boolean placeCrystal(ServerPlayer var1, BlockPos var2) {
       if (this.canPlaceCrystal(var1) && this.tactics.placeCrystal(this.arena, this.bot, var1, var2)) {
+         this.metrics.recordCrystalPlaced();
          this.attempt.crystalPlaced(var2);
          return true;
       } else {
          return false;
+      }
+   }
+
+   public void recordPlayerBlock(ServerPlayer player) {
+      if (!this.waitingForStart && this.owns(player)) {
+         this.metrics.recordPlayerBlock();
       }
    }
 
@@ -628,21 +639,25 @@ public final class TrainingSession {
 
    void playerAte(ServerPlayer var1, ItemStack var2) {
       if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordHealEaten();
          this.attempt.ate(var1, var2);
       }
    }
 
    public void playerPopped(ServerPlayer var1, ItemStack var2) {
-      if (!this.waitingForStart && this.owns(var1) && !this.attempt.done()) {
-         if (this.options.drill() == Drill.RETOTEM) {
-            if (TrainingKit.usableTotems(var2) == 0) {
-               return;
-            }
+      if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordPlayerPop();
+         if (!this.attempt.done()) {
+            if (this.options.drill() == Drill.RETOTEM) {
+               if (TrainingKit.usableTotems(var2) == 0) {
+                  return;
+               }
 
-            this.attempt.playerPop(TrainingKit.refillSupply(var1));
-            notifyPlayer(var1, this.attempt.progress());
-         } else {
-            this.attempt.playerPop();
+               this.attempt.playerPop(TrainingKit.refillSupply(var1));
+               notifyPlayer(var1, this.attempt.progress());
+            } else {
+               this.attempt.playerPop();
+            }
          }
       }
    }
@@ -656,6 +671,7 @@ public final class TrainingSession {
 
    void playerCrit(ServerPlayer var1, Entity var2) {
       if (!this.waitingForStart && this.owns(var1) && var2 == this.bot) {
+         this.metrics.recordCrit();
          this.attempt.critical();
       }
    }
@@ -668,6 +684,7 @@ public final class TrainingSession {
 
    public void playerLaunched(ServerPlayer var1) {
       if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordWindCharge();
          if (windHeight != null) windHeight.launched(var1, roundTick);
          if (options.drill() == Drill.LOW_WEB_SMASH) {
             cobwebFlight.onPlayerLaunch(roundTick, var1.onGround(), this::finishWebLanding);
@@ -682,12 +699,14 @@ public final class TrainingSession {
 
    void pearlCatch(ServerPlayer var1) {
       if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordPearlCatch();
          this.attempt.catchPearl();
       }
    }
 
    void waterDrawn(ServerPlayer var1, BlockPos var2) {
       if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordWaterDrain();
          this.attempt.waterDrawn(var2, this.bot);
       }
    }
@@ -704,6 +723,7 @@ public final class TrainingSession {
 
    public void sawPlayerObsidian(ServerPlayer player, BlockPos pos) {
       if (waitingForStart || !owns(player)) return;
+      this.metrics.recordObsidianPlaced();
       if (options.drill().isObiTrap()) attempt.trapBlockPlaced(pos);
       if (options.drill()==Drill.DUEL && (settings.mode()==TrainingSettings.Mode.CRYSTAL || settings.mode()==TrainingSettings.Mode.HUGOSMP))
          tactics.crystalCover.added(pos,bot);
@@ -711,18 +731,21 @@ public final class TrainingSession {
 
    void webPlaced(ServerPlayer var1, BlockPos var2) {
       if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordWebPlaced();
          this.attempt.webPlaced(var2);
       }
    }
 
    void lavaPlaced(ServerPlayer var1, BlockPos var2) {
       if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordLavaPlaced();
          this.attempt.lavaPlaced(var2);
       }
    }
 
    void anchorTriggered(ServerPlayer var1, BlockPos var2) {
       if (!this.waitingForStart && this.owns(var1)) {
+         this.metrics.recordAnchorDetonated();
          Vec3 var3 = Vec3.atCenterOf(var2);
          Vec3 var4 = var1.position().add(0.0, 0.2, 0.0);
          Vec3 var5 = var3.add(var4.subtract(var3).normalize().scale(0.9));
@@ -789,6 +812,7 @@ public final class TrainingSession {
 
    public void endCrystalBlast(TrainingCrystal var1, Vec3 var2, Vec3 var3, float var4, boolean var5) {
       if (this.bot != null && this.attempt != null && var1.belongsTo(this.owner, this.bot)) {
+         this.metrics.recordCrystalDetonated();
          this.attempt
             .crystalBlast(
                this.owner,
@@ -967,7 +991,8 @@ public final class TrainingSession {
          this.options,
          this.ownerId,
          this,
-         this.roundSequence
+         this.roundSequence,
+         this.metrics.consumeSnapshot()
       );
       this.previousRepetitionAt = this.roundTick;
       this.refreshSeries();
@@ -987,7 +1012,8 @@ public final class TrainingSession {
          this.ownerDefeated,
          this.resetAfterPop,
          this.bot,
-         this.attempt
+         this.attempt,
+         this.metrics
       )) {
          this.refreshSeries();
       }
@@ -1035,7 +1061,7 @@ public final class TrainingSession {
 
    void storeMaceRepetition() {
       var result = new DrillHistory.Result(attempt.won(), roundTick - previousRepetitionAt, attempt.control(), attempt.progress(), attempt.timeline());
-      TrainingProgress.record(history, historyKey, result, settings, options, ownerId);
+      TrainingProgress.record(history, historyKey, result, settings, options, ownerId, this.metrics.consumeSnapshot());
       if (options.drill() == Drill.LOW_WEB_SMASH) {
          cobwebFlight.onScored(result.won(), roundTick);
          owner.sendOverlayMessage(Component.literal(result.won() ? "Geschafft" : "Fehlversuch · " + result.reason())
@@ -1068,6 +1094,9 @@ public final class TrainingSession {
    void saveResult() {
       if (!this.saved && this.attempt != null && this.attempt.done() && !this.attempt.unscored() && this.options.drill().series()) {
          this.saved = true;
+         if (this.attempt.won() && (this.options.drill() == Drill.STUN_SLAM || this.options.drill() == Drill.ELY_STUN_SLAM)) {
+            this.metrics.recordStunSlam();
+         }
          TrainingProgress.recordRound(
             this.history,
             this.historyKey,
@@ -1076,7 +1105,8 @@ public final class TrainingSession {
             this.options,
             this.ownerId,
             this,
-            this.roundSequence
+            this.roundSequence,
+            this.metrics.consumeSnapshot()
          );
          this.refreshSeries();
       }
@@ -1118,6 +1148,10 @@ public final class TrainingSession {
 
    private void releaseBot() {
       RoundPing.end();
+      if (this.metrics.hasActivity()) {
+         TrainingProgress.recordPractice(this.historyKey, this.settings, this.options, this.ownerId,
+            Math.max(0, this.roundTick - this.previousRepetitionAt), this.metrics.consumeSnapshot());
+      }
 
       if (owner != null && options != null && options.pearlCatchOnly()) {
          for (var pearl : List.copyOf(owner.getEnderPearls())) {

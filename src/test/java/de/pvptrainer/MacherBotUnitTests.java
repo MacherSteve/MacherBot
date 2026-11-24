@@ -19,7 +19,10 @@ import de.pvptrainer.kits.TrainingPreset;
 import de.pvptrainer.kits.TrainingProfiles;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.progress.HudPreferences;
+import de.pvptrainer.progress.RoundMetrics;
+import de.pvptrainer.progress.RoundMetricsCollector;
 import de.pvptrainer.progress.TrainingProgress;
+import de.pvptrainer.progress.TrainingStats;
 import de.pvptrainer.progress.UpdateChecker;
 import de.pvptrainer.session.CobwebFlightTracker;
 import de.pvptrainer.ui.KnowledgeGuide;
@@ -62,6 +65,7 @@ public final class MacherBotUnitTests {
         testBatchFeaturesAndCrystalHotfixes();
         testSwightDrillsAndKnowledgeGuide();
         testUiRedesignStickyModifiersAndIcons();
+        testRealPvpMetricsAndStatsAggregation();
         System.out.println("PASS " + passed + " Unit-Tests erfolgreich.");
     }
 
@@ -1080,6 +1084,92 @@ public final class MacherBotUnitTests {
                         "Ungueltiges PNG-Format: " + path);
                 }
             }
+        });
+    }
+
+    private static void testRealPvpMetricsAndStatsAggregation() throws Exception {
+        run("Statistik-Workover: RoundMetrics, TrainingStats-Aggregation, Zeitraeume, PracticeOnly & Legacy-JSONL", () -> {
+            // 1. Collector consumeSnapshot() resettet atomar (kein Doppelzaehlen)
+            var collector = new RoundMetricsCollector();
+            collector.recordMaceSmash(14.5, 22.0F);
+            collector.recordMaceSmash(28.5, 36.0F);
+            collector.recordStunSlam();
+            collector.recordWindCharge();
+            collector.recordWindCharge();
+            collector.recordBotPop();
+            collector.recordShieldStun();
+            RoundMetrics maceSnap = collector.consumeSnapshot();
+            check(!collector.hasActivity(), "consumeSnapshot muss Collector atomar zuruecksetzen");
+            check(maceSnap.maceSmashes() == 2 && maceSnap.stunSlams() == 1, "Mace-Smashes & Stun-Slams erfasst");
+            check(Math.abs(maceSnap.maxFallMeters() - 28.5) < 1e-6 && Math.abs(maceSnap.avgFallMeters() - 21.5) < 1e-6,
+                "Max- und Durchschnitts-Fallhoehe exakt");
+            check(Math.abs(maceSnap.maxSmashHearts() - 18.0) < 1e-6, "Staerker Smash-Hit in Herzen exakt");
+
+            // 2. Crystal Effizienz & Sword Crit/Charge
+            var cCol = new RoundMetricsCollector();
+            cCol.recordCrystalPlaced(); cCol.recordCrystalPlaced(); cCol.recordCrystalPlaced();
+            cCol.recordCrystalDetonated(); cCol.recordCrystalDetonated(); cCol.recordCrystalDetonated();
+            cCol.recordBotPop(); cCol.recordBotPop();
+            cCol.recordObsidianPlaced();
+            RoundMetrics crystalSnap = cCol.consumeSnapshot();
+            check(Math.abs(crystalSnap.crystalsPerPop() - 1.5) < 1e-6, "Kristalle/Pop = 3/2 = 1.5");
+
+            var sCol = new RoundMetricsCollector();
+            sCol.recordMeleeHit(0.90F); sCol.recordMeleeHit(1.00F);
+            sCol.recordCrit();
+            sCol.recordDamageDealt(16.0F);
+            RoundMetrics swordSnap = sCol.consumeSnapshot();
+            check(Math.abs(swordSnap.critRatePct() - 50.0) < 1e-6 && Math.abs(swordSnap.avgChargePct() - 95.0) < 1e-6,
+                "Crit-Quote 50% und Avg-Charge 95%");
+            check(RoundMetrics.EMPTY.crystalsPerPop() == 0.0 && RoundMetrics.EMPTY.avgFallMeters() == 0.0
+                && RoundMetrics.EMPTY.critRatePct() == 0.0, "Division-durch-0-Schutz bei EMPTY");
+
+            // 3. TrainingStats Modus-Aggregation, Zeitraum-Filter und practiceOnly-Trennung
+            long now = 1_780_000_000_000L;
+            var zone = java.time.ZoneOffset.UTC;
+            long tenDaysAgo = now - 10L * 86_400_000L;
+            var runs = List.of(
+                new TrainingProgress.Run("s-mace", "MACE", "STUN_SLAM", now - 60_000L, true, 24, "Geschafft", List.of(), "HARD", 20, false, maceSnap, false),
+                new TrainingProgress.Run("s-mace", "MACE", "STUN_SLAM", now - 30_000L, false, 40, "Schild noch aktiv", List.of(), "HARD", 20, false, RoundMetrics.EMPTY, false),
+                // Practice-only (Passives Ziel): zaehlt Aktionen, aber NICHT Erfolgsquote oder Streak!
+                new TrainingProgress.Run("s-crys-p", "CRYSTAL", "PASSIVE", now - 20_000L, false, 200, "Freies Ueben", List.of(), "HARD", 20, false, crystalSnap, true),
+                new TrainingProgress.Run("s-crys", "CRYSTAL", "D_TAP", now - 10_000L, true, 18, "Geschafft", List.of(), "HARD", 20, false, crystalSnap, false),
+                // Alter Eintrag vor 10 Tagen -> nur in ALL sichtbar, nicht in TODAY/WEEK
+                new TrainingProgress.Run("s-sword", "SWORD", "DUEL", tenDaysAgo, true, 120, "Gewonnen", List.of(), "HT1", 20, false, swordSnap, false)
+            );
+
+            var maceToday = TrainingStats.overview(runs, TrainingSettings.Mode.MACE, TrainingStats.TimeRange.TODAY, now, zone);
+            check(maceToday.scoredAttempts() == 2 && maceToday.scoredWins() == 1 && maceToday.winRatePct() == 50, "Mace Quote 50% (1/2)");
+            check(maceToday.totals().stunSlams() == 1 && maceToday.totals().maceSmashes() == 2 && Math.abs(maceToday.totals().maxFallMeters() - 28.5) < 1e-6,
+                "Mace Overview echte Kennzahlen");
+
+            var crystalToday = TrainingStats.overview(runs, TrainingSettings.Mode.CRYSTAL, TrainingStats.TimeRange.TODAY, now, zone);
+            check(crystalToday.scoredAttempts() == 1 && crystalToday.scoredWins() == 1 && crystalToday.winRatePct() == 100,
+                "PracticeOnly darf Drill-Quote nicht verfaelschen (100% statt 50%)");
+            check(crystalToday.totals().crystalsDetonated() == 6 && crystalToday.totals().botPops() == 4,
+                "PracticeOnly-Aktionen (Passives Ziel) werden bei echten Zaehlern voll mitgezaehlt");
+
+            var streak = TrainingProgress.Streak.EMPTY.next(runs.get(3)).next(runs.get(2));
+            check(streak.current() == 1 && streak.best() == 1, "PracticeOnly-Eintrag darf laufende Streak nicht brechen");
+
+            var allWeek = TrainingStats.overview(runs, null, TrainingStats.TimeRange.WEEK, now, zone);
+            var allTime = TrainingStats.overview(runs, null, TrainingStats.TimeRange.ALL, now, zone);
+            check(allWeek.duelWins() == 0 && allTime.duelWins() == 1, "Zeitraum-Filter (7T vs Gesamt) trennt alte Eintraege sauber");
+
+            // 4. DrillReport waehlt echte Chart-Achse + Top-Fehler
+            var maceReport = TrainingStats.drillReport(runs, TrainingSettings.Mode.MACE, Drill.STUN_SLAM, TrainingStats.TimeRange.ALL, now, zone);
+            check(maceReport.axis() == TrainingStats.ChartAxis.FALL_METERS, "Stun-Slam nutzt Fallhoehe (m) als Chart-Achse");
+            check(maceReport.topFailures().size() == 1 && maceReport.topFailures().getFirst().reason().equals("Schild noch aktiv"),
+                "Haeufigster Fehler korrekt erfasst");
+            var dtapReport = TrainingStats.drillReport(runs, TrainingSettings.Mode.CRYSTAL, Drill.D_TAP, TrainingStats.TimeRange.ALL, now, zone);
+            check(dtapReport.axis() == TrainingStats.ChartAxis.SECONDS && Math.abs(dtapReport.bestSeconds() - 0.9) < 1e-6,
+                "D-Tap nutzt echte Ausfuehrungszeit in Sekunden (0,90 s)");
+
+            // 5. Legacy-JSONL-Zeile ohne 'metrics' und 'practiceOnly' bleibt 100% lesbar (Regel 5)
+            String legacyLine = "{\"setup\":\"abc\",\"mode\":\"CRYSTAL\",\"drill\":\"D_TAP\",\"time\":1700000000000,\"won\":true,\"ticks\":20,\"reason\":\"Geschafft\",\"timeline\":[],\"difficulty\":\"HARD\",\"tickRate\":20}";
+            TrainingProgress.Run parsed = new com.google.gson.Gson().fromJson(legacyLine, TrainingProgress.Run.class);
+            check(parsed != null && parsed.metrics() != null && !parsed.metrics().hasActivity() && !parsed.practiceOnly(),
+                "Legacy-JSONL-Zeile ohne metrics/practiceOnly deserialisiert sicher mit Defaults");
         });
     }
 

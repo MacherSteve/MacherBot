@@ -389,7 +389,13 @@ public final class TrainingTactics {
       }
       Vec3 beforeHit = var2.getDeltaMovement();
       boolean sprintHit = var1.isSprinting() && charge > 0.9F;
+      boolean targetBlocking = var2.isBlocking();
+      float targetHpBefore = DrillAttempt.health(var2);
       boolean var9 = var2.hurtServer(var0, var3, var8);
+      if (targetBlocking && DrillAttempt.health(var2) >= targetHpBefore - 0.01F) {
+         de.pvptrainer.session.TrainingSession activeSession = de.pvptrainer.TrainerClient.session(var0.getServer());
+         if (activeSession != null) activeSession.recordPlayerBlock(var2);
+      }
       if (var9) {
          float enchantKb = EnchantmentHelper.modifyKnockback(var0, var5, var2, var3, 0.0F);
          float extraKb = enchantKb * 0.5F + (sprintHit ? 0.5F : 0.0F);

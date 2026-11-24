@@ -397,10 +397,14 @@ public final class FeaturesProbe implements ClientModInitializer {
                     .filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget)
                     .map(c -> ((net.minecraft.client.gui.components.AbstractWidget) c).getMessage().getString())
                     .toList();
-                check(statsLabels.stream().anyMatch(l -> l.equals("Verlauf"))
+                check(statsLabels.stream().anyMatch(l -> l.equals("Übersicht"))
+                    && statsLabels.stream().anyMatch(l -> l.equals("Übungen"))
                     && statsLabels.stream().anyMatch(l -> l.equals("Rundenlog"))
                     && statsLabels.stream().anyMatch(l -> l.equals("Bot-Analyse")),
-                    "Statistik missing 3 unified tabs: " + statsLabels);
+                    "Statistik missing 4 unified tabs: " + statsLabels);
+                check(statsLabels.stream().anyMatch(l -> l.equals("Gesamt"))
+                    && statsLabels.stream().anyMatch(l -> l.equals("Heute")),
+                    "Statistik Übersicht missing mode/timeframe filters: " + statsLabels);
 
                 mc.gui.setScreen(null);
                 uiFuture.complete("ok");
@@ -1825,6 +1829,28 @@ public final class FeaturesProbe implements ClientModInitializer {
             TrainingTactics.strike(p.level(), b, p, b.damageSources().mobAttack(b), 0.0F);
             check(attempt(s).done() && !attempt(s).won(),
                 "HEAL with CLEAN_HEAL=1 taking a hit while eating must FAIL! progress=" + attempt(s).progress());
+
+            // Verify real PvP RoundMetrics were actually recorded across live Mace, Crystal, Sword & UHC scenes!
+            s.stop(server);
+            var recordedRuns = de.pvptrainer.progress.TrainingProgress.forScreen(Minecraft.getInstance());
+            var allOverview = de.pvptrainer.progress.TrainingStats.overview(recordedRuns, null, de.pvptrainer.progress.TrainingStats.TimeRange.ALL);
+            var maceOverview = de.pvptrainer.progress.TrainingStats.overview(recordedRuns, TrainingSettings.Mode.MACE, de.pvptrainer.progress.TrainingStats.TimeRange.ALL);
+            var crystalOverview = de.pvptrainer.progress.TrainingStats.overview(recordedRuns, TrainingSettings.Mode.CRYSTAL, de.pvptrainer.progress.TrainingStats.TimeRange.ALL);
+            check(allOverview.totals().botPops() >= 5, "Live RoundMetrics missing botPops: " + allOverview.totals());
+            check(crystalOverview.totals().crystalsPlaced() >= 3 && crystalOverview.totals().crystalsDetonated() >= 3,
+                "Live Crystal RoundMetrics missing crystals: " + crystalOverview.totals());
+            check(maceOverview.totals().maceSmashes() >= 2 && maceOverview.totals().stunSlams() >= 1 && maceOverview.totals().maxFallMeters() > 5.0,
+                "Live Mace RoundMetrics missing smashes/stunSlams/fallMeters: " + maceOverview.totals());
+            check(allOverview.totals().shieldStuns() >= 2 && allOverview.totals().crits() >= 2 && allOverview.totals().meleeHits() >= 3,
+                "Live Combat RoundMetrics missing stuns/crits/hits: " + allOverview.totals());
+            log("PASS Live RoundMetrics verified: pops=" + allOverview.totals().botPops()
+                + " crystals=" + crystalOverview.totals().crystalsDetonated()
+                + " smashes=" + maceOverview.totals().maceSmashes()
+                + " stunSlams=" + maceOverview.totals().stunSlams()
+                + " maxFall=" + de.pvptrainer.progress.TrainingStats.formatMeters(maceOverview.totals().maxFallMeters())
+                + " stuns=" + allOverview.totals().shieldStuns()
+                + " crits=" + allOverview.totals().crits());
+
             log("PASS HEAL_PUNISH, PCRIT_BREAK, and HEAL CLEAN_HEAL verified in-game");
             nextScene(s, server);
         }

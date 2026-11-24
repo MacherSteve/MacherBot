@@ -40,22 +40,23 @@ final class BotAnalysisScreen extends TrainerPanel {
         this.preferred = preferred;
     }
 
-    @Override int preferredWidth() { return 560; }
-    @Override int preferredHeight() { return 316; }
+    @Override int preferredWidth() { return 584; }
+    @Override int preferredHeight() { return 330; }
 
     @Override void build() {
-        // Unified 3-Tab Apple Segmented Control: Verlauf | Rundenlog | Bot-Analyse
+        // Unified 4-Tab Apple Segmented Control: Übersicht | Übungen | Rundenlog | Bot-Analyse
         this.topTabY = this.y;
         this.topTabH = 22;
-        String[] topTabs = {"Verlauf", "Rundenlog", "Bot-Analyse"};
+        String[] topTabs = {"Übersicht", "Übungen", "Rundenlog", "Bot-Analyse"};
         int segX = this.x + 2;
         int segW = this.inner - 4;
         for (int i = 0; i < topTabs.length; i++) {
             final int idx = i;
-            this.action(gridCol(segX, segW, 2, i, 3), this.topTabY + 2, gridW(segX, segW, 2, i, 3), this.topTabH - 4,
-                topTabs[i], i == 2 ? Style.SEGMENT_SELECTED : Style.SEGMENT, () -> {
-                    if (idx == 0) open(new ProgressScreen(this.parent, this.mode));
-                    else if (idx == 1) open(ProgressScreen.openLog(this.parent, this.mode, false));
+            this.action(gridCol(segX, segW, 2, i, 4), this.topTabY + 2, gridW(segX, segW, 2, i, 4), this.topTabH - 4,
+                topTabs[i], i == 3 ? Style.SEGMENT_SELECTED : Style.SEGMENT, () -> {
+                    if (idx == 0) open(ProgressScreen.openTab(this.parent, this.mode, ProgressScreen.ViewTab.OVERVIEW));
+                    else if (idx == 1) open(ProgressScreen.openTab(this.parent, this.mode, ProgressScreen.ViewTab.DRILLS));
+                    else if (idx == 2) open(ProgressScreen.openLog(this.parent, this.mode, false));
                 });
         }
 
