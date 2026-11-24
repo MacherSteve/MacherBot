@@ -886,8 +886,9 @@ public final class FeaturesProbe implements ClientModInitializer {
         if (sub == 1) {
             LivingEntity b = bot(s);
             check(!b.isBlocking() && !b.getMainHandItem().is(Items.SHIELD), "SHIELD_TRIPLE_TAP bot must NOT hold shield before Pop 1");
-            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
-                "SHIELD_TRIPLE_TAP bot must keep Blast Protection IV leggings from ltcrystal kit");
+            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.PROTECTION, 4)
+                    && !hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
+                "SHIELD_TRIPLE_TAP bot must wear Protection IV leggings (no Blast Prot) from ltcrystal kit");
             // Equip Netherite Sword 1 tick before attacking so ServerPlayer.tick() refreshes Attributes.ATTACK_DAMAGE to 8.0!
             equipFromInventory(p, Items.NETHERITE_SWORD);
             sub = 2;
@@ -948,11 +949,11 @@ public final class FeaturesProbe implements ClientModInitializer {
         if (sub == 5) {
             LivingEntity b = bot(s);
             check(b != null, "SHIELD_TRIPLE_TAP ended before Crystal 3! status=" + s.status());
-            if (age < 10) return; // T+20: fresh hurt window while bot is still airborne!
+            if (age < 10 || b.getY() > ForgeArena.FLOOR + 2.8) return; // T+20+: fresh hurt window + wait for 4x Prot IV knockup to descend near crystal height while still airborne!
             detonateCrystalAt(s, p, findOpenAdjacentBase(p.level(), b));
             check(pops(s) == 3 && attempt(s).done() && attempt(s).won(),
                 "Crystal 3 must pop totem 3 and win SHIELD_TRIPLE_TAP; pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
-            log("PASS SHIELD_TRIPLE_TAP verified in-game on HARD with authentic Blast Prot IV (Pop 1 -> Shield -> Axe break -> Pop 2 + Pop 3)");
+            log("PASS SHIELD_TRIPLE_TAP verified in-game on HARD with 4x Prot IV (Pop 1 -> Shield -> Axe break -> Pop 2 + Pop 3)");
             nextScene(s, server);
         }
     }
@@ -1011,11 +1012,14 @@ public final class FeaturesProbe implements ClientModInitializer {
         if (sub == 1) {
             LivingEntity b = bot(s);
             release(s, p);
-            // Verify authentic ltcrystal armor + Vanilla attributes (Blast Prot IV -> 0.6 explosion KB resist, Netherite -> 0.4 KB resist)
-            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
-                "Bot must wear Blast Protection IV leggings");
-            check(Math.abs(b.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE) - 0.6) < 1e-4,
-                "Bot explosion KB resist must be 0.6 (Blast Prot IV), got " + b.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE));
+            // Verify authentic ltcrystal 4x Prot IV armor + Vanilla attributes (0.0 explosion KB resist, Netherite -> 0.4 KB resist)
+            for (EquipmentSlot armorSlot : List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET)) {
+                check(hasEnchant(b.getItemBySlot(armorSlot), Enchantments.PROTECTION, 4)
+                        && !hasEnchant(b.getItemBySlot(armorSlot), Enchantments.BLAST_PROTECTION, 4),
+                    "Crystal bot must wear Protection IV only on " + armorSlot);
+            }
+            check(Math.abs(b.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE)) < 1e-4,
+                "Bot explosion KB resist must be 0.0 (4x Prot IV), got " + b.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE));
             check(Math.abs(b.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) - 0.4) < 1e-4,
                 "Bot melee KB resist must be 0.4 (4x Netherite), got " + b.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE));
             check(Math.abs(b.getMaxHealth() - 20.0F) < 1e-4, "Crystal default bot maxHealth must be 20 HP (10 hearts), got " + b.getMaxHealth());
@@ -1062,8 +1066,8 @@ public final class FeaturesProbe implements ClientModInitializer {
             b.stopUsingItem();
             b.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.TOTEM_OF_UNDYING));
 
-            // Place obsidian at (0, 65, 0), crystal at (0.5, 66.0, 0.5). Put Player at (-1.0, 66.0, 0.5) and Bot at (+2.0, 66.0, 0.5):
-            // Both at exact distance 1.5 blocks, Y=66.0 (seenPercent = 1.0, zero obsidian occlusion!).
+            // Place obsidian at (0, 65, 0), crystal at (0.5, 66.0, 0.5). Put Player at (-4.0, 66.0, 0.5) and Bot at (+5.0, 66.0, 0.5):
+            // Both at exact distance 4.5 blocks, Y=66.0 (seenPercent = 1.0, zero obsidian occlusion; non-popping ~17 HP on 4x Prot IV HARD!).
             ServerLevel level = p.level();
             BlockPos base = new BlockPos(0, ForgeArena.FLOOR + 1, 0);
             level.setBlockAndUpdate(base, Blocks.OBSIDIAN.defaultBlockState());
@@ -1076,8 +1080,8 @@ public final class FeaturesProbe implements ClientModInitializer {
             b.setAbsorptionAmount(0.0F);
             p.invulnerableTime = 0;
             b.invulnerableTime = 0;
-            p.teleportTo(level, -1.0, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
-            b.snapTo(2.0, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
+            p.teleportTo(level, -4.0, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(5.0, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
             p.setDeltaMovement(Vec3.ZERO);
             b.setDeltaMovement(Vec3.ZERO);
 
@@ -1086,19 +1090,19 @@ public final class FeaturesProbe implements ClientModInitializer {
             String fullTag = b.getCustomName() == null ? "" : b.getCustomName().getString();
             check(fullTag.contains("20,0") && fullTag.contains("❤"), "Bot nametag must show health indicator, got: " + fullTag);
 
-            // Default ARENA_DIFFICULTY is HARD: even if Overworld is NORMAL, BOTH Player and Bot must still take HARD (~17.6 HP) damage!
+            // Default ARENA_DIFFICULTY is HARD: even if Overworld is NORMAL, BOTH Player and Bot must still take identical HARD (~17 HP at d=4.5) damage!
             server.setDifficulty(Difficulty.NORMAL, true);
             detonateCrystalAt(s, p, base);
             parityHardPlayerDmg = 20.0F - p.getHealth();
             parityHardBotDmg = 20.0F - b.getHealth();
             parityHardBotVy = b.getDeltaMovement().y;
+            double parityHardPlayerVy = p.getDeltaMovement().y;
             check(Math.abs(parityHardBotDmg - parityHardPlayerDmg) < 0.05F,
                 "Default HARD Arena Crystal damage mismatch! player=" + parityHardPlayerDmg + " bot=" + parityHardBotDmg);
-            check(parityHardBotDmg > 16.5F && parityHardBotDmg < 18.8F,
-                "Default HARD Arena Crystal damage on NORMAL Overworld expected ~17.6 HP, got " + parityHardBotDmg);
-            // With Blast Prot IV (60% resist), explosion vy at d=1.5 is (1-1.5/12)*(1.62/sqrt(1.5^2+1.62^2))*0.4 = ~0.257 (NOT ~0.64!)
-            check(parityHardBotVy > 0.15 && parityHardBotVy < 0.38,
-                "HARD Crystal explosion vy with Blast Prot IV expected ~0.26 (NOT unresisted ~0.64), got " + parityHardBotVy);
+            check(parityHardBotDmg > 13.0F && parityHardBotDmg < 19.5F,
+                "Default HARD Arena Crystal damage at d=4.5 on 4x Prot IV expected ~17 HP, got " + parityHardBotDmg);
+            check(Math.abs(parityHardBotVy - parityHardPlayerVy) < 0.02 && parityHardBotVy > 0.12,
+                "HARD Crystal explosion vy parity mismatch! player=" + parityHardPlayerVy + " bot=" + parityHardBotVy);
 
             // Point-blank 10-heart (20 HP) single crystal pop on default HARD Arena (even on NORMAL world!) + Health Indicator absorption check!
             p.setNoGravity(true);
@@ -1235,8 +1239,8 @@ public final class FeaturesProbe implements ClientModInitializer {
             b.setAbsorptionAmount(0.0F);
             p.invulnerableTime = 0;
             b.invulnerableTime = 0;
-            p.teleportTo(level, -1.0, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
-            b.snapTo(2.0, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
+            p.teleportTo(level, -4.0, ForgeArena.FLOOR + 2.0, 0.5, java.util.Set.of(), -90.0F, 0.0F, true);
+            b.snapTo(5.0, ForgeArena.FLOOR + 2.0, 0.5, 90.0F, 0.0F);
             p.setDeltaMovement(Vec3.ZERO);
             b.setDeltaMovement(Vec3.ZERO);
             detonateCrystalAt(s, p, base);
@@ -1321,8 +1325,9 @@ public final class FeaturesProbe implements ClientModInitializer {
         if (sub == 3) {
             LivingEntity b = bot(s);
             check(b.getMaxHealth() == 20.0F, "TRIPLE_TAP bot must start at 10 hearts (20 HP)");
-            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
-                "TRIPLE_TAP bot must NOT strip Blast Protection IV");
+            check(hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.PROTECTION, 4)
+                    && !hasEnchant(b.getItemBySlot(EquipmentSlot.LEGS), Enchantments.BLAST_PROTECTION, 4),
+                "TRIPLE_TAP bot must wear Protection IV leggings (no Blast Prot)");
             // Equip Netherite Sword 1 tick ahead so ServerPlayer refreshes ATTACK_DAMAGE to 8.0 before attacking!
             equipFromInventory(p, Items.NETHERITE_SWORD);
             sub = 4;
@@ -1364,8 +1369,8 @@ public final class FeaturesProbe implements ClientModInitializer {
             tripleTapPeakY = Math.max(tripleTapPeakY, b.getY());
             // Wait until hurt window opens after Hit 1 (age 3 after T=7 = T=10), land Air Hit 2, then detonate Crystal 2!
             if (age < 3) return;
-            check(tripleTapPeakY < ForgeArena.FLOOR + 4.5,
-                "Blast Prot IV must keep Triple Tap knockup near Vanilla height (<4.5 bl), peaked at " + (tripleTapPeakY - ForgeArena.FLOOR));
+            check(tripleTapPeakY < ForgeArena.FLOOR + 7.5,
+                "Triple Tap knockup height out of range (<7.5 bl), peaked at " + (tripleTapPeakY - ForgeArena.FLOOR));
             equipFromInventory(p, Items.TOTEM_OF_UNDYING);
             p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.8, java.util.Set.of(), 0.0F, 0.0F, true);
             p.lookAt(Anchor.EYES, b.getEyePosition());
@@ -1380,7 +1385,7 @@ public final class FeaturesProbe implements ClientModInitializer {
         if (sub == 7) {
             LivingEntity b = bot(s);
             check(b != null, "TRIPLE_TAP ended before Crystal 3! status=" + s.status());
-            if (age < 10) return; // fresh hurt window after Air Hit 2
+            if (age < 10 || b.getY() > ForgeArena.FLOOR + 2.8) return; // fresh hurt window + wait for 4x Prot IV knockup to descend near crystal height (still airborne!)
             detonateCrystalAt(s, p, findOpenAdjacentBase(p.level(), b));
             check(pops(s) == 3 && attempt(s).done() && attempt(s).won(),
                 "TRIPLE_TAP Crystal 3 must pop totem 3 and win; pops=" + pops(s) + " progress=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
@@ -1420,9 +1425,10 @@ public final class FeaturesProbe implements ClientModInitializer {
                 "SELF_WEB_CRYSTAL bot must self-web at its feet! block=" + p.level().getBlockState(b.blockPosition()));
             check(attempt(s).isSelfWebbed(), "SELF_WEB_CRYSTAL attempt should confirm self-web");
             BlockPos floorBase = findFlushFloorObsidian(p.level(), b.blockPosition());
-            // Floor crystal 1 softens 20 HP -> ~1.15 HP (must NOT prematurely fail!)
+            // Floor crystal 1 cleanly pops totem 1 on 4x Prot IV HARD arena (must stay open for Pop 2)
             detonateCrystalAt(s, p, floorBase);
-            check(!attempt(s).done(), "Pre-Pop-1 floor crystal in SELF_WEB_CRYSTAL must not fail prematurely! progress=" + attempt(s).progress());
+            check(pops(s) == 1 && !attempt(s).done(),
+                "SELF_WEB_CRYSTAL floor crystal 1 must pop totem 1 and stay open! pops=" + pops(s) + " progress=" + attempt(s).progress());
             sub = 3;
             age = 0;
             return;
@@ -1432,19 +1438,8 @@ public final class FeaturesProbe implements ClientModInitializer {
             LivingEntity b = bot(s);
             BlockPos floorBase = findFlushFloorObsidian(p.level(), b.blockPosition());
             detonateCrystalAt(s, p, floorBase);
-            check(pops(s) == 1 && !attempt(s).done(),
-                "SELF_WEB_CRYSTAL floor crystal 2 must pop totem 1! pops=" + pops(s) + " progress=" + attempt(s).progress());
-            sub = 4;
-            age = 0;
-            return;
-        }
-        if (sub == 4) {
-            if (age < 11) return;
-            LivingEntity b = bot(s);
-            BlockPos floorBase = findFlushFloorObsidian(p.level(), b.blockPosition());
-            detonateCrystalAt(s, p, floorBase);
             check(pops(s) == 2 && attempt(s).done() && attempt(s).won(),
-                "SELF_WEB_CRYSTAL floor crystal 3 must pop totem 2 and WIN! pops=" + pops(s) + " progress=" + attempt(s).progress());
+                "SELF_WEB_CRYSTAL floor crystal 2 must pop totem 2 and WIN! pops=" + pops(s) + " progress=" + attempt(s).progress());
             log("PASS SELF_WEB_CRYSTAL verified in-game (bot self-webs, 2 floor crystal pops win on default HARD arena)");
 
             // Sub 5..8: D_TAP hotfix — 2 real pops at T+10 (old bug failed at T+9!) MUST WIN!

@@ -39,16 +39,6 @@ final class KnowledgeGuideScreen extends TrainerPanel {
    }
 
    @Override
-   int preferredWidth() {
-      return 560;
-   }
-
-   @Override
-   int preferredHeight() {
-      return 316;
-   }
-
-   @Override
    void build() {
       KnowledgeGuide.Category[] categories = KnowledgeGuide.Category.values();
       int tabH = 22;
@@ -284,11 +274,8 @@ final class KnowledgeGuideScreen extends TrainerPanel {
       if (this.maxScroll > 0) {
          int trackTop = this.detailY + 30;
          int trackH = Math.max(16, this.detailH - 36);
-         int thumbH = Math.max(14, trackH * trackH / Math.max(trackH, this.detailLines.size() * 10));
-         int thumbY = trackTop + (trackH - thumbH) * this.detailScroll / this.maxScroll;
-         int barX = this.detailX + this.detailW - 4;
-         graphics.fill(barX, trackTop, barX + 2, trackTop + trackH, LINE);
-         graphics.fill(barX, thumbY, barX + 2, thumbY + thumbH, EMBER);
+         drawScrollbar(graphics, this.detailX + this.detailW - 5, trackTop, trackH,
+            this.detailScroll, this.maxScroll, this.detailLines.size() * 10, false);
       }
    }
 

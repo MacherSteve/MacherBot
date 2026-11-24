@@ -44,11 +44,7 @@ public record TrainingSettings(
    }
 
    public static TrainingSettings defaults(TrainingSettings.Mode var0) {
-      byte var1 = switch (var0) {
-         case MACE -> 30;
-         default -> 20;
-      };
-      return new TrainingSettings(var0, TrainingSettings.Difficulty.HARD, TrainingSettings.Movement.STILL, var1, false, true);
+      return new TrainingSettings(var0, TrainingSettings.Difficulty.HARD, TrainingSettings.Movement.STILL, 20, false, true);
    }
 
    public TrainingSettings forDrill(Drill var1) {
@@ -63,9 +59,7 @@ public record TrainingSettings(
          var3 = TrainingSettings.Movement.FOLLOW;
       }
 
-      int health = (var1 == Drill.DOUBLE_ANCHOR || var1 == Drill.CORNER_WEB_DTAP || var1 == Drill.MACE_COUNTER_DTAP) && this.maxHealth >= 20
-         ? 10
-         : (var1.requiresPopChain() && this.maxHealth == 40 ? 20 : this.maxHealth);
+      int health = var1.requiresPopChain() && this.maxHealth == 40 ? 20 : this.maxHealth;
       return new TrainingSettings(mode, Difficulty.HARD, var3, health, var2, autoRespawn, duelTier, duelBand, maceCenterLocked);
    }
 

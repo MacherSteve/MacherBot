@@ -520,13 +520,31 @@ public final class MacherBotUnitTests {
                 deleteRecursive(tempDir);
             }
 
-            // Standard-HP fuer DOUBLE_ANCHOR, CORNER_WEB_DTAP und MACE_COUNTER_DTAP (damit 1. Pop sicher ausloest)
-            check(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.DOUBLE_ANCHOR).maxHealth() == 10,
-                "DOUBLE_ANCHOR startet mit 10 Bot-LP");
-            check(TrainingSettings.defaults(TrainingSettings.Mode.HUGOSMP).forDrill(Drill.CORNER_WEB_DTAP).maxHealth() == 10,
-                "CORNER_WEB_DTAP startet mit 10 Bot-LP");
-            check(TrainingSettings.defaults(TrainingSettings.Mode.HUGOSMP).forDrill(Drill.MACE_COUNTER_DTAP).maxHealth() == 10,
-                "MACE_COUNTER_DTAP startet mit 10 Bot-LP");
+            // Standard-HP: alle Modi und Drills starten standardmaessig bei 10 Herzen (20 LP)
+            for (TrainingSettings.Mode m : TrainingSettings.Mode.values()) {
+                check(TrainingSettings.defaults(m).maxHealth() == 20,
+                    "Modus " + m + " muss standardmaessig 20 Bot-LP (10 Herzen) haben");
+            }
+            check(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.DOUBLE_ANCHOR).maxHealth() == 20,
+                "DOUBLE_ANCHOR startet mit 20 Bot-LP (10 Herzen)");
+            check(TrainingSettings.defaults(TrainingSettings.Mode.HUGOSMP).forDrill(Drill.CORNER_WEB_DTAP).maxHealth() == 20,
+                "CORNER_WEB_DTAP startet mit 20 Bot-LP (10 Herzen)");
+            check(TrainingSettings.defaults(TrainingSettings.Mode.HUGOSMP).forDrill(Drill.MACE_COUNTER_DTAP).maxHealth() == 20,
+                "MACE_COUNTER_DTAP startet mit 20 Bot-LP (10 Herzen)");
+
+            // Crystal-Standardkit (ltcrystal): alle 4 Ruestungsteile nur Protection IV (kein Blast Protection)
+            var crystalStream = MacherBotUnitTests.class.getResourceAsStream("/assets/pvptrainer/kits.json");
+            check(crystalStream != null, "kits.json nicht im Klassenpfad gefunden");
+            JsonObject crystalRoot;
+            try (var reader = new InputStreamReader(crystalStream, StandardCharsets.UTF_8)) {
+                crystalRoot = JsonParser.parseReader(reader).getAsJsonObject();
+            }
+            JsonObject ltcrystal = crystalRoot.getAsJsonObject("ltcrystal");
+            for (String piece : List.of("helmet", "chestplate", "leggings", "boots")) {
+                JsonObject armor = ltcrystal.getAsJsonObject(piece);
+                check(hasEnchant(armor, "protection", 4), "Crystal " + piece + " braucht Protection 4");
+                check(!hasEnchant(armor, "blast_protection", 4), "Crystal " + piece + " darf kein Blast Protection 4 haben");
+            }
         });
     }
 

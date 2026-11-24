@@ -154,9 +154,54 @@ public class SmokeProbe implements ClientModInitializer {
                                     child -> child instanceof net.minecraft.client.gui.components.AbstractWidget w
                                         && w.getMessage().getString().contains("Update 99.0.0")
                                 );
+                                // Verify uniform window size across Start, Statistik, Bot-Analyse, Guide, Kits, and Einstellungen
+                                Class<?> panelCls = Class.forName("de.pvptrainer.ui.TrainerPanel");
+                                var pwF = panelCls.getDeclaredField("panelWidth");
+                                var phF = panelCls.getDeclaredField("panelHeight");
+                                pwF.setAccessible(true);
+                                phF.setAccessible(true);
+                                int baseW = pwF.getInt(screen);
+                                int baseH = phF.getInt(screen);
+                                String[] childScreenNames = {
+                                    "de.pvptrainer.ui.TrainingOptionsScreen",
+                                    "de.pvptrainer.ui.ProgressScreen",
+                                    "de.pvptrainer.ui.BotAnalysisScreen",
+                                    "de.pvptrainer.ui.KnowledgeGuideScreen",
+                                    "de.pvptrainer.ui.KitShelfScreen"
+                                };
+                                boolean uniformSize = true;
+                                for (String clsName : childScreenNames) {
+                                    Class<?> cls = Class.forName(clsName);
+                                    net.minecraft.client.gui.screens.Screen sub;
+                                    if (clsName.endsWith("BotAnalysisScreen")) {
+                                        var ctor = cls.getDeclaredConstructor(net.minecraft.client.gui.screens.Screen.class, TrainingSettings.Mode.class, String.class);
+                                        ctor.setAccessible(true);
+                                        sub = (net.minecraft.client.gui.screens.Screen) ctor.newInstance(screen, TrainingSettings.Mode.CRYSTAL, null);
+                                    } else if (clsName.endsWith("KnowledgeGuideScreen")) {
+                                        var ctor = cls.getDeclaredConstructor(net.minecraft.client.gui.screens.Screen.class, TrainingSettings.Mode.class, Drill.class);
+                                        ctor.setAccessible(true);
+                                        sub = (net.minecraft.client.gui.screens.Screen) ctor.newInstance(screen, TrainingSettings.Mode.CRYSTAL, Drill.D_TAP);
+                                    } else if (clsName.endsWith("KitShelfScreen")) {
+                                        var ctor = cls.getDeclaredConstructor(TrainingScreen.class, TrainingSettings.Mode.class, boolean.class);
+                                        ctor.setAccessible(true);
+                                        sub = (net.minecraft.client.gui.screens.Screen) ctor.newInstance(screen, TrainingSettings.Mode.CRYSTAL, false);
+                                    } else if (clsName.endsWith("TrainingOptionsScreen")) {
+                                        var ctor = cls.getDeclaredConstructor(TrainingScreen.class, TrainingSettings.Mode.class);
+                                        ctor.setAccessible(true);
+                                        sub = (net.minecraft.client.gui.screens.Screen) ctor.newInstance(screen, TrainingSettings.Mode.CRYSTAL);
+                                    } else {
+                                        var ctor = cls.getDeclaredConstructor(net.minecraft.client.gui.screens.Screen.class, TrainingSettings.Mode.class);
+                                        ctor.setAccessible(true);
+                                        sub = (net.minecraft.client.gui.screens.Screen) ctor.newInstance(screen, TrainingSettings.Mode.CRYSTAL);
+                                    }
+                                    mc.gui.setScreen(sub);
+                                    if (pwF.getInt(sub) != baseW || phF.getInt(sub) != baseH) {
+                                        uniformSize = false;
+                                    }
+                                }
                                 mc.gui.setScreen(null);
                                 UpdateChecker.clear();
-                                uiCheck.complete(foundBadge);
+                                uiCheck.complete(foundBadge && uniformSize);
                             } catch (Throwable err) {
                                 UpdateChecker.clear();
                                 uiCheck.completeExceptionally(err);

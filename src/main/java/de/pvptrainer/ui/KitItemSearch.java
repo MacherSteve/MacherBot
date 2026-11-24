@@ -164,9 +164,9 @@ final class KitItemSearch extends TrainerPanel {
 
    @Override
    void content(GuiGraphicsExtractor var1) {
-      this.line(var1, this.matches.size() + " Treffer · " + (this.page + 1) + "/" + this.pages, this.x + 40, this.bottom - 13, this.inner - 80, -3819081);
+      this.line(var1, this.matches.size() + " Treffer · " + (this.page + 1) + "/" + this.pages, this.x + 40, this.bottom - 13, this.inner - 80, MUTED);
       if (this.matches.isEmpty()) {
-         this.line(var1, "Kein passender Gegenstand gefunden.", this.x, this.y + 30, this.inner, -593428);
+         this.line(var1, "Kein passender Gegenstand gefunden.", this.x, this.y + 30, this.inner, TEXT);
       }
    }
 

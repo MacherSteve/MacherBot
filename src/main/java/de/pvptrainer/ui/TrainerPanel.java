@@ -98,11 +98,11 @@ abstract class TrainerPanel extends Screen {
    }
 
    int preferredWidth() {
-      return 560;
+      return 590;
    }
 
    int preferredHeight() {
-      return 316;
+      return 334;
    }
 
    abstract void build();
@@ -290,11 +290,15 @@ abstract class TrainerPanel extends Screen {
    }
 
    static void drawScrollbar(GuiGraphicsExtractor g, int barX, int topY, int height, int scroll, int maxScroll, int contentHeight) {
+      drawScrollbar(g, barX, topY, height, scroll, maxScroll, contentHeight, false);
+   }
+
+   static void drawScrollbar(GuiGraphicsExtractor g, int barX, int topY, int height, int scroll, int maxScroll, int contentHeight, boolean highlighted) {
       if (maxScroll <= 0 || height < 16) return;
-      fillRounded(g, barX, topY, 3, height, 0x1AFFFFFF);
+      fillRounded(g, barX, topY, 3, height, 0xFF16161D);
       int thumbH = Math.max(18, (int)Math.round((double)height * height / Math.max(height + 1, contentHeight)));
       int thumbY = topY + (int)Math.round((double)(height - thumbH) * scroll / maxScroll);
-      fillRounded(g, barX, thumbY, 3, thumbH, 0x78FFFFFF);
+      fillRounded(g, barX, thumbY, 3, thumbH, highlighted ? BORDER_SELECTED : BORDER_HOVER);
    }
 
    static int withAlpha(int rgb, int alpha) {

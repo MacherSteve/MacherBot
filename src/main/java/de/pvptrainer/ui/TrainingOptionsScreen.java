@@ -54,16 +54,6 @@ final class TrainingOptionsScreen extends TrainerPanel {
    }
 
    @Override
-   int preferredWidth() {
-      return 570;
-   }
-
-   @Override
-   int preferredHeight() {
-      return 324;
-   }
-
-   @Override
    int headerRightMargin() {
       return this.headerRightReserved;
    }
@@ -79,7 +69,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
       int resetX = this.right - 24 - resetW;
       this.iconChip(resetX, this.top + 6, resetW, 17, UiIcons.RESET, "Standard", false, EMBER, () -> {
          TrainerClient.saveSetup(
-            TrainerClient.settings(this.mode).forDrill(drill),
+            TrainingSettings.defaults(this.mode).forDrill(drill),
             DrillOptions.forDrill(drill)
          );
          this.refresh();
@@ -469,8 +459,9 @@ final class TrainingOptionsScreen extends TrainerPanel {
       graphics.disableScissor();
 
       if (this.maxScroll > 0) {
+         boolean hoverBar = this.draggingScrollbar || (mx >= this.right - 7 && mx <= this.right + 1 && my >= this.viewTop && my <= this.viewBottom);
          drawScrollbar(graphics, this.right - 3, this.viewTop, this.viewBottom - this.viewTop,
-            this.scrollOffset, this.maxScroll, this.contentHeight);
+            this.scrollOffset, this.maxScroll, this.contentHeight, hoverBar);
       }
    }
 

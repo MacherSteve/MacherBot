@@ -92,9 +92,6 @@ final class ProgressScreen extends TrainerPanel {
         return screen;
     }
 
-    @Override int preferredWidth() { return 584; }
-    @Override int preferredHeight() { return 330; }
-
     @Override void build() {
         this.firstFrame = true;
         this.pointerMoved = false;

@@ -503,13 +503,19 @@ public final class KitLibrary {
              && MacherAppearance.PROFILE.equals(stack.get(DataComponents.PROFILE)))) styleGoldenHeads(var5);
          if (defaultId(TrainingSettings.Mode.CRYSTAL).equals(var3.id())) {
             // Built-in layouts can rearrange slots but have no editable enchantments. Preserve
-            // previous arrangements by recognizing exactly the boots from the pre-1.7 template.
+            // previous arrangements by migrating legacy Blast Protection IV boots/leggings.
             ItemStack updatedBoots = var3.stack(36);
             ItemStack legacyBoots = updatedBoots.copy();
+            ItemStack updatedLeggings = var3.stack(37);
+            ItemStack legacyLeggings = updatedLeggings.copy();
             var enchants = var0.lookupOrThrow(Registries.ENCHANTMENT);
             var protection = enchants.getOrThrow(Enchantments.PROTECTION);
             var blastProtection = enchants.getOrThrow(Enchantments.BLAST_PROTECTION);
             EnchantmentHelper.updateEnchantments(legacyBoots, levels -> {
+               levels.set(protection, 0);
+               levels.set(blastProtection, 4);
+            });
+            EnchantmentHelper.updateEnchantments(legacyLeggings, levels -> {
                levels.set(protection, 0);
                levels.set(blastProtection, 4);
             });
@@ -519,6 +525,9 @@ public final class KitLibrary {
                }
                if (ItemStack.isSameItemSameComponents(var6, legacyBoots)) {
                   var6.set(DataComponents.ENCHANTMENTS, updatedBoots.get(DataComponents.ENCHANTMENTS));
+               }
+               if (ItemStack.isSameItemSameComponents(var6, legacyLeggings)) {
+                  var6.set(DataComponents.ENCHANTMENTS, updatedLeggings.get(DataComponents.ENCHANTMENTS));
                }
             }
          }

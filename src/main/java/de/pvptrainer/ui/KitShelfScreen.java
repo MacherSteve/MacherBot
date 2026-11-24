@@ -46,16 +46,6 @@ final class KitShelfScreen extends TrainerPanel {
    }
 
    @Override
-   int preferredWidth() {
-      return 560;
-   }
-
-   @Override
-   int preferredHeight() {
-      return 316;
-   }
-
-   @Override
    void build() {
       if (this.minecraft.level == null || this.minecraft.player == null) return;
       this.subtitle = this.mode.label() + " · " + (this.bot ? "Bot-Kit" : "Spieler-Kit");
@@ -262,8 +252,9 @@ final class KitShelfScreen extends TrainerPanel {
       graphics.disableScissor();
 
       if (this.maxScroll > 0) {
+         boolean hoverBar = this.draggingScrollbar || (mx >= this.right - 7 && mx <= this.right + 1 && my >= this.listTop && my <= this.listBottom);
          drawScrollbar(graphics, this.right - 3, this.listTop, this.listBottom - this.listTop,
-            this.scrollOffset, this.maxScroll, this.contentHeight);
+            this.scrollOffset, this.maxScroll, this.contentHeight, hoverBar);
       }
 
       String status = this.message.isEmpty() ? KitLibrary.notice() : this.message;

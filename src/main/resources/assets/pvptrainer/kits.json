@@ -132,7 +132,7 @@
       "amount": 1,
       "enchants": [
         {
-          "id": "blast_protection",
+          "id": "protection",
           "level": 4
         },
         {

@@ -87,16 +87,6 @@ public final class TrainingScreen extends TrainerPanel {
    }
 
    @Override
-   int preferredWidth() {
-      return 590;
-   }
-
-   @Override
-   int preferredHeight() {
-      return 334;
-   }
-
-   @Override
    int headerRightMargin() {
       return this.headerRightReserved;
    }
@@ -185,16 +175,14 @@ public final class TrainingScreen extends TrainerPanel {
 
       if (this.shownUpdate != null) {
          UpdateChecker.UpdateInfo update = this.shownUpdate;
-         String label = "↑ " + update.latestVersion();
-         int updW = Math.min(72, this.font.width(label) + 10);
-         cursorRight -= updW + 4;
-         Action updateBtn = this.action(cursorRight, headerBtnY, updW, headerBtnH, label, Style.SELECTED,
-            () -> ConfirmLinkScreen.confirmLinkNow(this, update.downloadUri(), true));
-         updateBtn.setMessage(Component.literal("Update " + update.latestVersion()));
+         String label = compact ? ("↑ " + update.latestVersion()) : ("Update " + update.latestVersion() + " ↗");
+         int updW = Math.min(compact ? 66 : 112, this.font.width(label) + (compact ? 12 : 18));
+         cursorRight -= updW + 5;
          String tip = "Neue MacherBot-Version " + update.latestVersion() + " verfügbar (installiert: " + update.currentVersion() + ")";
          if (!update.summary().isEmpty()) tip += "\n" + update.summary();
          tip += "\nKlicken zum Öffnen der Download-Seite.";
-         updateBtn.tip(tip);
+         this.addRenderableWidget(new UpdatePill(cursorRight, headerBtnY, updW, headerBtnH, label, update.latestVersion(), tip,
+            () -> ConfirmLinkScreen.confirmLinkNow(this, update.downloadUri(), true)));
       }
 
       this.headerRightReserved = this.right - cursorRight + 8;
@@ -957,8 +945,9 @@ public final class TrainingScreen extends TrainerPanel {
       graphics.disableScissor();
 
       if (this.maxScroll > 0) {
+         boolean hoverBar = this.draggingScrollbar || (!blockedByPopover && mx >= this.right - 7 && mx <= this.right + 1 && my >= this.viewTop && my <= this.viewBottom);
          drawScrollbar(graphics, this.right - 3, this.viewTop, this.viewBottom - this.viewTop,
-            this.scrollOffset, this.maxScroll, this.contentHeight);
+            this.scrollOffset, this.maxScroll, this.contentHeight, hoverBar);
       }
 
       // --- Elevated Apple Launch Dock ---
@@ -1192,6 +1181,39 @@ public final class TrainingScreen extends TrainerPanel {
          graphics.text(TrainingScreen.this.font, this.leftLabel, sx, textY, this.large ? OFF : TEXT, false);
          drawToggleSwitch(graphics, sx + leftW + 4, y + (h - 12) / 2, this.large, hover);
          graphics.text(TrainingScreen.this.font, this.rightLabel, sx + leftW + 4 + switchW + 4, textY, this.large ? ACCENT_GREEN : OFF, false);
+      }
+   }
+
+   /** Prominent Apple-style amber notification pill in the header when a newer release exists. */
+   private final class UpdatePill extends Button {
+      private final String badgeText;
+
+      UpdatePill(int x, int y, int w, int h, String badgeText, String version, String tooltip, Runnable onOpen) {
+         super(x, y, w, h, Component.literal("Update " + version), btn -> onOpen.run(), DEFAULT_NARRATION);
+         this.badgeText = badgeText;
+         this.setTooltip(Tooltip.create(Component.literal(tooltip)));
+         this.setTooltipDelay(Duration.ofMillis(200L));
+      }
+
+      @Override
+      protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+         boolean hover = this.active && this.isHoveredOrFocused();
+         int x = this.getX();
+         int y = this.getY();
+         int w = this.getWidth();
+         int h = this.getHeight();
+         fillRounded(graphics, x, y, w, h, hover ? 0xFF3A2C19 : 0xFF281F13);
+         outlineRounded(graphics, x, y, w, h, hover ? 0xFFFFCA74 : ACCENT_AMBER);
+         boolean showDot = w >= 72;
+         int dotSpace = showDot ? 7 : 0;
+         String fitted = TrainingScreen.this.fit(this.badgeText, w - 8 - dotSpace);
+         int contentW = dotSpace + TrainingScreen.this.font.width(fitted);
+         int startX = x + Math.max(4, (w - contentW) / 2);
+         if (showDot) {
+            fillRounded(graphics, startX, y + (h - 4) / 2, 4, 4, ACCENT_AMBER);
+            startX += dotSpace;
+         }
+         graphics.text(TrainingScreen.this.font, fitted, startX, y + (h - 8) / 2, hover ? TEXT : ACCENT_AMBER, false);
       }
    }
 

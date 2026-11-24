@@ -40,9 +40,6 @@ final class BotAnalysisScreen extends TrainerPanel {
         this.preferred = preferred;
     }
 
-    @Override int preferredWidth() { return 584; }
-    @Override int preferredHeight() { return 330; }
-
     @Override void build() {
         // Unified 4-Tab Apple Segmented Control: Übersicht | Übungen | Rundenlog | Bot-Analyse
         this.topTabY = this.y;
@@ -148,7 +145,7 @@ final class BotAnalysisScreen extends TrainerPanel {
             outlineRounded(g, x, bodyTop, inner, 72, LINE);
             line(g, "Noch keine Bot-Messung", x + 10, bodyTop + 10, inner - 20, TEXT);
             line(g, "Spiele ein freies Duell mit Gegenangriffen oder eine Runde Manuelles Retotem.", x + 10, bodyTop + 26, inner - 20, MUTED);
-            line(g, "Frühere Spielerscores bleiben im Tab Verlauf.", x + 10, bodyTop + 42, inner - 20, MUTED);
+            line(g, "Deine persönlichen PvP-Statistiken findest du in den Tabs Übersicht & Übungen.", x + 10, bodyTop + 42, inner - 20, MUTED);
         } else {
             line(g, label, x + 24, bodyTop + 4, inner - 50, TEXT);
             if (over(bodyTop, 16)) tip(g, List.of(label, "Setup " + setups.get(group).setup().substring(0, Math.min(12, setups.get(group).setup().length()))

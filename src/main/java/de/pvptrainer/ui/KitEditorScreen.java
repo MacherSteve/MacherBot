@@ -183,14 +183,14 @@ final class KitEditorScreen extends TrainerPanel {
 
    @Override
    void content(GuiGraphicsExtractor var1) {
-      this.line(var1, "Rüstung", this.x, this.gearY - 10, 4 * this.cell, -3819081);
-      this.line(var1, "Nebenhand", this.x + 5 * this.cell, this.gearY - 10, 4 * this.cell, -3819081);
-      this.line(var1, "Inventar", this.x, this.inventoryY - 10, 9 * this.cell, -3819081);
-      this.line(var1, slotName(this.selected), this.sideX, this.gearY, this.right - this.sideX, -3819081);
+      this.line(var1, "Rüstung", this.x, this.gearY - 10, 4 * this.cell, MUTED);
+      this.line(var1, "Nebenhand", this.x + 5 * this.cell, this.gearY - 10, 4 * this.cell, MUTED);
+      this.line(var1, "Inventar", this.x, this.inventoryY - 10, 9 * this.cell, MUTED);
+      this.line(var1, slotName(this.selected), this.sideX, this.gearY, this.right - this.sideX, MUTED);
       ItemStack var2 = this.slots.get(this.selected);
-      this.line(var1, var2.isEmpty() ? "Leer" : MacherItems.label(var2).getString(), this.sideX, this.gearY + 11, this.right - this.sideX, -593428);
+      this.line(var1, var2.isEmpty() ? "Leer" : MacherItems.label(var2).getString(), this.sideX, this.gearY + 11, this.right - this.sideX, TEXT);
       if (!this.message.isEmpty()) {
-         this.line(var1, this.message, this.x, this.bottom - 31, this.inner, -3819081);
+         this.line(var1, this.message, this.x, this.bottom - 31, this.inner, MUTED);
       }
    }
 
@@ -200,10 +200,10 @@ final class KitEditorScreen extends TrainerPanel {
       Button var6 = new Button(var1, var2, this.cell, this.cell, Component.literal(var5), var2x -> this.pick(var3), Supplier::get) {
          protected void extractContents(GuiGraphicsExtractor var1, int var2x, int var3x, float var4x) {
             int var5x = this.isHoveredOrFocused()
-               ? -593428
-               : (var3 != KitEditorScreen.this.selected && var3 != KitEditorScreen.this.sourceSlot ? -12107967 : KitEditorScreen.this.accent());
+               ? BORDER_HOVER
+               : (var3 != KitEditorScreen.this.selected && var3 != KitEditorScreen.this.sourceSlot ? LINE : BORDER_SELECTED);
             var1.fill(
-               this.getX(), this.getY(), this.getRight(), this.getBottom(), var3 == KitEditorScreen.this.selected ? KitEditorScreen.this.shade() : -14014678
+               this.getX(), this.getY(), this.getRight(), this.getBottom(), var3 == KitEditorScreen.this.selected ? SELECTED : (this.isHoveredOrFocused() ? HOVER : CELL)
             );
             var1.outline(this.getX(), this.getY(), this.getWidth(), this.getHeight(), var5x);
             int var6x = this.getX() + (this.getWidth() - 16) / 2;
@@ -212,7 +212,7 @@ final class KitEditorScreen extends TrainerPanel {
                var1.item(var4, var6x, var7);
                var1.itemDecorations(KitEditorScreen.this.font, var4, var6x, var7);
             } else if (var3 < 9) {
-               var1.text(KitEditorScreen.this.font, Integer.toString(var3 + 1), var6x + 5, var7 + 4, -6976630, false);
+               var1.text(KitEditorScreen.this.font, Integer.toString(var3 + 1), var6x + 5, var7 + 4, OFF, false);
             }
 
             if (this.isHoveredOrFocused()) {
