@@ -33,11 +33,7 @@ public final class TrainingResources {
         if (level == null || !TrainingArena.isArena(level)) {
             return level == null ? Difficulty.HARD : level.getDifficulty();
         }
-        Round active = round;
-        DrillOptions.ArenaDifficulty setting = active != null
-            ? active.options().arenaDifficulty()
-            : DrillOptions.ArenaDifficulty.HARD;
-        return setting.resolve(level.getDifficulty(), true);
+        return Difficulty.HARD;
     }
 
     public static boolean zeroDamageFor(LivingEntity actor) {

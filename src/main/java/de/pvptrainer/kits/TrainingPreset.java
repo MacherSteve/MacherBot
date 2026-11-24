@@ -79,11 +79,7 @@ public enum TrainingPreset {
    }
 
    public TrainingPreset.Setup setup(TrainingSettings var1, Drill var2) {
-      TrainingSettings var3 = var1.forDrill(var2).withDifficulty(switch (this) {
-         case BEGINNER -> TrainingSettings.Difficulty.EASY;
-         case PRACTICE -> TrainingSettings.Difficulty.NORMAL;
-         case ADVANCED -> TrainingSettings.Difficulty.HARD;
-      });
+      TrainingSettings var3 = var1.forDrill(var2).withDifficulty(TrainingSettings.Difficulty.HARD);
       TrainingPreset.Recipe var4 = new TrainingPreset.Recipe();
       if (var2 == Drill.JUMP_RESET) var4.index(DrillOptions.Field.HINTS, this == ADVANCED ? 0 : 1);
       boolean var5 = this == ADVANCED;
@@ -93,7 +89,7 @@ public enum TrainingPreset {
          case DUEL -> {
             var4.number(DrillOptions.Field.REACTION, this.choose(40, 20, 10));
             var3 = var3.withMovement(var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.FOLLOW);
-            yield var3.movement().label() + " · " + var3.difficulty().label();
+            yield var3.movement().label();
          }
          case PASSIVE, TOTEM_POPS, SHIELD -> {
             var4.number(DrillOptions.Field.DISTANCE, this.choose(2, 3, 4));

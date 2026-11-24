@@ -51,16 +51,18 @@ final class KnowledgeGuideScreen extends TrainerPanel {
    @Override
    void build() {
       KnowledgeGuide.Category[] categories = KnowledgeGuide.Category.values();
-      int tabH = 19;
+      int tabH = 22;
+      int segX = this.x + 2;
+      int segW = this.inner - 4;
       for (int i = 0; i < categories.length; i++) {
          KnowledgeGuide.Category cat = categories[i];
          this.action(
-            this.col(i, categories.length),
-            this.y,
-            this.cw(i, categories.length),
-            tabH,
+            gridCol(segX, segW, 2, i, categories.length),
+            this.y + 2,
+            gridW(segX, segW, 2, i, categories.length),
+            tabH - 4,
             cat.label(),
-            cat == this.category ? Style.SELECTED : Style.NORMAL,
+            cat == this.category ? Style.SEGMENT_SELECTED : Style.SEGMENT,
             () -> {
                this.category = cat;
                this.listPage = 0;
@@ -184,9 +186,10 @@ final class KnowledgeGuideScreen extends TrainerPanel {
             "Jetzt üben ▶  " + targetDrill.label(),
             Style.PRIMARY,
             () -> {
+               DrillOptions sticky = TrainerClient.options(this.mode).carryCrossModeModifiersTo(DrillOptions.forDrill(targetDrill));
                TrainerClient.saveSetup(
                   TrainerClient.settings(targetMode).forDrill(targetDrill),
-                  DrillOptions.forDrill(targetDrill)
+                  sticky
                );
                this.minecraft.gui.setScreen(new TrainingScreen());
             }
@@ -250,9 +253,11 @@ final class KnowledgeGuideScreen extends TrainerPanel {
 
    @Override
    void content(GuiGraphicsExtractor graphics) {
-      graphics.fill(this.detailX, this.detailY, this.detailX + this.detailW, this.detailY + this.detailH, CELL);
-      graphics.outline(this.detailX, this.detailY, this.detailW, this.detailH, LINE);
-      graphics.fill(this.detailX + 1, this.detailY + 1, this.detailX + 3, this.detailY + this.detailH - 1, EMBER);
+      fillRounded2(graphics, this.x, this.y, this.inner, 22, TRACK);
+      outlineRounded2(graphics, this.x, this.y, this.inner, 22, LINE);
+      fillRounded2(graphics, this.detailX, this.detailY, this.detailW, this.detailH, SURFACE);
+      outlineRounded2(graphics, this.detailX, this.detailY, this.detailW, this.detailH, BORDER);
+      graphics.fill(this.detailX + 1, this.detailY + 5, this.detailX + 3, this.detailY + this.detailH - 5, EMBER);
 
       if (this.activeEntry == null) {
          this.line(graphics, "Kein Eintrag verfügbar.", this.detailX + 10, this.detailY + 10, this.detailW - 20, MUTED);

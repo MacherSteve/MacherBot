@@ -17,6 +17,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
             (var2, var3x) -> {
                if (var2 != null && var3x != null && var3x >= 0 && var3x < var2.size()) {
                   if (var2 == Field.HINTS && drill != Drill.JUMP_RESET) return;
+                  if (var2 == Field.ARENA_DIFFICULTY) return;
                   if ((drill == Drill.LOW_WEB_SMASH || drill == Drill.SHIELD_TRIPLE_TAP || drill == Drill.MACE_COUNTER_DTAP) && var2 == Field.SHIELD) return;
                   if (drill.requiresPopChain() && (var2 == Field.CRYSTAL_AIR || var2 == Field.RESET_POP || var2 == Field.TOTEMS && var3x == 0)) {
                      return;
@@ -51,6 +52,28 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
 
    public static DrillOptions forDrill(Drill var0) {
       return new DrillOptions(var0, Map.of());
+   }
+
+   /** Copies sticky arena/session modifiers onto a target drill configuration within the same mode. */
+   public DrillOptions carryModifiersTo(DrillOptions target, TrainingSettings.Mode mode) {
+      DrillOptions updated = carryCrossModeModifiersTo(target)
+         .withIndex(Field.ITEM_CONSUMPTION, this.itemConsumption(mode) ? 0 : 1);
+      if (mode == TrainingSettings.Mode.MACE) {
+         updated = updated.withIndex(Field.PEARL_CATCH_ONLY, this.pearlCatchOnly() ? 1 : 0);
+      }
+      return updated;
+   }
+
+   /** Copies universal environment modifiers when switching between game modes. */
+   public DrillOptions carryCrossModeModifiersTo(DrillOptions target) {
+      return target
+         .withIndex(Field.TICK_RATE, Field.TICK_RATE.indexOfNumber(this.tickRate()))
+         .withIndex(Field.ARENA_SIZE, this.largeArena() ? 1 : 0)
+         .withIndex(Field.ZERO_DAMAGE, this.zeroDamage().ordinal())
+         .withIndex(Field.PLAYER_PING, Field.PLAYER_PING.indexOfNumber(this.playerPing()))
+         .withIndex(Field.BOT_PING, Field.BOT_PING.indexOfNumber(this.botPing()))
+         .withIndex(Field.FALL_DAMAGE, this.fallDamage() ? 0 : 1)
+         .withIndex(Field.ARMOR_WEAR, this.armorWear() ? 0 : 1);
    }
 
    DrillOptions next(DrillOptions.Field var1) {
@@ -547,7 +570,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
             case BOT_JUMP, RANDOM_BLOCK_POS, BOT_AUTO_HIT -> var1.drill() == Drill.STUN_WEB;
             case CLEAN_HEAL -> var1.drill() == Drill.HEAL;
             case DUNK_TYPE -> var1.drill() == Drill.WEB_DUNK;
-            case HINTS -> false;
+            case HINTS, ARENA_DIFFICULTY -> false;
             case REPLACE -> var1.holdShield();
             case DURABILITY -> var1.holdShield();
             case REBLOCK -> var1.holdShield() && !DrillOptions.requiresStunWindow(var1.drill());
@@ -618,14 +641,7 @@ public record DrillOptions(Drill drill, Map<DrillOptions.Field, Integer> overrid
       EASY;
 
       public net.minecraft.world.Difficulty resolve(net.minecraft.world.Difficulty worldDifficulty, boolean inArena) {
-         return switch (this) {
-            case HARD -> net.minecraft.world.Difficulty.HARD;
-            case NORMAL -> net.minecraft.world.Difficulty.NORMAL;
-            case EASY -> net.minecraft.world.Difficulty.EASY;
-            case WORLD -> worldDifficulty == net.minecraft.world.Difficulty.PEACEFUL && inArena
-               ? net.minecraft.world.Difficulty.NORMAL
-               : (worldDifficulty == null ? net.minecraft.world.Difficulty.HARD : worldDifficulty);
-         };
+         return net.minecraft.world.Difficulty.HARD;
       }
    }
 

@@ -61,6 +61,7 @@ public final class MacherBotUnitTests {
         testVanillaPlayerDamageAndCrystalParity();
         testBatchFeaturesAndCrystalHotfixes();
         testSwightDrillsAndKnowledgeGuide();
+        testUiRedesignStickyModifiersAndIcons();
         System.out.println("PASS " + passed + " Unit-Tests erfolgreich.");
     }
 
@@ -767,14 +768,16 @@ public final class MacherBotUnitTests {
 
     private static void testBatchFeaturesAndCrystalHotfixes() throws Exception {
         run("Neue Features & Hotfixes: Arena-Schwierigkeit, Zero-Damage, Health-Tag, Self-Web, Uppercut, D-Tap/Triple-Tap", () -> {
-            // 1. Arena-Schwierigkeit: Standard Schwer (HARD), 'Von Welt' uebernimmt Weltschwierigkeit
+            // 1. Arena-Schwierigkeit: fest auf Schwer (HARD) und aus dem UI ausgeblendet
             var defaultOpts = DrillOptions.forDrill(Drill.D_TAP);
-            check(defaultOpts.arenaDifficulty() == DrillOptions.ArenaDifficulty.HARD, "Standard Arena-Schwierigkeit muss Schwer (HARD) sein");
-            check(defaultOpts.arenaDifficulty().resolve(Difficulty.NORMAL, true) == Difficulty.HARD, "Standard Schwer bleibt auf Normal-Welt HARD");
-            var worldOpts = defaultOpts.withIndex(DrillOptions.Field.ARENA_DIFFICULTY, DrillOptions.ArenaDifficulty.WORLD.ordinal());
-            check(worldOpts.arenaDifficulty().resolve(Difficulty.NORMAL, true) == Difficulty.NORMAL, "Von Welt uebernimmt NORMAL");
-            check(worldOpts.arenaDifficulty().resolve(Difficulty.EASY, true) == Difficulty.EASY, "Von Welt uebernimmt EASY");
-            check(worldOpts.arenaDifficulty().resolve(Difficulty.PEACEFUL, true) == Difficulty.NORMAL, "Von Welt mappt PEACEFUL in Arena auf NORMAL");
+            check(defaultOpts.arenaDifficulty() == DrillOptions.ArenaDifficulty.HARD, "Arena-Schwierigkeit muss immer Schwer (HARD) sein");
+            check(!DrillOptions.Field.ARENA_DIFFICULTY.visible(defaultOpts, TrainingSettings.Mode.CRYSTAL), "Arena-Schwierigkeit muss aus dem UI entfernt sein");
+            check(defaultOpts.arenaDifficulty().resolve(Difficulty.NORMAL, true) == Difficulty.HARD, "Arena bleibt auf Normal-Welt HARD");
+            check(DrillOptions.ArenaDifficulty.WORLD.resolve(Difficulty.NORMAL, true) == Difficulty.HARD, "Legacy WORLD mappt in Arena fest auf HARD");
+            check(DrillOptions.ArenaDifficulty.EASY.resolve(Difficulty.EASY, true) == Difficulty.HARD, "Legacy EASY mappt in Arena fest auf HARD");
+            check(DrillOptions.ArenaDifficulty.WORLD.resolve(Difficulty.PEACEFUL, true) == Difficulty.HARD, "Legacy PEACEFUL mappt in Arena fest auf HARD");
+            var legacyWorldOpts = defaultOpts.withIndex(DrillOptions.Field.ARENA_DIFFICULTY, DrillOptions.ArenaDifficulty.WORLD.ordinal());
+            check(legacyWorldOpts.arenaDifficulty() == DrillOptions.ArenaDifficulty.HARD, "Legacy ARENA_DIFFICULTY-Override faellt auf HARD zurueck");
 
             // 2. Zero-Damage-Modus
             check(defaultOpts.zeroDamage() == DrillOptions.ZeroDamage.OFF, "Zero-Damage Standard Aus");
@@ -978,6 +981,104 @@ public final class MacherBotUnitTests {
                 }
                 check(preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.SWORD), Drill.PCRIT_BREAK).options().startDistance() >= 7,
                     "PCRIT_BREAK Preset startet bei >= 7 Bl.");
+            }
+        });
+    }
+
+    private static void testUiRedesignStickyModifiersAndIcons() throws Exception {
+        run("UI-Redesign: Sticky Modifier, feste Schwer-Defaults, Legacy-JSON & 12x12 Icon-Assets", () -> {
+            // 1. Alle Modi und Presets nutzen fest Difficulty.HARD
+            for (var mode : TrainingSettings.Mode.values()) {
+                var def = TrainingSettings.defaults(mode);
+                check(def.difficulty() == TrainingSettings.Difficulty.HARD, mode + " Default muss HARD sein");
+                for (var drill : Drill.forMode(mode)) {
+                    check(def.forDrill(drill).difficulty() == TrainingSettings.Difficulty.HARD,
+                        mode + "/" + drill + " forDrill muss HARD sein");
+                    for (var preset : TrainingPreset.values()) {
+                        check(preset.setup(def, drill).behavior().difficulty() == TrainingSettings.Difficulty.HARD,
+                            mode + "/" + drill + " Preset " + preset + " muss HARD sein");
+                    }
+                }
+            }
+
+            // 2. Sticky Modifier innerhalb desselben Modus (Drill- und Preset-Wechsel)
+            var configured = DrillOptions.forDrill(Drill.STUN_WEB)
+                .withIndex(DrillOptions.Field.TICK_RATE, DrillOptions.Field.TICK_RATE.indexOfNumber(10))
+                .withIndex(DrillOptions.Field.ARENA_SIZE, 1)
+                .withIndex(DrillOptions.Field.ZERO_DAMAGE, DrillOptions.ZeroDamage.PLAYER_ONLY.ordinal())
+                .withIndex(DrillOptions.Field.PLAYER_PING, DrillOptions.Field.PLAYER_PING.indexOfNumber(60))
+                .withIndex(DrillOptions.Field.BOT_PING, DrillOptions.Field.BOT_PING.indexOfNumber(30))
+                .withIndex(DrillOptions.Field.FALL_DAMAGE, 0)
+                .withIndex(DrillOptions.Field.ARMOR_WEAR, 0)
+                .withIndex(DrillOptions.Field.ITEM_CONSUMPTION, 1); // UHC: unendlich
+            var carried = configured.carryModifiersTo(DrillOptions.forDrill(Drill.WEB_DUNK), TrainingSettings.Mode.UHC);
+            check(carried.drill() == Drill.WEB_DUNK, "Ziel-Drill uebernommen");
+            check(carried.tickRate() == 10, "Spieltempo (10 TPS) bleibt beim Drill-Wechsel aktiv");
+            check(carried.largeArena(), "Grosse Arena bleibt beim Drill-Wechsel aktiv");
+            check(carried.zeroDamage() == DrillOptions.ZeroDamage.PLAYER_ONLY, "Zero-Damage bleibt beim Drill-Wechsel aktiv");
+            check(carried.playerPing() == 60 && carried.botPing() == 30, "Pings bleiben beim Drill-Wechsel aktiv");
+            check(carried.fallDamage() && carried.armorWear(), "Fallschaden & Ruestungsverschleiss bleiben aktiv");
+            check(!carried.itemConsumption(TrainingSettings.Mode.UHC), "Unendliche Items bleiben im selben Modus aktiv");
+
+            // 3. Cross-Mode Sticky Modifier (z.B. Crystal -> UHC behaelt Tempo/Arena/ZeroDmg/Ping/Fall/Armor, aber respektiert UHC Item-Default)
+            var cross = configured.carryCrossModeModifiersTo(DrillOptions.forDrill(Drill.D_TAP));
+            check(cross.tickRate() == 10 && cross.largeArena() && cross.zeroDamage() == DrillOptions.ZeroDamage.PLAYER_ONLY
+                && cross.playerPing() == 60 && cross.fallDamage(), "Cross-Mode Modifier bleiben erhalten");
+            check(!cross.itemConsumption(TrainingSettings.Mode.CRYSTAL), "Crystal behaelt eigenen Item-Default");
+
+            // 4. Legacy-Profile mit EASY und ARENA_DIFFICULTY bleiben fehlerfrei lesbar
+            Path tempDir = Files.createTempDirectory("macher-legacy-profile-");
+            try {
+                Path file = tempDir.resolve("pvptrainer.json");
+                String legacyJson = """
+                    {
+                      "selected": "UHC",
+                      "profiles": {
+                        "UHC": {
+                          "mode": "UHC",
+                          "difficulty": "EASY",
+                          "movement": "STILL",
+                          "maxHealth": 20,
+                          "counterAttacks": false,
+                          "autoRespawn": true,
+                          "duelTier": "T3",
+                          "duelBand": "AUTO",
+                          "maceCenterLocked": false
+                        }
+                      },
+                      "exercises": {
+                        "UHC": {
+                          "drill": "STUN_WEB",
+                          "overrides": {
+                            "ARENA_DIFFICULTY": 3,
+                            "ARENA_SIZE": 1,
+                            "TICK_RATE": 9
+                          }
+                        }
+                      }
+                    }
+                    """;
+                Files.writeString(file, legacyJson, StandardCharsets.UTF_8);
+                var profiles = new TrainingProfiles(file);
+                check(profiles.selected().mode() == TrainingSettings.Mode.UHC, "Legacy-Profil lesbar");
+                check(profiles.options(TrainingSettings.Mode.UHC).largeArena(), "Legacy ARENA_SIZE erhalten");
+                check(profiles.options(TrainingSettings.Mode.UHC).tickRate() == 10, "Legacy TICK_RATE erhalten");
+                check(profiles.options(TrainingSettings.Mode.UHC).arenaDifficulty() == DrillOptions.ArenaDifficulty.HARD,
+                    "Legacy ARENA_DIFFICULTY wird fest auf HARD aufgeloest");
+            } finally {
+                deleteRecursive(tempDir);
+            }
+
+            // 5. Alle 11 12x12 GUI-Icon-PNGs sind vorhanden und gueltige PNG-Dateien
+            for (String name : List.of("gear", "clock", "arena", "zero_damage", "ping", "infinity",
+                "fall_damage", "help", "reset", "chevron_right", "chevron_down")) {
+                String path = "/assets/pvptrainer/textures/gui/icons/" + name + ".png";
+                try (var in = MacherBotUnitTests.class.getResourceAsStream(path)) {
+                    check(in != null, "GUI-Icon fehlt: " + path);
+                    byte[] header = in.readNBytes(8);
+                    check(header.length == 8 && (header[0] & 0xFF) == 0x89 && header[1] == 'P' && header[2] == 'N' && header[3] == 'G',
+                        "Ungueltiges PNG-Format: " + path);
+                }
             }
         });
     }

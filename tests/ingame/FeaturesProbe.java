@@ -347,6 +347,55 @@ public final class FeaturesProbe implements ClientModInitializer {
                 check(guideLabels.stream().anyMatch(l -> l.contains("Grundlagen"))
                     && guideLabels.stream().anyMatch(l -> l.contains("Jetzt üben")),
                     "KnowledgeGuideScreen missing tabs or CTA: " + guideLabels);
+
+                // Verify Gear button opens page-free Settings screen (2 tabs, no Difficulty switches)
+                var settingsBtn = tripleScreen.children().stream()
+                    .filter(c -> c instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().contains("Einstellungen"))
+                    .map(c -> (net.minecraft.client.gui.components.Button) c)
+                    .findFirst().orElse(null);
+                check(settingsBtn != null, "Settings gear button missing in TrainingScreen: " + tripleLabels);
+                settingsBtn.onPress(null);
+                var settingsScreen = mc.gui.screen();
+                check(settingsScreen != null && settingsScreen.getTitle().getString().contains("Einstellungen"),
+                    "TrainingOptionsScreen did not open: " + settingsScreen);
+                List<String> settingsLabels = settingsScreen.children().stream()
+                    .filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget)
+                    .map(c -> ((net.minecraft.client.gui.components.AbstractWidget) c).getMessage().getString())
+                    .toList();
+                check(settingsLabels.stream().anyMatch(l -> l.contains("Übung & Bot"))
+                    && settingsLabels.stream().anyMatch(l -> l.contains("Arena & Anzeige")),
+                    "Settings missing 2 Apple segmented tabs: " + settingsLabels);
+                check(settingsLabels.stream().noneMatch(l -> l.contains("Schwierigkeit")),
+                    "Difficulty control must not exist in Settings: " + settingsLabels);
+
+                // Verify unified Kits & Statistik screens open cleanly
+                var kitsBtn = tripleScreen.children().stream()
+                    .filter(c -> c instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().equals("Kits"))
+                    .map(c -> (net.minecraft.client.gui.components.Button) c)
+                    .findFirst().orElse(null);
+                check(kitsBtn != null, "Kits button missing in TrainingScreen");
+                kitsBtn.onPress(null);
+                check(mc.gui.screen() != null && mc.gui.screen().getTitle().getString().equals("Kits"),
+                    "Unified KitShelfScreen did not open: " + mc.gui.screen());
+
+                var statsBtn = tripleScreen.children().stream()
+                    .filter(c -> c instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().equals("Statistik"))
+                    .map(c -> (net.minecraft.client.gui.components.Button) c)
+                    .findFirst().orElse(null);
+                check(statsBtn != null, "Statistik button missing in TrainingScreen");
+                statsBtn.onPress(null);
+                var statsScreen = mc.gui.screen();
+                check(statsScreen != null && statsScreen.getTitle().getString().equals("Statistik"),
+                    "Unified Statistik screen did not open: " + statsScreen);
+                List<String> statsLabels = statsScreen.children().stream()
+                    .filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget)
+                    .map(c -> ((net.minecraft.client.gui.components.AbstractWidget) c).getMessage().getString())
+                    .toList();
+                check(statsLabels.stream().anyMatch(l -> l.equals("Verlauf"))
+                    && statsLabels.stream().anyMatch(l -> l.equals("Rundenlog"))
+                    && statsLabels.stream().anyMatch(l -> l.equals("Bot-Analyse")),
+                    "Statistik missing 3 unified tabs: " + statsLabels);
+
                 mc.gui.setScreen(null);
                 uiFuture.complete("ok");
             } catch (Throwable err) {
@@ -1184,9 +1233,9 @@ public final class FeaturesProbe implements ClientModInitializer {
             parityNormalPlayerDmg = 20.0F - p.getHealth();
             parityNormalBotDmg = 20.0F - b.getHealth();
             check(Math.abs(parityNormalBotDmg - parityNormalPlayerDmg) < 0.05F,
-                "ARENA_DIFFICULTY=WORLD NORMAL mismatch! player=" + parityNormalPlayerDmg + " bot=" + parityNormalBotDmg);
-            check(parityNormalBotDmg < parityHardBotDmg - 5.0F,
-                "ARENA_DIFFICULTY=WORLD on NORMAL must be well below HARD: normal=" + parityNormalBotDmg + " hard=" + parityHardBotDmg);
+                "Arena always-HARD parity mismatch! player=" + parityNormalPlayerDmg + " bot=" + parityNormalBotDmg);
+            check(Math.abs(parityNormalBotDmg - parityHardBotDmg) < 0.1F,
+                "Arena must ALWAYS stay HARD even with NORMAL Overworld & legacy WORLD override: got=" + parityNormalBotDmg + " expected=" + parityHardBotDmg);
 
             // Switch to ZERO_DAMAGE = BOTH -> 0 HP lost on BOTH sides while real knockback still applies!
             var zeroBothSettings = TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.PASSIVE).withAutoRespawn(false);
