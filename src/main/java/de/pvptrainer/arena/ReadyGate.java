@@ -50,7 +50,15 @@ public final class ReadyGate {
       UseEntityCallback.EVENT.register((UseEntityCallback)(var0, var1, var2, var3, var4) -> permission(var0));
       UseItemCallback.EVENT.register((UseItemCallback)(var0, var1, var2) -> permission(var0));
       UseBlockCallback.EVENT.register((UseBlockCallback)(var0, var1, var2, var3) -> permission(var0));
-      ServerLivingEntityEvents.ALLOW_DAMAGE.register((AllowDamage)(var0, var1, var2) -> !holding(var0));
+      ServerLivingEntityEvents.ALLOW_DAMAGE.register((AllowDamage)(var0, var1, var2) -> !holding(var0) && !betweenRounds(var0));
+   }
+
+   private static boolean betweenRounds(Entity entity) {
+      if (entity.level() instanceof ServerLevel level && TrainingArena.isArena(level)) {
+         TrainingSession session = TrainerClient.session(level.getServer());
+         return session != null && session.betweenRounds(entity);
+      }
+      return false;
    }
 
    private static InteractionResult permission(Entity var0) {

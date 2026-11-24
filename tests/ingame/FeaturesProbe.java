@@ -7,6 +7,10 @@ import de.pvptrainer.combat.TrainingTactics;
 import de.pvptrainer.drill.Drill;
 import de.pvptrainer.drill.DrillAttempt;
 import de.pvptrainer.drill.DrillOptions;
+import de.pvptrainer.drill.PearlInterceptSolver;
+import de.pvptrainer.kits.KitLibrary;
+import de.pvptrainer.kits.KitLoadout;
+import de.pvptrainer.kits.TrainingPreset;
 import de.pvptrainer.kits.TrainingSettings;
 import de.pvptrainer.progress.HudPreferences;
 import de.pvptrainer.session.TrainingSession;
@@ -36,10 +40,12 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.Potions;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
@@ -279,6 +285,7 @@ public final class FeaturesProbe implements ClientModInitializer {
                     case 13 -> runUppercutAndSwordSprintHits(s, server, p);
                     case 14 -> runSwightUhcDrills(s, server, p);
                     case 15 -> runHealPunishPCritBreakAndCleanHeal(s, server, p);
+                    case 16 -> runV1170Features(s, server, p);
                     default -> {
                         if (savedDifficulty != null) {
                             server.setDifficulty(savedDifficulty, true);
@@ -360,6 +367,8 @@ public final class FeaturesProbe implements ClientModInitializer {
                     .map(c -> (net.minecraft.client.gui.components.Button) c)
                     .findFirst().orElse(null);
                 check(settingsBtn != null, "Settings gear button missing in TrainingScreen: " + tripleLabels);
+                check(tripleLabels.stream().anyMatch(l -> l.contains("Pearl Ground Hit")),
+                    "Pearl Ground Hit icon chip missing in TrainingScreen: " + tripleLabels);
                 settingsBtn.onPress(null);
                 var settingsScreen = mc.gui.screen();
                 check(settingsScreen != null && settingsScreen.getTitle().getString().contains("Einstellungen"),
@@ -1849,5 +1858,460 @@ public final class FeaturesProbe implements ClientModInitializer {
             log("PASS HEAL_PUNISH, PCRIT_BREAK, and HEAL CLEAN_HEAL verified in-game");
             nextScene(s, server);
         }
+    }
+
+    private void runV1170Features(TrainingSession s, MinecraftServer server, ServerPlayer p) throws Exception {
+        // Sub 0..2: Stay-in-arena after player death (autoRespawn=true -> healed, stays in arena, respawns round 2)
+        if (sub == 0) {
+            var duel = TrainingSettings.defaults(TrainingSettings.Mode.SWORD).forDrill(Drill.DUEL).withAutoRespawn(true);
+            s.start(server, p.getUUID(), duel, DrillOptions.forDrill(Drill.DUEL));
+            sub = 1;
+            age = 0;
+            return;
+        }
+        if (sub == 1) {
+            release(s, p);
+            boolean prevented = s.preventTrainingDeath(p, p.damageSources().generic());
+            check(prevented, "preventTrainingDeath must catch lethal hit in active round");
+            sub = 2;
+            age = 0;
+            return;
+        }
+        if (sub == 2) {
+            if (age < 44) {
+                check(TrainingArena.isArena(p.level()), "Player must STAY in arena after death (age=" + age + ")");
+                check(s.status().active(), "Session must STAY active after death (age=" + age + ")");
+                return;
+            }
+            check(TrainingArena.isArena(p.level()), "Player must still be in arena after auto-respawn");
+            check(s.status().rounds() >= 2 && s.status().waitingForStart(),
+                "Auto-respawn after defeat must spawn round 2! status=" + s.status());
+            check(p.getHealth() >= p.getMaxHealth() - 0.1F, "Player must be healed on respawn, hp=" + p.getHealth());
+            check(TrainingArena.hasReturnPoint(p), "Return point must stay intact until explicit exit");
+            log("PASS Stay-in-arena after death + auto-respawn verified in-game");
+
+            // Sub 3..4: First-Hit Knockback in OBI_TRAP after waiting 1 server tick post-releaseStart
+            var obi = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.OBI_TRAP).withAutoRespawn(false);
+            s.start(server, p.getUUID(), obi, DrillOptions.forDrill(Drill.OBI_TRAP));
+            sub = 3;
+            age = 0;
+            return;
+        }
+        if (sub == 3) {
+            release(s, p);
+            sub = 4;
+            age = 0;
+            return;
+        }
+        if (sub == 4) {
+            // Exactly 1 tick after releaseStart: previously bot.onGround() dropped to false here!
+            LivingEntity b = bot(s);
+            check(b.onGround(), "OBI_TRAP bot must keep onGround=true 1 tick after releaseStart!");
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 1.9, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            check(b.getDeltaMovement().y >= 0.35,
+                "First hit 1 tick after releaseStart must deliver full vertical knockback! vel=" + b.getDeltaMovement());
+            log("PASS OBI_TRAP First-Hit knockback after 1-tick wait verified: dy=" + b.getDeltaMovement().y);
+
+            // Sub 5..6: Adjacent TrainingCrystal explosion destroys neighbor crystal (Vanilla EndCrystal parity)
+            var crys = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.PASSIVE).withAutoRespawn(false);
+            s.start(server, p.getUUID(), crys, DrillOptions.forDrill(Drill.PASSIVE));
+            sub = 5;
+            age = 0;
+            return;
+        }
+        if (sub == 5) {
+            release(s, p);
+            ServerLevel level = p.level();
+            BlockPos baseA = new BlockPos(4, ForgeArena.FLOOR, 0);
+            BlockPos baseB = baseA.east(2);
+            level.setBlockAndUpdate(baseA, Blocks.OBSIDIAN.defaultBlockState());
+            level.setBlockAndUpdate(baseB, Blocks.OBSIDIAN.defaultBlockState());
+            level.setBlockAndUpdate(baseA.above(), Blocks.AIR.defaultBlockState());
+            level.setBlockAndUpdate(baseB.above(), Blocks.AIR.defaultBlockState());
+            check(s.placeCrystal(p, baseA), "placeCrystal A failed");
+            check(s.placeCrystal(p, baseB), "placeCrystal B failed");
+            var before = level.getEntities(EntityTypeTest.forClass(TrainingCrystal.class), c -> !c.isRemoved());
+            check(before.size() == 2, "Expected 2 adjacent TrainingCrystals, got " + before.size());
+            p.attack(before.getFirst());
+            var after = level.getEntities(EntityTypeTest.forClass(TrainingCrystal.class), c -> !c.isRemoved());
+            check(after.isEmpty(), "Detonating Crystal A must destroy adjacent Crystal B! remaining=" + after.size());
+            log("PASS Adjacent TrainingCrystal explosion parity verified in-game");
+
+            // Sub 6: D_TAP forces Bot armor to Protection IV even if Bot kit had Blast Protection IV!
+            var lookup = p.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+            var blast = lookup.getOrThrow(Enchantments.BLAST_PROTECTION);
+            var prot = lookup.getOrThrow(Enchantments.PROTECTION);
+            KitLoadout baseKit = KitLibrary.selected(p.registryAccess(), TrainingSettings.Mode.CRYSTAL, true);
+            var slots = baseKit.slots();
+            ItemStack blastLegs = slots.get(37).copy();
+            EnchantmentHelper.updateEnchantments(blastLegs, m -> {
+                m.set(prot, 0);
+                m.set(blast, 4);
+            });
+            slots.set(37, blastLegs);
+            KitLoadout blastKit = new KitLoadout(baseKit.id(), baseKit.name(), baseKit.source(), slots, baseKit.effects());
+            var dtap = TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).forDrill(Drill.D_TAP).withAutoRespawn(false);
+            Class<?> rsClass = Class.forName("de.pvptrainer.session.TrainingSession$RoundSelection");
+            var rsCtor = rsClass.getDeclaredConstructor(TrainingSettings.class, DrillOptions.class, KitLoadout.class, KitLoadout.class);
+            rsCtor.setAccessible(true);
+            Object rs = rsCtor.newInstance(dtap, DrillOptions.forDrill(Drill.D_TAP),
+                KitLibrary.selected(p.registryAccess(), TrainingSettings.Mode.CRYSTAL, false), blastKit);
+            var startMethod = TrainingSession.class.getDeclaredMethod("start", MinecraftServer.class, ServerPlayer.class, rsClass);
+            startMethod.setAccessible(true);
+            startMethod.invoke(s, server, p, rs);
+            sub = 6;
+            age = 0;
+            return;
+        }
+        if (sub == 6) {
+            LivingEntity b = bot(s);
+            ItemStack legs = b.getItemBySlot(EquipmentSlot.LEGS);
+            check(hasEnchant(legs, Enchantments.PROTECTION, 4) && !hasEnchant(legs, Enchantments.BLAST_PROTECTION, 1),
+                "D_TAP bot leggings must be normalized from Blast Prot IV to Protection IV! enchants=" + legs.getEnchantments());
+            log("PASS D_TAP Protection-IV-only armor guard verified in-game");
+
+            // Sub 7..8: SHIELD_TIMING continues past 3 counters and wins on bot death
+            var st = TrainingSettings.defaults(TrainingSettings.Mode.UHC).forDrill(Drill.SHIELD_TIMING).withAutoRespawn(false).withMaxHealth(20);
+            s.start(server, p.getUUID(), st, DrillOptions.forDrill(Drill.SHIELD_TIMING));
+            sub = 7;
+            age = 0;
+            return;
+        }
+        if (sub == 7) {
+            release(s, p);
+            DrillAttempt a = attempt(s);
+            for (int i = 0; i < 3; i++) {
+                a.playerShieldBlocked();
+                a.swordContact(p, bot(s), 4.0F, 1.0F, false, true, true);
+            }
+            check(!a.done(), "SHIELD_TIMING must NOT finish at 3 counters anymore!");
+            LivingEntity b = bot(s);
+            b.setHealth(0.0F);
+            sub = 8;
+            age = 0;
+            return;
+        }
+        if (sub == 8) {
+            // 1 tick after bot health hit 0 -> TrainingSession.tick calls attempt.botDefeated() and saves win
+            check(s.status().successes() >= 1 || (attempt(s) != null && attempt(s).done() && attempt(s).won()),
+                "SHIELD_TIMING must WIN when bot dies after clean counters! status=" + s.status());
+            log("PASS SHIELD_TIMING runs past 3 counters and wins on bot death");
+
+            // Sub 9..11: BODY_PEARL live in-game (bot always at center, player random on map, auto-releases & falls under real gravity + real pearl hit)
+            var bpSetup = TrainingPreset.BEGINNER.setup(
+                TrainingSettings.defaults(TrainingSettings.Mode.MACE).withMaceCenterLocked(true).withAutoRespawn(false), Drill.BODY_PEARL);
+            s.start(server, p.getUUID(), bpSetup.behavior().withAutoRespawn(false), bpSetup.options());
+            sub = 9;
+            age = 0;
+            return;
+        }
+        if (sub == 9) {
+            LivingEntity b = bot(s);
+            check(Math.abs(b.getX() - 0.5) < 0.05 && Math.abs(b.getZ() - 0.5) < 0.05,
+                "BODY_PEARL bot must ALWAYS spawn in arena center (0.5, 0.5), got " + b.position());
+            check(b.getY() >= ForgeArena.FLOOR + 24.5, "BODY_PEARL bot must spawn elevated (24m), y=" + b.getY());
+            check(b.getMainHandItem().is(Items.MACE), "BODY_PEARL bot should hold Mace, got " + b.getMainHandItem());
+            check(p.getY() <= ForgeArena.FLOOR + 1.5, "BODY_PEARL player must spawn on ground, y=" + p.getY());
+            double horizDist = Math.hypot(p.getX() - 0.5, p.getZ() - 0.5);
+            check(horizDist >= 3.5 && horizDist <= 20.5,
+                "BODY_PEARL player must spawn at valid random arena distance from center, dist=" + horizDist + " pos=" + p.position());
+            // Do NOT call release(s, p) manually — verify automatic release & genuine Vanilla gravity fall!
+            sub = 10;
+            age = 0;
+            return;
+        }
+        if (sub == 10) {
+            if (age < 8) return;
+            LivingEntity b = bot(s);
+            check(!s.status().waitingForStart(), "BODY_PEARL must auto-release without manual player input! status=" + s.status());
+            check(!b.onGround() && b.getDeltaMovement().y < -0.15 && b.getY() < ForgeArena.FLOOR + 24.5,
+                "BODY_PEARL bot must genuinely fall under real gravity! y=" + b.getY() + " vel=" + b.getDeltaMovement());
+            // Solve exact Vanilla/CCD intercept with the falling bot (supports long-range spawns up to 20m!)
+            Vec3 origin = p.getEyePosition();
+            Vec3 botStart = b.position();
+            double botVyStart = b.getDeltaMovement().y;
+            Vec3 bestDir = b.getBoundingBox().getCenter().subtract(origin).normalize();
+            double bestSpeedErr = Double.POSITIVE_INFINITY;
+            for (int t = 1; t <= 24; t++) {
+                Vec3 simBot = botStart;
+                double simVy = botVyStart;
+                for (int sTick = 1; sTick <= t; sTick++) {
+                    simBot = simBot.add(0.0, simVy, 0.0);
+                    simVy = (simVy - 0.08) * 0.98;
+                }
+                if (simBot.y < ForgeArena.FLOOR + 2.8) break;
+                for (double aimY : new double[]{0.9, 1.4, 0.4}) {
+                    Vec3 center = simBot.add(0.0, aimY, 0.0);
+                    double dragSum = 0.0, gravDrop = 0.0, pFactor = 1.0;
+                    for (int i = 1; i <= t; i++) {
+                        pFactor *= 0.99;
+                        dragSum += pFactor;
+                        gravDrop += 0.03 * dragSum;
+                    }
+                    Vec3 reqV0 = new Vec3(
+                        (center.x - origin.x) / dragSum,
+                        (center.y - origin.y + gravDrop) / dragSum,
+                        (center.z - origin.z) / dragSum
+                    );
+                    double err = Math.abs(reqV0.length() - 1.5);
+                    if (err >= bestSpeedErr) continue;
+                    Vec3 candDir = reqV0.normalize();
+                    Vec3 pp = origin, pv = candDir.scale(1.5), bp = botStart;
+                    double bv = botVyStart;
+                    boolean ccdHit = false;
+                    for (int k = 1; k <= 24; k++) {
+                        Vec3 bpPrev = bp;
+                        bp = bp.add(0.0, bv, 0.0);
+                        bv = (bv - 0.08) * 0.98;
+                        pv = pv.add(0.0, -0.03, 0.0).scale(0.99);
+                        Vec3 pn = pp.add(pv);
+                        var box = new net.minecraft.world.phys.AABB(bp.x - 0.3, bp.y, bp.z - 0.3, bp.x + 0.3, bp.y + 1.8, bp.z + 0.3);
+                        if (PearlInterceptSolver.sweepMovingTarget(pp, pn, box, bpPrev, bp, 0.30).isPresent()
+                            && bp.y >= ForgeArena.FLOOR + 2.6) {
+                            ccdHit = true;
+                            break;
+                        }
+                        pp = pn;
+                    }
+                    if (ccdHit) {
+                        bestSpeedErr = err;
+                        bestDir = candDir;
+                    }
+                }
+            }
+            ThrownEnderpearl pearl = new ThrownEnderpearl(p.level(), p, new ItemStack(Items.ENDER_PEARL));
+            pearl.setPos(origin.x, origin.y, origin.z);
+            pearl.shoot(bestDir.x, bestDir.y, bestDir.z, 1.5F, 0.0F);
+            p.level().addFreshEntity(pearl);
+            sub = 11;
+            age = 0;
+            return;
+        }
+        if (sub == 11) {
+            if (s.status().active() && attempt(s) != null && !attempt(s).done()) {
+                return;
+            }
+            check(s.status().successes() >= 1 || (attempt(s) != null && attempt(s).done() && attempt(s).won()),
+                "BODY_PEARL real pearl hitting falling bot must WIN! status=" + s.status());
+            log("PASS BODY_PEARL center spawn, random player pos, auto-fall & mid-air pearl hit verified in-game");
+
+            // Sub 12..14: PEARL_CATCH_GUIDE live in-game using PearlInterceptSolver + real Pearl + real WindCharge!
+            var pcgSettings = TrainingSettings.defaults(TrainingSettings.Mode.MACE).forDrill(Drill.PEARL_CATCH_GUIDE).withAutoRespawn(false);
+            var pcgOpts = TrainingPreset.BEGINNER.setup(pcgSettings, Drill.PEARL_CATCH_GUIDE).options();
+            s.start(server, p.getUUID(), pcgSettings, pcgOpts);
+            sub = 12;
+            age = 0;
+            return;
+        }
+        if (sub == 12) {
+            release(s, p);
+            Vec3 eye = p.getEyePosition();
+            ThrownEnderpearl pearl = new ThrownEnderpearl(p.level(), p, new ItemStack(Items.ENDER_PEARL));
+            pearl.setPos(eye.x, eye.y, eye.z);
+            pearl.shoot(0.0, 1.15, 0.95, 1.5F, 0.0F);
+            p.level().addFreshEntity(pearl);
+            sub = 13;
+            age = 0;
+            return;
+        }
+        if (sub == 13) {
+            if (age < 4) return;
+            var snap = s.activePearl();
+            check(snap != null, "TrainingSession.activePearl() server snapshot missing for PEARL_CATCH_GUIDE");
+            Vec3 eye = p.getEyePosition();
+            var sol = PearlInterceptSolver.solve(snap.pos(), snap.vel(), eye, Vec3.ZERO, ForgeArena.FLOOR + 1.0, snap.tickCount());
+            check(sol.status() == PearlInterceptSolver.Status.READY && sol.discreteHit() && sol.hitConfidence() >= 0.85,
+                "PearlInterceptSolver must return READY + high confidence for live server snapshot! sol=" + sol);
+            p.lookAt(Anchor.EYES, eye.add(sol.aimDirection().scale(24.0)));
+            double liveConf = PearlInterceptSolver.evaluateAim(snap.pos(), snap.vel(), eye, p.getLookAngle(), Vec3.ZERO, ForgeArena.FLOOR + 1.0, snap.tickCount());
+            check(liveConf >= 0.80, "evaluateAim on player lookAngle aimed at indicator must be >= 0.80, got " + liveConf);
+            Vec3 dir = p.getLookAngle();
+            WindCharge wc = new WindCharge(p, p.level(), eye.x, eye.y, eye.z);
+            wc.shoot(dir.x, dir.y, dir.z, 1.5F, 0.0F);
+            p.level().addFreshEntity(wc);
+            sub = 14;
+            age = 0;
+            return;
+        }
+        if (sub == 14) {
+            if (s.status().active() && attempt(s) != null && !attempt(s).done()) {
+                return;
+            }
+            check(s.status().successes() >= 1 || (attempt(s) != null && attempt(s).done() && attempt(s).won()),
+                "PEARL_CATCH_GUIDE live WindCharge aimed via PearlInterceptSolver must catch pearl & WIN! status=" + s.status());
+            log("PASS PEARL_CATCH_GUIDE live PearlInterceptSolver + real WindCharge catch verified in-game");
+
+            // Sub 15..18: Sword S_TAP live in-game (negative missing S-Tap fails; positive Sprint-Hit -> backward Input -> Sprint-Hit wins!)
+            var stSetup = TrainingPreset.BEGINNER.setup(
+                TrainingSettings.defaults(TrainingSettings.Mode.SWORD).withAutoRespawn(false), Drill.S_TAP);
+            s.start(server, p.getUUID(), stSetup.behavior().withMovement(TrainingSettings.Movement.STILL).withCounterAttacks(false).withAutoRespawn(false), stSetup.options());
+            sub = 15;
+            age = 0;
+            return;
+        }
+        if (sub == 15) {
+            release(s, p);
+            LivingEntity b = bot(s);
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            p.setLastClientInput(net.minecraft.world.entity.player.Input.EMPTY);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 2.0, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            check(!attempt(s).done(), "S_TAP Hit 1 must leave round open awaiting S-Tap");
+            sub = 16;
+            age = 0;
+            return;
+        }
+        if (sub == 16) {
+            if (age < 13) return;
+            LivingEntity b = bot(s);
+            // Hit 2 WITHOUT pressing S -> must FAIL!
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 2.0, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            check(attempt(s).done() && !attempt(s).won(),
+                "S_TAP Hit 2 without backward S input must FAIL! msg=" + attempt(s).progress());
+
+            // Now restart for positive case: Sprint-Hit 1 -> real backward ClientInput -> Sprint-Hit 2 -> WIN!
+            var stSetup = TrainingPreset.BEGINNER.setup(
+                TrainingSettings.defaults(TrainingSettings.Mode.SWORD).withAutoRespawn(false), Drill.S_TAP);
+            s.start(server, p.getUUID(), stSetup.behavior().withMovement(TrainingSettings.Movement.STILL).withCounterAttacks(false).withAutoRespawn(false), stSetup.options());
+            sub = 17;
+            age = 0;
+            return;
+        }
+        if (sub == 17) {
+            release(s, p);
+            LivingEntity b = bot(s);
+            equipFromInventory(p, Items.DIAMOND_SWORD);
+            p.setLastClientInput(net.minecraft.world.entity.player.Input.EMPTY);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 2.0, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            check(!attempt(s).done(), "S_TAP positive Hit 1 must leave round open");
+            // Deliver real S-Tap client input packet via ServerPlayer.setLastClientInput -> PlayerActionMixin -> ArenaSignals!
+            p.setLastClientInput(new net.minecraft.world.entity.player.Input(false, true, false, false, false, false, false));
+            p.setLastClientInput(net.minecraft.world.entity.player.Input.EMPTY);
+            sub = 18;
+            age = 0;
+            return;
+        }
+        if (sub == 18) {
+            if (age < 13) return;
+            LivingEntity b = bot(s);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 2.0, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            check(attempt(s).done() && attempt(s).won(),
+                "S_TAP Hit 2 after real S-Tap input must WIN! msg=" + attempt(s).progress() + " tl=" + attempt(s).timeline());
+            log("PASS Sword S_TAP (missing S-Tap rejected; real Sprint-Hit -> S-Tap -> Sprint-Hit wins) verified in-game");
+
+            // Sub 19..23: CORNER_HIT_CRYSTAL live in-game (90° corner, same-height obsidian, hit + crystal pop counts every pop as success!)
+            var chcSetup = TrainingPreset.BEGINNER.setup(
+                TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL).withAutoRespawn(false), Drill.CORNER_HIT_CRYSTAL);
+            s.start(server, p.getUUID(), chcSetup.behavior().withAutoRespawn(false), chcSetup.options());
+            sub = 19;
+            age = 0;
+            return;
+        }
+        if (sub == 19) {
+            LivingEntity b = bot(s);
+            BlockPos feet = b.blockPosition();
+            int walls = 0;
+            BlockPos sameHeightObsidian = null;
+            for (Direction d : Direction.Plane.HORIZONTAL) {
+                BlockPos adj = feet.relative(d);
+                if (!p.level().getBlockState(adj).isAir() && !p.level().getBlockState(adj.above()).isAir()) {
+                    walls++;
+                } else if (p.level().getBlockState(adj).is(Blocks.OBSIDIAN) && p.level().getBlockState(adj.above()).isAir()) {
+                    sameHeightObsidian = adj;
+                }
+            }
+            check(walls == 2, "CORNER_HIT_CRYSTAL expected 2 perpendicular corner walls, found " + walls);
+            check(sameHeightObsidian != null && sameHeightObsidian.getY() == feet.getY(),
+                "CORNER_HIT_CRYSTAL expected prepared Obsidian at same Y as bot feet (" + feet.getY() + "), found=" + sameHeightObsidian);
+
+            release(s, p);
+            // Negative live check: detonating crystal on same-height Obsidian WITHOUT hitting bot first must NOT count as success!
+            int winsBefore = s.status().successes();
+            detonateCrystalAt(s, p, sameHeightObsidian);
+            check(s.status().successes() == winsBefore && s.status().active(),
+                "CORNER_HIT_CRYSTAL crystal without hitting bot first must NOT count as success! status=" + s.status());
+
+            // Now wait for any invulnerability to clear, then hit bot in corner and pop #1!
+            sub = 20;
+            age = 0;
+            return;
+        }
+        if (sub == 20) {
+            if (age < 12) return;
+            LivingEntity b = bot(s);
+            equipFromInventory(p, Items.NETHERITE_SWORD);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 2.1, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            sub = 21;
+            age = 0;
+            return;
+        }
+        if (sub == 21) {
+            if (age < 2) return;
+            LivingEntity b = bot(s);
+            BlockPos sameHeightObsidian = findSameHeightObsidian(p.level(), b.blockPosition());
+            check(sameHeightObsidian != null, "Same-height obsidian missing for Pop #1");
+            int winsBefore = s.status().successes();
+            detonateCrystalAt(s, p, sameHeightObsidian);
+            check(s.status().successes() == winsBefore + 1 && s.status().active() && !attempt(s).done(),
+                "CORNER_HIT_CRYSTAL Hit + Crystal Pop #1 must record 1 success and keep round active! winsBefore=" + winsBefore + " status=" + s.status());
+            sub = 22;
+            age = 0;
+            return;
+        }
+        if (sub == 22) {
+            if (age < 13) return;
+            LivingEntity b = bot(s);
+            equipFromInventory(p, Items.NETHERITE_SWORD);
+            p.teleportTo(p.level(), b.getX(), b.getY(), b.getZ() - 2.1, java.util.Set.of(), 0.0F, 0.0F, true);
+            p.lookAt(Anchor.EYES, b.getEyePosition());
+            p.setSprinting(true);
+            p.attack(b);
+            sub = 23;
+            age = 0;
+            return;
+        }
+        if (sub == 23) {
+            if (age < 2) return;
+            LivingEntity b = bot(s);
+            BlockPos sameHeightObsidian = findSameHeightObsidian(p.level(), b.blockPosition());
+            check(sameHeightObsidian != null, "Same-height obsidian missing for Pop #2");
+            int winsBefore = s.status().successes();
+            detonateCrystalAt(s, p, sameHeightObsidian);
+            check(s.status().successes() == winsBefore + 1 && s.status().active() && !attempt(s).done(),
+                "CORNER_HIT_CRYSTAL Hit + Crystal Pop #2 must record 2nd success continuously! winsBefore=" + winsBefore + " status=" + s.status());
+            log("PASS CORNER_HIT_CRYSTAL (90° corner, same-height obsidian, pre-hit crystal rejected, 2 consecutive hit+crystal pops counted as successes) verified in-game");
+            nextScene(s, server);
+        }
+    }
+
+    private static BlockPos findSameHeightObsidian(ServerLevel level, BlockPos near) {
+        int y = ForgeArena.FLOOR + 1;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                BlockPos cand = new BlockPos(near.getX() + dx, y, near.getZ() + dz);
+                if (level.getBlockState(cand).is(Blocks.OBSIDIAN) && level.getBlockState(cand.above()).isAir()) {
+                    return cand;
+                }
+            }
+        }
+        return null;
     }
 }

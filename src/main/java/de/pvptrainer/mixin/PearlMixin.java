@@ -2,6 +2,7 @@ package de.pvptrainer.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import de.pvptrainer.arena.TrainingTarget;
 import de.pvptrainer.session.ArenaSignals;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge;
@@ -39,8 +40,14 @@ abstract class PearlMixin {
         target = "Lnet/minecraft/server/level/ServerPlayer;teleport(Lnet/minecraft/world/level/portal/TeleportTransition;)Lnet/minecraft/server/level/ServerPlayer;"))
     private ServerPlayer pvptrainer$catch(ServerPlayer owner, TeleportTransition transition, Operation<ServerPlayer> original, HitResult hit) {
         var teleported = original.call(owner, transition);
-        if (teleported != null && pvptrainer$airCatch(teleported, hit, teleported.position())) {
-            ArenaSignals.caughtPearl(teleported);
+        if (teleported != null) {
+            if (pvptrainer$airCatch(teleported, hit, teleported.position())) {
+                ArenaSignals.caughtPearl(teleported);
+            } else if (hit instanceof EntityHitResult entity && TrainingTarget.matches(entity.getEntity())) {
+                ArenaSignals.bodyPearl(teleported, entity.getEntity());
+            } else {
+                ArenaSignals.pearlMissed(teleported);
+            }
         }
         return teleported;
     }

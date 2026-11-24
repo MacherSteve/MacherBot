@@ -22,6 +22,7 @@ public final class OutcomeOverlay implements ClientModInitializer {
         HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS,
             Identifier.fromNamespaceAndPath("pvptrainer", "round_outcome"), OutcomeOverlay::draw);
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("pvptrainer", "streak"), StreakHud::draw);
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("pvptrainer", "pearl_catch_hud"), PearlCatchHud::draw);
     }
 
     public static void show(UUID owner, boolean won) {

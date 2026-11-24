@@ -140,8 +140,10 @@ final class TrainingOptionsScreen extends TrainerPanel {
          boolean hasSlamScenes = drill.slamOptions();
 
          if (this.mode == TrainingSettings.Mode.MACE) {
-            setupSpecs.add(toggleField(options, DrillOptions.Field.PEARL_CATCH_ONLY));
-            if (!drill.centeredMaceDrill()) {
+            if (drill != Drill.BODY_PEARL) {
+               setupSpecs.add(toggleField(options, DrillOptions.Field.PEARL_CATCH_ONLY));
+            }
+            if (!drill.centeredMaceDrill() && drill != Drill.BODY_PEARL) {
                setupSpecs.add(toggle("Arenamitte fixieren", settings.maceCenterLocked(),
                   "Hält den Bot bei Mace-Übungen in der Arenamitte.",
                   () -> TrainerClient.save(TrainerClient.settings(this.mode).withMaceCenterLocked(!settings.maceCenterLocked()))));
@@ -358,6 +360,8 @@ final class TrainingOptionsScreen extends TrainerPanel {
          case BOT_JUMP -> options.botJump();
          case BOT_AUTO_HIT -> options.botAutoHit();
          case CLEAN_HEAL -> options.cleanHeal();
+         case BODY_PEARL_SMASH -> options.bodyPearlSmash();
+         case CATCH_NEEDS_SMASH -> options.catchNeedsSmash();
          default -> false;
       };
       return toggle(field.label(), on, tooltipFor(field, this.mode), () ->
@@ -605,7 +609,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
 
    private static List<DrillOptions.Field> setupFieldsFor(Drill drill) {
       return switch (drill) {
-         case HIT_CRYSTAL, D_TAP, TRIPLE_TAP, SHIELD_TRIPLE_TAP, SELF_WEB_CRYSTAL, TAP_ANCHOR, MACE_COUNTER_DTAP, CORNER_WEB_DTAP -> List.of(
+         case HIT_CRYSTAL, CORNER_HIT_CRYSTAL, D_TAP, TRIPLE_TAP, SHIELD_TRIPLE_TAP, SELF_WEB_CRYSTAL, TAP_ANCHOR, MACE_COUNTER_DTAP, CORNER_WEB_DTAP -> List.of(
             DrillOptions.Field.BASE, DrillOptions.Field.CRYSTAL_AIR, DrillOptions.Field.TERRAIN, DrillOptions.Field.PING_PONG
          );
          case DOUBLE_ANCHOR -> List.of(DrillOptions.Field.TERRAIN);
@@ -615,9 +619,11 @@ final class TrainingOptionsScreen extends TrainerPanel {
          case STUN_WEB -> List.of(DrillOptions.Field.RANDOM_BLOCK_POS, DrillOptions.Field.BOT_JUMP, DrillOptions.Field.BOT_AUTO_HIT);
          case RETOTEM, DOUBLE_HAND -> List.of(DrillOptions.Field.BURST_PATTERN);
          case SMASH, WIND_CHAIN, BACKSTAB, PEARL_CATCH, ELYTRA_SMASH, ELY_STUN_SLAM, LOW_WEB_SMASH -> List.of(DrillOptions.Field.START_HEIGHT);
+         case BODY_PEARL -> List.of(DrillOptions.Field.TARGET_HEIGHT, DrillOptions.Field.BODY_PEARL_SMASH);
+         case PEARL_CATCH_GUIDE -> List.of(DrillOptions.Field.CATCH_NEEDS_SMASH, DrillOptions.Field.START_HEIGHT);
          case STUN_SLAM -> List.of(DrillOptions.Field.SLAM_POSITION, DrillOptions.Field.TARGET_HEIGHT, DrillOptions.Field.HEIGHT_OFFSET, DrillOptions.Field.START_HEIGHT);
          case WIND_STUN_SLAM -> List.of(DrillOptions.Field.WIND_CENTER, DrillOptions.Field.WIND_FLIGHT, DrillOptions.Field.SLAM_POSITION, DrillOptions.Field.TARGET_HEIGHT, DrillOptions.Field.HEIGHT_OFFSET, DrillOptions.Field.START_HEIGHT);
-         case SPACING -> List.of(DrillOptions.Field.COMBO_LENGTH);
+         case SPACING, S_TAP -> List.of(DrillOptions.Field.COMBO_LENGTH);
          case DUEL -> List.of(DrillOptions.Field.BASE);
          default -> List.of();
       };
@@ -625,7 +631,7 @@ final class TrainingOptionsScreen extends TrainerPanel {
 
    private static boolean isToggleField(DrillOptions.Field field) {
       return switch (field) {
-         case SHIELD, WIND_CENTER, PEARL_CATCH_ONLY, BOT_JUMP, BOT_AUTO_HIT, CLEAN_HEAL -> true;
+         case SHIELD, WIND_CENTER, PEARL_CATCH_ONLY, BOT_JUMP, BOT_AUTO_HIT, CLEAN_HEAL, BODY_PEARL_SMASH, CATCH_NEEDS_SMASH -> true;
          default -> false;
       };
    }
@@ -643,8 +649,8 @@ final class TrainingOptionsScreen extends TrainerPanel {
       return switch (field) {
          case VARIABLE -> drill.needsSwordAttack() || drill.totemDefense() || drill == Drill.WEB_DRAIN || drill == Drill.RE_LAVA;
          case WINDOW -> switch (drill) {
-            case HIT_CRYSTAL, D_TAP, TRIPLE_TAP, SHIELD_TRIPLE_TAP, SELF_WEB_CRYSTAL, DOUBLE_ANCHOR,
-                 MACE_COUNTER_DTAP, CORNER_WEB_DTAP, TAP_ANCHOR, SMASH, WIND_CHAIN, PEARL_CATCH, ELYTRA_SMASH,
+            case HIT_CRYSTAL, CORNER_HIT_CRYSTAL, D_TAP, TRIPLE_TAP, SHIELD_TRIPLE_TAP, SELF_WEB_CRYSTAL, DOUBLE_ANCHOR,
+                 MACE_COUNTER_DTAP, CORNER_WEB_DTAP, TAP_ANCHOR, SMASH, WIND_CHAIN, PEARL_CATCH, PEARL_CATCH_GUIDE, ELYTRA_SMASH,
                  HIT_SELECT, PUNISH_CRIT, MOMENTUM_BREAK, WEB_DUNK, PCRIT_BREAK -> true;
             default -> false;
          };
@@ -686,6 +692,8 @@ final class TrainingOptionsScreen extends TrainerPanel {
          case DUNK_TYPE -> "Wählt das Ziel-Secondary nach dem Crit: Cobweb, Lava oder Cobweb + Lava.";
          case ZERO_DAMAGE -> "Kein LP-Verlust für dich oder beide Seiten. Rückstoß, Schildblock, Axt-Stun, Cobwebs und Effekte bleiben aktiv.";
          case PEARL_CATCH_ONLY -> "Nur eine in der Luft mit deiner eigenen Windladung gefangene Perle teleportiert dich.";
+         case BODY_PEARL_SMASH -> "Verlangt nach der erfolgreichen Body Pearl zusätzlich einen Mace-Smash vor der Landung.";
+         case CATCH_NEEDS_SMASH -> "Verlangt nach dem Pearl Catch zusätzlich einen Mace-Smash vor der Landung.";
          case TOTEMS -> "Unbegrenzt schützt das Übungsziel auch ohne Kit-Totem. Im freien Duell gilt der Kit-Vorrat als Voraussetzung.";
          case WIND_FLIGHT -> "Kombiniert startet der Bot mit einer Windladung vom Boden und fängt im selben Flug seine Enderperle.";
          case ITEM_CONSUMPTION -> (mode == TrainingSettings.Mode.MACE || mode == TrainingSettings.Mode.CRYSTAL || mode == TrainingSettings.Mode.HUGOSMP)

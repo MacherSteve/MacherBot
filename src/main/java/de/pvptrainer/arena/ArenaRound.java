@@ -184,6 +184,9 @@ public final class ArenaRound {
             if (options.drill() == Drill.CORNER_WEB_DTAP && options.preparedBase()) {
                 player.level().setBlockAndUpdate(feet.below().relative(back.getOpposite()), Blocks.OBSIDIAN.defaultBlockState());
                 player.level().setBlockAndUpdate(feet.below().relative(side.getOpposite()), Blocks.OBSIDIAN.defaultBlockState());
+            } else if (options.drill() == Drill.CORNER_HIT_CRYSTAL && options.preparedBase()) {
+                // Same-height Obsidian (feet.getY()) directly in front of the bot in the corner.
+                player.level().setBlockAndUpdate(feet.relative(back.getOpposite()), Blocks.OBSIDIAN.defaultBlockState());
             }
             return Vec3.atBottomCenterOf(feet).add(
                 back.getStepX() * 0.14 + side.getStepX() * 0.14,

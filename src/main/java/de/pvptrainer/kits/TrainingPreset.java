@@ -63,6 +63,10 @@ public enum TrainingPreset {
          case ANTI_DRAIN -> names("Standard-Escape", "Schneller Drainer", "Druck im Web");
          case HEAL_PUNISH -> names("Nahes Gappen", "Abstand brechen", "Schneller Punish");
          case PCRIT_BREAK -> names("Gerader Break", "Schräger Break", "Wechselnder Takt");
+         case BODY_PEARL -> names("Ruhiger Fall", "Hoher Fall", "Weitwurf · 48m");
+         case PEARL_CATCH_GUIDE -> names("Nur Catch", "Catch + Smash", "Bewegtes Ziel");
+         case S_TAP -> names("2er S-Tap", "3er S-Tap", "5er S-Tap");
+         case CORNER_HIT_CRYSTAL -> names("Fertiges Obsidian", "Mehr Abstand", "Selbst setzen");
       };
    }
 
@@ -301,6 +305,45 @@ public enum TrainingPreset {
             var4.number(DrillOptions.Field.REACTION, this.choose(20, 10, 5));
             var3 = var3.withMovement(TrainingSettings.Movement.STILL);
             yield "Bot gapt aus " + this.choose(4, 5, 5) + " Bl. · 2 Crits landen";
+         }
+         case BODY_PEARL -> {
+            int height = this.choose(24, 32, 48);
+            int dist = this.choose(5, 7, 9);
+            var4.number(DrillOptions.Field.TARGET_HEIGHT, height);
+            var4.number(DrillOptions.Field.DISTANCE, dist);
+            var4.number(DrillOptions.Field.SIDE_OFFSET, 0);
+            var3 = var3.withMovement(var5 ? TrainingSettings.Movement.FOLLOW : TrainingSettings.Movement.STILL);
+            yield height + " Bl. Fallhöhe · ab " + dist + " Bl. bis Fernwurf"
+               + (var5 ? " · Bot steuert auf dich zu" : " · Zufallsposition rund um die Mitte");
+         }
+         case PEARL_CATCH_GUIDE -> {
+            int side = this.choose(0, 0, 2);
+            var4.index(DrillOptions.Field.CATCH_NEEDS_SMASH, var6 ? 0 : 1);
+            var4.number(DrillOptions.Field.SIDE_OFFSET, side);
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(3, 3, 4));
+            var3 = var3.withMovement(var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.STILL);
+            yield var6
+               ? "Indikator aktiv · Catch in der Luft genügt"
+               : (var5 ? "Indikator aktiv · Catch + Smash auf bewegtes Ziel" : "Indikator aktiv · Catch + Mace-Smash");
+         }
+         case S_TAP -> {
+            int combo = this.choose(2, 3, 5);
+            int react = this.choose(30, 20, 10);
+            var4.number(DrillOptions.Field.COMBO_LENGTH, combo);
+            var4.number(DrillOptions.Field.REACTION, react);
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(5, 5, 7));
+            var4.number(DrillOptions.Field.ANGLE, this.choose(0, 15, 15));
+            var4.index(DrillOptions.Field.VARIABLE, var5 ? 1 : 0);
+            var3 = var3.withMovement(var5 ? TrainingSettings.Movement.STRAFE : TrainingSettings.Movement.FOLLOW);
+            yield combo + " Sprint-Hits mit S-Tap · " + (var5 ? "seitlicher Bot" : react + " Ticks Takt");
+         }
+         case CORNER_HIT_CRYSTAL -> {
+            var4.index(DrillOptions.Field.BASE, var5 ? 0 : 1);
+            var4.number(DrillOptions.Field.DISTANCE, this.choose(3, 5, 4));
+            var3 = var3.withMovement(TrainingSettings.Movement.STILL);
+            yield var5
+               ? "Ecke · Obsidian auf gleicher Höhe selbst setzen · jeder Crystal-Pop zählt"
+               : "Ecke · Obsidian auf gleicher Höhe bereit · schlagen & crystaln (jeder Pop zählt)";
          }
          default -> throw new IllegalStateException("Unbekannte Übung " + var2);
       };

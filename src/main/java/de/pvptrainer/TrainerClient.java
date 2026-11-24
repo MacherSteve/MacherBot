@@ -82,6 +82,15 @@ public final class TrainerClient implements ClientModInitializer {
          if (var1x.player != null) {
             UpdateChecker.announceIfReady(var1x.player);
          }
+         if (var1x.level != null && TrainingArena.isArena(var1x.level)
+               && status().active() && status().drill() == de.pvptrainer.drill.Drill.BODY_PEARL) {
+            for (var entity : var1x.level.entitiesForRendering()) {
+               if (de.pvptrainer.arena.TrainingTarget.matches(entity)
+                     && entity instanceof net.minecraft.world.entity.LivingEntity living) {
+                  living.getInterpolation().setInterpolationLength(1);
+               }
+            }
+         }
 
          while (restartKey.consumeClick()) {
             if (var1x.player != null && var1x.gui.screen() == null) {
@@ -144,6 +153,11 @@ public final class TrainerClient implements ClientModInitializer {
    public static TrainingStatus status() {
       TrainerClient.HostedWorld var0 = world;
       return var0 == null ? TrainingStatus.idle() : var0.session().status();
+   }
+
+   public static TrainingSession.PearlSnapshot activePearl() {
+      TrainerClient.HostedWorld var0 = world;
+      return var0 == null ? null : var0.session().activePearl();
    }
 
    public static String seriesKey(TrainingSettings.Mode var0, String var1) {

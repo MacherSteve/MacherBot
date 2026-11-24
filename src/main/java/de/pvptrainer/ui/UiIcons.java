@@ -17,6 +17,7 @@ final class UiIcons {
     static final Identifier PING = icon("ping");
     static final Identifier INFINITY = icon("infinity");
     static final Identifier FALL_DAMAGE = icon("fall_damage");
+    static final Identifier PEARL_GROUND = icon("pearl_ground");
     static final Identifier HELP = icon("help");
     static final Identifier RESET = icon("reset");
     static final Identifier CHEVRON_RIGHT = icon("chevron_right");
@@ -44,7 +45,7 @@ final class UiIcons {
             case PASSIVE -> Items.TARGET;
             case TOTEM_POPS -> Items.TOTEM_OF_UNDYING;
             case SHIELD, SHIELD_TIMING, SHIELD_DRAIN -> Items.SHIELD;
-            case HIT_CRYSTAL, D_TAP, TRIPLE_TAP -> Items.END_CRYSTAL;
+            case HIT_CRYSTAL, CORNER_HIT_CRYSTAL, D_TAP, TRIPLE_TAP -> Items.END_CRYSTAL;
             case SHIELD_TRIPLE_TAP -> Items.DIAMOND_AXE;
             case SELF_WEB_CRYSTAL -> Items.COBWEB;
             case LEDGE_DASH -> Items.OBSIDIAN;
@@ -54,7 +55,8 @@ final class UiIcons {
             case SMASH, WIND_CHAIN, PERFECT_WIND_CHARGE -> Items.WIND_CHARGE;
             case STUN_SLAM, WIND_STUN_SLAM -> Items.MACE;
             case BACKSTAB -> Items.NETHERITE_SWORD;
-            case PEARL_CATCH -> Items.ENDER_PEARL;
+            case PEARL_CATCH, BODY_PEARL -> Items.ENDER_PEARL;
+            case PEARL_CATCH_GUIDE -> Items.ENDER_EYE;
             case ELYTRA_SMASH, ELY_STUN_SLAM -> Items.ELYTRA;
             case LOW_WEB_SMASH -> Items.COBWEB;
             case SPACING -> Items.DIAMOND_SWORD;
@@ -63,6 +65,7 @@ final class UiIcons {
             case JUMP_RESET -> Items.FEATHER;
             case UPPERCUT -> Items.STONE_SWORD;
             case PCRIT_BREAK -> Items.NETHERITE_SWORD;
+            case S_TAP -> Items.DIAMOND_BOOTS;
             case STUN_WEB, HEAD_WEB -> Items.COBWEB;
             case WEB_DRAIN -> Items.BUCKET;
             case RE_LAVA, WEB_DUNK -> Items.LAVA_BUCKET;

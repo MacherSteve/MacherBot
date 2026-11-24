@@ -6,6 +6,7 @@ import de.pvptrainer.session.TrainingSession;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -41,7 +42,15 @@ public final class TrainingCrystal extends EndCrystal {
    }
 
    public boolean hitInTraining(DamageSource var1) {
-      if (var1.getEntity() == this.owner && !this.isRemoved()) {
+      if (this.isRemoved()) {
+         return false;
+      }
+      if (var1.is(DamageTypeTags.IS_EXPLOSION)) {
+         // Vanilla EndCrystal.hurtServer parity: nearby explosions destroy adjacent crystals without double-exploding.
+         this.remove(Entity.RemovalReason.KILLED);
+         return true;
+      }
+      if (var1.getEntity() == this.owner) {
          this.detonate(this.owner);
          return true;
       } else {
@@ -69,7 +78,9 @@ public final class TrainingCrystal extends EndCrystal {
          int var8 = var5 ? var4.ownerPops() : 0;
          ExplosionDamageCalculator var9 = new ExplosionDamageCalculator() {
             public boolean shouldDamageEntity(Explosion var1, Entity var2x) {
-               return var2x == TrainingCrystal.this.owner || var2x == TrainingCrystal.this.bot;
+               return var2x == TrainingCrystal.this.owner
+                  || var2x == TrainingCrystal.this.bot
+                  || var2x instanceof TrainingCrystal;
             }
 
             public float getKnockbackMultiplier(Entity var1) {

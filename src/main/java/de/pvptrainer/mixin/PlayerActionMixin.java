@@ -3,6 +3,7 @@ package de.pvptrainer.mixin;
 import de.pvptrainer.session.ArenaSignals;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Input;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -24,5 +25,12 @@ abstract class PlayerActionMixin {
    @Inject(method = "crit", at = @At("HEAD"))
    private void pvptrainer$critical(Entity var1, CallbackInfo var2) {
       ArenaSignals.crit((ServerPlayer)(Object)this, var1);
+   }
+
+   @Inject(method = "setLastClientInput", at = @At("TAIL"))
+   private void pvptrainer$clientInput(Input input, CallbackInfo info) {
+      if (input != null && input.backward()) {
+         ArenaSignals.backwardInput((ServerPlayer)(Object)this);
+      }
    }
 }

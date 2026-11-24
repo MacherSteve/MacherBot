@@ -28,6 +28,13 @@ public final class ArenaSignals {
       }
    }
 
+   public static void backwardInput(ServerPlayer player) {
+      TrainingSession session = active(player);
+      if (session != null) {
+         session.playerBackwardInput(player);
+      }
+   }
+
    public static void crit(ServerPlayer var0, Entity var1) {
       TrainingSession var2 = active(var0);
       if (var2 != null) {
@@ -51,6 +58,25 @@ public final class ArenaSignals {
       TrainingSession var1 = active(var0);
       if (var1 != null) {
          var1.pearlCatch(var0);
+      }
+   }
+
+   public static void bodyPearl(ServerPlayer player, Entity target) {
+      TrainingSession session = active(player);
+      if (session != null) {
+         session.bodyPearl(player, target);
+      }
+   }
+
+   public static net.minecraft.world.entity.LivingEntity bodyPearlTarget(ServerPlayer player) {
+      TrainingSession session = active(player);
+      return session == null ? null : session.bodyPearlTarget(player);
+   }
+
+   public static void pearlMissed(ServerPlayer player) {
+      TrainingSession session = active(player);
+      if (session != null) {
+         session.pearlMissed(player);
       }
    }
 

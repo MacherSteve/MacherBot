@@ -15,7 +15,7 @@ public enum Drill {
    LEDGE_DASH(TrainingSettings.Mode.CRYSTAL, "Ledge Dash", "Verlasse die Kante und triff den höher stehenden Bot mit einem Kristall."),
    SAFE_ANCHOR(TrainingSettings.Mode.CRYSTAL, "Safe Anchor", "Zünde einen geladenen Anker aus Deckung. Der Bot soll mehr Schaden nehmen als du."),
    TAP_ANCHOR(TrainingSettings.Mode.CRYSTAL, "D-Tap → Anchor", "Verbinde zwei Kristalltreffer nach dem Nahkampftreffer mit einem wirksamen Anker."),
-   RETOTEM(TrainingSettings.Mode.CRYSTAL, "Manuelles Retotem", "Fülle Totems nach und überlebe, bis dein letztes Totem poppt."),
+   RETOTEM(TrainingSettings.Mode.CRYSTAL, "Totem Refill", "Fülle Totems nach und überlebe, bis dein letztes Totem poppt."),
    DOUBLE_HAND(
       TrainingSettings.Mode.CRYSTAL, "Double Hand", "Halte vor dem ersten Pop zwei Totems. Überstehe den nächsten Kristall mit dem verbliebenen Totem."
    ),
@@ -74,7 +74,7 @@ public enum Drill {
    SHIELD_TIMING(
       TrainingSettings.Mode.UHC,
       "Shield Timing",
-      "Nur Schwert & Schild (ohne Axt): Blocke den Bot-Schlag sauber ab und kontere danach – nie panisch nach Zwischentreffern schlagen."
+      "Nur Schwert & Schild (ohne Axt): Blocke den Bot-Schlag sauber ab und kontere bis zum Tod des Bots – nie panisch nach Zwischentreffern schlagen."
    ),
    MOMENTUM_BREAK(
       TrainingSettings.Mode.UHC,
@@ -100,6 +100,26 @@ public enum Drill {
       TrainingSettings.Mode.SWORD,
       "P-Crit Break",
       "Nimm den Bot-Treffer an, öffne kurz Abstand und brich den P-Crit-Trade mit einem Sprint-KB-Hit + Folgetreffer."
+   ),
+   BODY_PEARL(
+      TrainingSettings.Mode.MACE,
+      "Body Pearl",
+      "Der Bot fällt aus der Höhe – triff seinen Körper in der Luft direkt mit einer Enderperle."
+   ),
+   PEARL_CATCH_GUIDE(
+      TrainingSettings.Mode.MACE,
+      "Pearl Catch · Indikator",
+      "Wirf eine Perle – der dynamische Horizont-Indikator zeigt dir in Echtzeit den exakten WindCharge-Vorhaltepunkt."
+   ),
+   S_TAP(
+      TrainingSettings.Mode.SWORD,
+      "S-Taps",
+      "Lande einen Sprint-KB-Treffer, tippe kurz S für Sprint-Reset & Abstand und halte die Kombo ohne Gegentreffer."
+   ),
+   CORNER_HIT_CRYSTAL(
+      TrainingSettings.Mode.CRYSTAL,
+      "Corner Hit-Crystal",
+      "Der Bot steht in der Ecke mit Obsidian auf gleicher Höhe. Schlage ihn an und löse per Kristall ein Totem aus – jeder Crystal-Pop zählt als Erfolg."
    );
 
    private final TrainingSettings.Mode mode;
@@ -213,7 +233,7 @@ public enum Drill {
          case SELF_WEB_CRYSTAL -> "Der Bot setzt ein Cobweb an seine Füße. Zünde Boden-Kristalle (5) auf Obsidian (6) auf Fußhöhe des Bots für zwei Totem-Pops.";
          case UPPERCUT -> "Nimm den Sprint-Treffer des Bots an und kontere im Rückstoß oder triff den Bot mit dem Schwert (1) aus einer tieferen Position.";
          case ELY_STUN_SLAM -> "Die Elytra ist angelegt. Fliege an, beende den Gleitflug, brich das Schild mit der Axt (4) und lande einen vollen Wind-Burst-Smash (8).";
-         case SHIELD_TIMING -> "Nur Schwert (1) & Schild – ohne Axt! Blocke den Bot-Angriff mit dem Schild und kontere direkt. Nach einem Zwischentreffer erst wieder blocken.";
+         case SHIELD_TIMING -> "Nur Schwert (1) & Schild – ohne Axt! Blocke den Bot-Angriff mit dem Schild und kontere direkt bis zum Tod des Bots. Nach einem Zwischentreffer erst wieder blocken.";
          case MOMENTUM_BREAK -> "Deaktiviere das Schild mit der Axt (4), mach beim Bot-Auto-Hit einen Jump-Reset (" + var3 + ") und wechsle sofort aufs Schwert (1).";
          case WEB_DUNK -> switch (var2.dunkType()) {
             case WEB -> "Lande einen echten Crit mit dem Schwert (1) und platziere direkt das Cobweb (8) in die Flugbahn des Bots.";
@@ -223,6 +243,15 @@ public enum Drill {
          case ANTI_DRAIN -> "Du steckst im Cobweb! Halte erst das Schild, schlage den Bot mit W-Tap weg und setze dann Wasser (6) außer Reichweite, um sicher zu entkommen.";
          case HEAL_PUNISH -> "Der angeschlagene Bot versucht zu nah zu gappen. Stürme los und lande mindestens 2 Crits mit dem Schwert (1), bevor sein Goldapfel wirkt.";
          case PCRIT_BREAK -> "Lass den Bot zuerst treffen, löse kurz W für Abstand und brich die Serie mit einem vollen Sprint-KB-Treffer (>85 %) + Anschluss.";
+         case BODY_PEARL -> var2.bodyPearlSmash()
+            ? "Der Bot fällt aus der Höhe. Wirf deine Enderperle (7) auf seinen Körper in der Luft und lande direkt danach einen Mace-Smash (8)."
+            : "Der Bot fällt aus der Höhe. Lies seinen Fallweg und wirf deine Enderperle (7) direkt auf seinen Körper, bevor er landet.";
+         case PEARL_CATCH_GUIDE -> var2.catchNeedsSmash()
+            ? "Wirf deine Perle (7) und ziele mit der Windladung (6) auf den dynamischen Horizont-Indikator. Nach dem Luft-Teleport mit der Mace (8) smashen."
+            : "Wirf deine Perle (7) und folge dem dynamischen Horizont-Indikator. Triff die Perle mit der Windladung (6) in der Luft.";
+         case S_TAP -> "Sprinte mit dem Schwert (1) an, lande einen voll geladenen Sprint-Treffer (>85 %), tippe direkt danach kurz S zum Resetten und setze "
+            + var2.comboLength() + " Treffer in Folge ohne Gegentreffer.";
+         case CORNER_HIT_CRYSTAL -> "Schlage den Bot in der Ecke mit Schwert (1) oder Totem-Sprint (3) hoch und zünde den Kristall (5) auf dem Obsidian (6) auf gleicher Höhe. Jeder Kristall-Pop zählt direkt als Erfolg.";
       };
    }
 
@@ -251,7 +280,7 @@ public enum Drill {
    }
 
    public boolean needsCornerWalls() {
-      return this == CORNER_OBI_TRAP || this == CORNER_WEB_DTAP;
+      return this == CORNER_OBI_TRAP || this == CORNER_WEB_DTAP || this == CORNER_HIT_CRYSTAL;
    }
 
    public boolean hidesPresets() {
@@ -278,7 +307,7 @@ public enum Drill {
    }
 
    public boolean needsSwordAttack() {
-      return this == SPACING || this == HIT_SELECT || this == PUNISH_CRIT || this == JUMP_RESET
+      return this == SPACING || this == S_TAP || this == HIT_SELECT || this == PUNISH_CRIT || this == JUMP_RESET
          || this == UPPERCUT || this == PCRIT_BREAK || this == HEAL;
    }
 }

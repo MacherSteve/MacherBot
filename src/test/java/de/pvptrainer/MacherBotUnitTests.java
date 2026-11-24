@@ -11,9 +11,11 @@ import de.pvptrainer.analytics.CalibrationPlan;
 import de.pvptrainer.arena.ForgeArena;
 import de.pvptrainer.arena.MacherAppearance;
 import de.pvptrainer.arena.TrainingArena;
+import de.pvptrainer.combat.BotEquipment;
 import de.pvptrainer.drill.Drill;
 import de.pvptrainer.drill.DrillAttempt;
 import de.pvptrainer.drill.DrillOptions;
+import de.pvptrainer.drill.PearlInterceptSolver;
 import de.pvptrainer.drill.WindHeight;
 import de.pvptrainer.kits.TrainingPreset;
 import de.pvptrainer.kits.TrainingProfiles;
@@ -66,6 +68,7 @@ public final class MacherBotUnitTests {
         testSwightDrillsAndKnowledgeGuide();
         testUiRedesignStickyModifiersAndIcons();
         testRealPvpMetricsAndStatsAggregation();
+        testV1170DrillsBallisticsAndRules();
         System.out.println("PASS " + passed + " Unit-Tests erfolgreich.");
     }
 
@@ -917,13 +920,22 @@ public final class MacherBotUnitTests {
             check(stFail.done() && !stFail.won(), "Panik-Schlag nach Zwischentreffer muss scheitern");
 
             var stWin = new DrillAttempt(DrillOptions.forDrill(Drill.SHIELD_TIMING), -1.0, 0);
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 4; i++) {
                 stWin.observeFall(10 + i * 20, 0.0);
                 stWin.playerShieldBlocked();
                 stWin.observeFall(14 + i * 20, 0.0);
                 stWin.swordContact(null, null, 3.0F, 1.0F, false, true, true);
             }
-            check(stWin.done() && stWin.won(), "3 saubere Schild-Konter gewinnen SHIELD_TIMING");
+            check(!stWin.done(), "SHIELD_TIMING laeuft ueber 3 Konter hinaus bis zum Tod des Bots weiter");
+            stWin.botDefeated();
+            check(stWin.done() && stWin.won() && stWin.progress().contains("4 Schild-Konter"),
+                "Bot-Tod nach sauberen Schild-Kontern gewinnt SHIELD_TIMING: " + stWin.progress());
+
+            var stNoCounter = new DrillAttempt(DrillOptions.forDrill(Drill.SHIELD_TIMING), -1.0, 0);
+            stNoCounter.observeFall(10, 0.0);
+            stNoCounter.swordContact(null, null, 3.0F, 1.0F, false, true, true);
+            stNoCounter.botDefeated();
+            check(stNoCounter.done() && !stNoCounter.won(), "Bot-Tod ohne Schild-Konter verliert SHIELD_TIMING");
 
             // 3. MOMENTUM_BREAK: Positivfall (Stun + Auto-Hit + Jump-Reset + Schwert) & Gegenfall (kein Jump-Reset)
             var mbWin = new DrillAttempt(DrillOptions.forDrill(Drill.MOMENTUM_BREAK), -1.0, 0);
@@ -1091,9 +1103,9 @@ public final class MacherBotUnitTests {
                 deleteRecursive(tempDir);
             }
 
-            // 5. Alle 11 12x12 GUI-Icon-PNGs sind vorhanden und gueltige PNG-Dateien
+            // 5. Alle 12 12x12 GUI-Icon-PNGs sind vorhanden und gueltige PNG-Dateien
             for (String name : List.of("gear", "clock", "arena", "zero_damage", "ping", "infinity",
-                "fall_damage", "help", "reset", "chevron_right", "chevron_down")) {
+                "fall_damage", "pearl_ground", "help", "reset", "chevron_right", "chevron_down")) {
                 String path = "/assets/pvptrainer/textures/gui/icons/" + name + ".png";
                 try (var in = MacherBotUnitTests.class.getResourceAsStream(path)) {
                     check(in != null, "GUI-Icon fehlt: " + path);
@@ -1188,6 +1200,259 @@ public final class MacherBotUnitTests {
             TrainingProgress.Run parsed = new com.google.gson.Gson().fromJson(legacyLine, TrainingProgress.Run.class);
             check(parsed != null && parsed.metrics() != null && !parsed.metrics().hasActivity() && !parsed.practiceOnly(),
                 "Legacy-JSONL-Zeile ohne metrics/practiceOnly deserialisiert sicher mit Defaults");
+        });
+    }
+
+    private static void testV1170DrillsBallisticsAndRules() throws Exception {
+        run("v1.17.0: Totem Refill, Prot-IV-Guard, Body Pearl, Pearl Catch Indikator & PearlInterceptSolver", () -> {
+            // 1. Umbenennung "Totem Refill" bei unveraendertem Enum-Namen RETOTEM (Regel 5)
+            check("Totem Refill".equals(Drill.RETOTEM.label()), "RETOTEM Label muss 'Totem Refill' sein");
+            check(Drill.valueOf("RETOTEM") == Drill.RETOTEM, "Enum-Key RETOTEM bleibt abwaertskompatibel");
+
+            // 2. Prot-IV-Only Regel bei D-Tap / Triple Tap / Shield-Triple-Tap
+            check(BotEquipment.requiresProtectionOnlyArmor(Drill.D_TAP), "D_TAP erzwingt Protection IV");
+            check(BotEquipment.requiresProtectionOnlyArmor(Drill.TRIPLE_TAP), "TRIPLE_TAP erzwingt Protection IV");
+            check(BotEquipment.requiresProtectionOnlyArmor(Drill.SHIELD_TRIPLE_TAP), "SHIELD_TRIPLE_TAP erzwingt Protection IV");
+            check(!BotEquipment.requiresProtectionOnlyArmor(Drill.DUEL), "Freies Duell bleibt unberuehrt");
+            check(!BotEquipment.requiresProtectionOnlyArmor(Drill.HIT_CRYSTAL), "Hit-Crystal bleibt unberuehrt");
+
+            // 3. Body Pearl Optionen, Presets & Wertungslogik
+            var bpDefaults = DrillOptions.forDrill(Drill.BODY_PEARL);
+            check(!bpDefaults.pearlCatchOnly(), "BODY_PEARL darf nicht von PEARL_CATCH_ONLY blockiert werden");
+            check(bpDefaults.botElevation() == 24 && bpDefaults.playerElevation() == 0,
+                "BODY_PEARL startet Bot auf 24 Bl. und Spieler am Boden");
+            var carried = DrillOptions.forDrill(Drill.PEARL_CATCH)
+                .withIndex(DrillOptions.Field.PEARL_CATCH_ONLY, 1)
+                .carryModifiersTo(bpDefaults, TrainingSettings.Mode.MACE);
+            check(!carried.pearlCatchOnly(), "carryModifiersTo darf PEARL_CATCH_ONLY nicht auf BODY_PEARL erzwingen");
+
+            for (TrainingPreset preset : TrainingPreset.values()) {
+                var bpSetup = preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.MACE), Drill.BODY_PEARL);
+                check(bpSetup.options().botElevation() >= 24 && bpSetup.options().playerElevation() == 0,
+                    "BODY_PEARL Preset " + preset + " hat gueltige Fallhoehe");
+                var pcgSetup = preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.MACE), Drill.PEARL_CATCH_GUIDE);
+                check((preset == TrainingPreset.BEGINNER) != pcgSetup.options().catchNeedsSmash(),
+                    "PEARL_CATCH_GUIDE Preset " + preset + " Smash-Toggle korrekt");
+            }
+
+            // Body Pearl CCD: High-Speed Vertical Tunneling & Start-Inside-Box Fix (Gegenfall: Fehlwurf daneben)
+            Vec3 bStart = new Vec3(0.5, 76.0, 0.5);
+            Vec3 bEnd = new Vec3(0.5, 74.2, 0.5); // -1.8 Bloecke Fall in 1 Tick
+            var botEndBox = new net.minecraft.world.phys.AABB(0.2, 74.2, 0.2, 0.8, 76.0, 0.8);
+            Vec3 pStartTunnel = new Vec3(0.5, 76.4, -0.6);
+            Vec3 pEndTunnel = new Vec3(0.5, 76.9, 0.8);
+            // Vanilla clip gegen statische End-Box verpasst den schnellen Fall!
+            check(botEndBox.inflate(0.3).clip(pStartTunnel, pEndTunnel).isEmpty(),
+                "Statischer Vanilla-Check tunnelt beim schnellen Fall");
+            var ccdTunnel = PearlInterceptSolver.sweepMovingTarget(pStartTunnel, pEndTunnel, botEndBox, bStart, bEnd, 0.3);
+            check(ccdTunnel.isPresent() && ccdTunnel.get().z >= -0.6 && ccdTunnel.get().z <= 0.8,
+                "CCD muss schnellen Fall-Durchflug sauber als Treffer erkennen: " + ccdTunnel);
+
+            Vec3 pInsideStart = new Vec3(0.5, 75.0, 0.5);
+            Vec3 pInsideEnd = new Vec3(0.5, 75.6, 1.8);
+            check(botEndBox.inflate(0.3).clip(pInsideStart, pInsideEnd).isEmpty(),
+                "Vanilla AABB.clip ignoriert Startpunkt in der Box");
+            check(PearlInterceptSolver.sweepMovingTarget(pInsideStart, pInsideEnd, botEndBox, bStart, bEnd, 0.3).isPresent(),
+                "CCD erkennt Startpunkt innerhalb der Box");
+
+            check(PearlInterceptSolver.sweepMovingTarget(
+                new Vec3(2.2, 76.4, -0.6), new Vec3(2.2, 76.9, 0.8), botEndBox, bStart, bEnd, 0.3).isEmpty(),
+                "Klarer Fehlwurf (1.7 Bl. seitlich daneben) darf nicht als Treffer zaehlen");
+
+            // Body Pearl Positivfall (reiner Lufttreffer)
+            var bpWin = new DrillAttempt(bpDefaults, -1.0, 0);
+            bpWin.observeFall(12, 0.0);
+            bpWin.bodyPearlHit(10.4, true);
+            check(bpWin.done() && bpWin.won(), "Body Pearl in 10.4m Hoehe gewinnt direkt ohne Smash-Toggle");
+
+            // Body Pearl Gegenfall (Bot bereits am Boden)
+            var bpGroundFail = new DrillAttempt(bpDefaults, -1.0, 0);
+            bpGroundFail.observeFall(20, 0.0);
+            bpGroundFail.bodyPearlHit(0.2, false);
+            check(bpGroundFail.done() && !bpGroundFail.won(), "Body Pearl am Boden muss scheitern");
+
+            // Body Pearl mit Danach-Smash-Toggle: Treffer alleine reicht nicht, Bot-Tod ohne Treffer scheitert
+            var bpSmashOpts = bpDefaults.withIndex(DrillOptions.Field.BODY_PEARL_SMASH, 1);
+            var bpSmash = new DrillAttempt(bpSmashOpts, -1.0, 0);
+            bpSmash.observeFall(10, 0.0);
+            bpSmash.bodyPearlHit(11.0, true);
+            check(!bpSmash.done() && bpSmash.progress().contains("Mace-Smash"),
+                "BODY_PEARL mit Smash-Toggle wartet auf Mace-Smash");
+            var bpLandMiss = new DrillAttempt(bpDefaults, -1.0, 0);
+            bpLandMiss.botDefeated();
+            check(bpLandMiss.done() && !bpLandMiss.won(), "Bot-Landung/Tod ohne Body Pearl scheitert");
+
+            // 4. Pearl Catch Indikator Drill-Logik
+            var pcgOnlyOpts = TrainingPreset.BEGINNER.setup(TrainingSettings.defaults(TrainingSettings.Mode.MACE), Drill.PEARL_CATCH_GUIDE).options();
+            var pcgOnly = new DrillAttempt(pcgOnlyOpts, -1.0, 0);
+            pcgOnly.observeFall(18, 0.0);
+            pcgOnly.catchPearl();
+            check(pcgOnly.done() && pcgOnly.won(), "PEARL_CATCH_GUIDE (Nur Catch) gewinnt sofort beim Luft-Catch");
+
+            var pcgSmashOpts = TrainingPreset.PRACTICE.setup(TrainingSettings.defaults(TrainingSettings.Mode.MACE), Drill.PEARL_CATCH_GUIDE).options();
+            var pcgSmash = new DrillAttempt(pcgSmashOpts, -1.0, 0);
+            pcgSmash.observeFall(18, 0.0);
+            pcgSmash.catchPearl();
+            check(!pcgSmash.done(), "PEARL_CATCH_GUIDE (Catch + Smash) wartet nach Catch auf Smash");
+
+            // 5. PearlInterceptSolver: exakte MC 26.2 Ballistik & diskreter Treffernachweis
+            double floorY = ForgeArena.FLOOR + 1.0;
+            Vec3 eye = new Vec3(0.5, floorY + 1.62, 0.5);
+
+            // 5a. Senkrechter Wurf nach oben (nach 4 Ticks Flug)
+            Vec3 pPos = eye;
+            Vec3 pVel = new Vec3(0.0, 1.5, 0.0);
+            for (int t = 0; t < 4; t++) {
+                pVel = pVel.add(0.0, -0.03, 0.0).scale(0.99);
+                pPos = pPos.add(pVel);
+            }
+            var solUp = PearlInterceptSolver.solve(pPos, pVel, eye, Vec3.ZERO, floorY, 4);
+            check(solUp.status() == PearlInterceptSolver.Status.READY && solUp.discreteHit() && solUp.hitConfidence() >= 0.85,
+                "Senkrechte Perle muss READY + discreteHit + hohe Konfidenz liefern: " + solUp);
+            check(PearlInterceptSolver.willHitDiscretely(pPos, pVel, eye, solUp.aimDirection(), Vec3.ZERO, floorY, 4),
+                "Diskrete Pruefung bestaetigt Treffer beim senkrechten Wurf");
+            check(PearlInterceptSolver.evaluateAim(pPos, pVel, eye, solUp.aimDirection(), Vec3.ZERO, floorY, 4) >= 0.85,
+                "evaluateAim auf exaktem Vorhalt bestaetigt hohe Trefferkonfidenz");
+            check(PearlInterceptSolver.evaluateAim(pPos, pVel, eye, new Vec3(0.5, 0.5, 0.7).normalize(), Vec3.ZERO, floorY, 4) == 0.0,
+                "evaluateAim weit daneben muss 0.0 liefern");
+
+            // 5b. 45-Grad-Wurf schraeg nach vorne (nach 6 Ticks) -> Vorhalt liegt unterhalb der Sichtlinie zur Perle!
+            Vec3 aPos = eye;
+            Vec3 aVel = new Vec3(0.0, 1.06, 1.06);
+            for (int t = 0; t < 6; t++) {
+                aVel = aVel.add(0.0, -0.03, 0.0).scale(0.99);
+                aPos = aPos.add(aVel);
+            }
+            var solAngled = PearlInterceptSolver.solve(aPos, aVel, eye, Vec3.ZERO, floorY);
+            check(solAngled.status() == PearlInterceptSolver.Status.READY && solAngled.discreteHit(),
+                "45-Grad-Perle muss READY + discreteHit liefern: " + solAngled);
+            Vec3 directToPearl = aPos.subtract(eye).normalize();
+            check(solAngled.aimDirection().y < directToPearl.y,
+                "Vorhalt bei 45-Grad-Flug muss unterhalb der direkten Sichtlinie liegen (Schwerkraft-Vorhalt)");
+
+            // 5c. Bewegter / strafender Spieler (geerbte Spielerbewegung wird korrekt kompensiert)
+            Vec3 strafeVel = new Vec3(0.24, 0.0, -0.12);
+            var solMoving = PearlInterceptSolver.solve(aPos, aVel, eye, strafeVel, floorY);
+            check(solMoving.status() == PearlInterceptSolver.Status.READY && solMoving.discreteHit(),
+                "Bewegter Spieler muss READY + discreteHit liefern: " + solMoving);
+            check(PearlInterceptSolver.willHitDiscretely(aPos, aVel, eye, solMoving.aimDirection(), strafeVel, floorY),
+                "Diskrete Pruefung bestaetigt Treffer mit geerbter Spielerbewegung");
+
+            // 5d. Gegenfall: Perle 0.25m ueber Boden, faellt schnell in 22 Bloecken Entfernung -> UNREACHABLE
+            Vec3 deadPos = new Vec3(0.5, floorY + 0.25, 22.5);
+            Vec3 deadVel = new Vec3(0.0, -1.2, 0.5);
+            var solDead = PearlInterceptSolver.solve(deadPos, deadVel, eye, Vec3.ZERO, floorY);
+            check(solDead.status() == PearlInterceptSolver.Status.UNREACHABLE && !solDead.discreteHit(),
+                "Zu tiefe/ferne Perle muss UNREACHABLE sein: " + solDead);
+
+            // 6. RoundMetrics.bodyPearls + Rueckwaertskompatibilitaet fuer JSONL ohne bodyPearls
+            var col = new RoundMetricsCollector();
+            col.recordBodyPearl();
+            col.recordBodyPearl();
+            RoundMetrics snap = col.consumeSnapshot();
+            check(snap.bodyPearls() == 2 && snap.hasActivity(), "RoundMetrics.bodyPearls gezaehlt");
+            String oldMetricsJson = "{\"setup\":\"s\",\"mode\":\"MACE\",\"drill\":\"PEARL_CATCH\",\"time\":1700000000000,\"won\":true,\"ticks\":25,\"reason\":\"OK\",\"timeline\":[],\"difficulty\":\"HARD\",\"tickRate\":20,\"metrics\":{\"pearlCatches\":3}}";
+            TrainingProgress.Run oldRun = new com.google.gson.Gson().fromJson(oldMetricsJson, TrainingProgress.Run.class);
+            check(oldRun.metrics().pearlCatches() == 3 && oldRun.metrics().bodyPearls() == 0,
+                "Alte JSONL-Metrics ohne bodyPearls laden mit Default 0");
+
+            // 7. KnowledgeGuide findet alle neuen Drills (Body Pearl, Pearl Catch Indikator, S-Taps)
+            check("body_pearl".equals(KnowledgeGuide.forDrill(Drill.BODY_PEARL, TrainingSettings.Mode.MACE).id()),
+                "Guide findet Body Pearl");
+            check("pearl_catch_guide".equals(KnowledgeGuide.forDrill(Drill.PEARL_CATCH_GUIDE, TrainingSettings.Mode.MACE).id()),
+                "Guide findet Pearl Catch Indikator");
+            check("s_tap".equals(KnowledgeGuide.forDrill(Drill.S_TAP, TrainingSettings.Mode.SWORD).id()),
+                "Guide findet S-Taps");
+
+            // 8. Sword S-Taps: Presets, Positivfall (Sprint-Hit -> S-Tap -> Sprint-Hit) & Gegenfaelle
+            check(Drill.S_TAP.supports(TrainingSettings.Mode.SWORD) && Drill.S_TAP.needsSwordAttack(),
+                "S_TAP ist gueltiger Sword-Drill");
+            check(DrillOptions.Field.COMBO_LENGTH.visible(DrillOptions.forDrill(Drill.S_TAP)),
+                "S_TAP zeigt Trefferserie (COMBO_LENGTH)");
+            var sTapBeginner = TrainingPreset.BEGINNER.setup(TrainingSettings.defaults(TrainingSettings.Mode.SWORD), Drill.S_TAP);
+            var sTapPractice = TrainingPreset.PRACTICE.setup(TrainingSettings.defaults(TrainingSettings.Mode.SWORD), Drill.S_TAP);
+            var sTapAdvanced = TrainingPreset.ADVANCED.setup(TrainingSettings.defaults(TrainingSettings.Mode.SWORD), Drill.S_TAP);
+            check("2".equals(sTapBeginner.options().value(DrillOptions.Field.COMBO_LENGTH))
+                && "3".equals(sTapPractice.options().value(DrillOptions.Field.COMBO_LENGTH))
+                && "5".equals(sTapAdvanced.options().value(DrillOptions.Field.COMBO_LENGTH)),
+                "S_TAP Presets setzen 2 / 3 / 5 Treffer");
+
+            // Positivfall: 2er S-Tap (Sprint-Hit 1 -> S-Tap -> Sprint-Hit 2 -> Sieg)
+            var stWin = new DrillAttempt(sTapBeginner.options(), -1.0, 0);
+            stWin.observeFall(5, 0.0);
+            stWin.swordContact(null, null, 6.0F, 1.0F, false, true, true);
+            check(!stWin.done(), "Nach Sprint-Hit 1 noch offen");
+            stWin.observeFall(7, 0.0);
+            stWin.observeBackwardInput(true);
+            stWin.observeFall(18, 0.0);
+            stWin.swordContact(null, null, 6.0F, 1.0F, false, true, true);
+            check(stWin.done() && stWin.won(), "Sprint-Hit -> S-Tap -> Sprint-Hit gewinnt 2er S-Tap");
+
+            // Gegenfall 1: Zweiter Treffer ohne S-Tap dazwischen scheitert
+            var stNoReset = new DrillAttempt(sTapBeginner.options(), -1.0, 0);
+            stNoReset.observeFall(5, 0.0);
+            stNoReset.swordContact(null, null, 6.0F, 1.0F, false, true, true);
+            stNoReset.observeFall(18, 0.0);
+            stNoReset.swordContact(null, null, 6.0F, 1.0F, false, true, true);
+            check(stNoReset.done() && !stNoReset.won(), "Folgetreffer ohne S-Tap muss scheitern");
+
+            // Gegenfall 2: Schwacher Folgetreffer (<85%) nach S-Tap scheitert
+            var stWeak = new DrillAttempt(sTapBeginner.options(), -1.0, 0);
+            stWeak.observeFall(5, 0.0);
+            stWeak.swordContact(null, null, 6.0F, 1.0F, false, true, true);
+            stWeak.observeFall(7, 0.0);
+            stWeak.observeBackwardInput(true);
+            stWeak.observeFall(12, 0.0);
+            stWeak.swordContact(null, null, 3.0F, 0.5F, false, true, true);
+            check(stWeak.done() && !stWeak.won(), "Schwacher Folgetreffer (<85%) nach S-Tap muss scheitern");
+
+            // Gegenfall 3: Gegentreffer vom Bot beendet S-Tap als Niederlage
+            var stCountered = new DrillAttempt(sTapBeginner.options(), -1.0, 0);
+            stCountered.observeFall(5, 0.0);
+            stCountered.swordContact(null, null, 6.0F, 1.0F, false, true, true);
+            stCountered.observeFall(10, 0.0);
+            stCountered.playerHit(null, 3.0F);
+            check(stCountered.done() && !stCountered.won(), "Gegentreffer vom Bot muss S-Tap verlieren");
+
+            // 9. Corner Hit-Crystal: Ecke + Obsidian auf gleicher Hoehe + jeder Crystal-Pop nach Schlag zaehlt
+            check(Drill.CORNER_HIT_CRYSTAL.supports(TrainingSettings.Mode.CRYSTAL)
+                && Drill.CORNER_HIT_CRYSTAL.needsCornerWalls(), "CORNER_HIT_CRYSTAL ist Crystal-Ecken-Drill");
+            check(BotEquipment.requiresProtectionOnlyArmor(Drill.CORNER_HIT_CRYSTAL),
+                "CORNER_HIT_CRYSTAL erzwingt Protection IV");
+            var chcDefaults = DrillOptions.forDrill(Drill.CORNER_HIT_CRYSTAL);
+            check(chcDefaults.preparedBase() && !chcDefaults.resetOnPop(),
+                "CORNER_HIT_CRYSTAL startet mit vorbereitetem Obsidian und ohne Reset nach Pop");
+            check("corner_hit_crystal".equals(KnowledgeGuide.forDrill(Drill.CORNER_HIT_CRYSTAL, TrainingSettings.Mode.CRYSTAL).id()),
+                "Guide findet Corner Hit-Crystal");
+            for (TrainingPreset preset : TrainingPreset.values()) {
+                var chcSetup = preset.setup(TrainingSettings.defaults(TrainingSettings.Mode.CRYSTAL), Drill.CORNER_HIT_CRYSTAL);
+                check((preset != TrainingPreset.ADVANCED) == chcSetup.options().preparedBase(),
+                    "CORNER_HIT_CRYSTAL Preset " + preset + " Obsidian-Flag korrekt");
+            }
+
+            // Gegenfall 1: Crystal-Pop OHNE vorherigen Schlag auf den Bot zaehlt nicht
+            var chcNoHit = new DrillAttempt(chcDefaults, -1.0, 0);
+            chcNoHit.observeFall(8, 0.0);
+            chcNoHit.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 20.0F, 0.0F, true, false, 0, true);
+            check(!chcNoHit.done() && chcNoHit.timingHint() != null && chcNoHit.timingHint().contains("schlagen"),
+                "Crystal-Pop ohne vorherigen Schlag darf nicht als Erfolg zaehlen");
+
+            // Gegenfall 2: Schlag + Crystal OHNE Totem-Pop zaehlt nicht
+            var chcNoPop = new DrillAttempt(chcDefaults, -1.0, 0);
+            chcNoPop.observeFall(5, 0.0);
+            chcNoPop.swordContact(null, null, 2.0F, 1.0F, true, true, true);
+            chcNoPop.observeFall(8, 0.0);
+            chcNoPop.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 6.0F, 0.0F, true, false, 0, false);
+            check(!chcNoPop.done() && chcNoPop.timingHint() != null && chcNoPop.timingHint().contains("Totem-Pop"),
+                "Crystal ohne Totem-Pop darf nicht als Erfolg zaehlen");
+
+            // Positivfall: Schlag + Crystal-Pop zaehlt sofort als Erfolg
+            var chcWin = new DrillAttempt(chcDefaults, -1.0, 0);
+            chcWin.observeFall(5, 0.0);
+            chcWin.swordContact(null, null, 2.0F, 1.0F, true, true, true);
+            chcWin.observeFall(8, 0.0);
+            chcWin.crystalBlast(null, null, Vec3.ZERO, Vec3.ZERO, 25.0F, 0.0F, true, true, 0, true);
+            check(chcWin.done() && chcWin.won(), "Schlag + Crystal-Totem-Pop muss als Erfolg zaehlen");
         });
     }
 

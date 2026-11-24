@@ -25,6 +25,7 @@ public final class RoundMetricsCollector {
     private double maxWindMeters;
     private int windChargesUsed;
     private int pearlCatches;
+    private int bodyPearls;
     private int websPlaced;
     private int lavaPlaced;
     private int waterDrains;
@@ -35,7 +36,7 @@ public final class RoundMetricsCollector {
         damageDealt = 0.0F;
         shieldStuns = shieldBreaks = playerBlocks = 0;
         botPops = playerPops = crystalsPlaced = crystalsDetonated = anchorsDetonated = anchorPops = obsidianPlaced = 0;
-        maceSmashes = stunSlams = windChargesUsed = pearlCatches = 0;
+        maceSmashes = stunSlams = windChargesUsed = pearlCatches = bodyPearls = 0;
         maxFallMeters = sumFallMeters = maxSmashDamage = maxWindMeters = 0.0;
         websPlaced = lavaPlaced = waterDrains = healsEaten = 0;
     }
@@ -73,6 +74,7 @@ public final class RoundMetricsCollector {
     public void recordWindHeight(double meters) { if (Double.isFinite(meters) && meters > maxWindMeters) maxWindMeters = meters; }
     public void recordWindCharge() { windChargesUsed++; }
     public void recordPearlCatch() { pearlCatches++; }
+    public void recordBodyPearl() { bodyPearls++; }
     public void recordWebPlaced() { websPlaced++; }
     public void recordLavaPlaced() { lavaPlaced++; }
     public void recordWaterDrain() { waterDrains++; }
@@ -86,7 +88,7 @@ public final class RoundMetricsCollector {
         return new RoundMetrics(
             meleeHits, crits, chargeSamples, chargeSumPct, damageDealt, shieldStuns, shieldBreaks, playerBlocks,
             botPops, playerPops, crystalsPlaced, crystalsDetonated, anchorsDetonated, anchorPops, obsidianPlaced,
-            maceSmashes, stunSlams, maxFallMeters, sumFallMeters, maxSmashDamage, maxWindMeters, windChargesUsed, pearlCatches,
+            maceSmashes, stunSlams, maxFallMeters, sumFallMeters, maxSmashDamage, maxWindMeters, windChargesUsed, pearlCatches, bodyPearls,
             websPlaced, lavaPlaced, waterDrains, healsEaten
         );
     }

@@ -211,15 +211,52 @@ public final class TrainingArena {
 
         double approachRad = Math.toRadians(options.approachAngle());
         int startZ = START_Z;
+        double playerX = 0.5;
+        double playerZ = startZ + 0.5;
         double botX = 0.5 + options.sideOffset() + Math.sin(approachRad) * options.startDistance();
         double botZ = 0.5 + startZ + Math.cos(approachRad) * options.startDistance();
-        if (options.randomBlockPos()) {
+        if (options.drill() == Drill.BODY_PEARL) {
+            // Bot always spawns at arena center above; player spawns across the full reachable arena floor.
+            botX = 0.5;
+            botZ = 0.5;
+            var rng = player.getRandom();
+            double simY = Math.max(1.0, options.botElevation());
+            double simVy = -0.10;
+            int fallTicks = 0;
+            while (simY > 1.5 && fallTicks < 120) {
+                simY += simVy;
+                simVy = (simVy - 0.08) * 0.98;
+                fallTicks++;
+            }
+            double minDist = Math.max(4.0, options.startDistance());
+            double pearlRange = Math.max(minDist + 6.0, (fallTicks - 4.0) * 1.32);
+            double mapCap = options.largeArena() ? 42.0 : 19.0;
+            double maxDist = Math.max(minDist + 4.0, Math.min(mapCap, pearlRange));
+            int px = (int) Math.round(minDist);
+            int pz = 0;
+            for (int tries = 0; tries < 24; tries++) {
+                double dist = minDist + rng.nextDouble() * (maxDist - minDist);
+                double theta = rng.nextDouble() * Math.PI * 2.0;
+                int cx = (int) Math.round(Math.sin(theta) * dist);
+                int cz = (int) Math.round(Math.cos(theta) * dist);
+                if (Math.hypot(cx, cz) >= Math.max(3.5, minDist - 0.5) && insideBodyPearlFloor(cx, cz, options.largeArena())) {
+                    px = cx;
+                    pz = cz;
+                    break;
+                }
+            }
+            playerX = px + 0.5;
+            playerZ = pz + 0.5;
+        } else if (options.randomBlockPos()) {
             // Randomly shift bot to a block edge/corner (±0.30) to train trajectory reading in Stun-Web.
             var rng = player.getRandom();
             botX += (rng.nextInt(3) - 1) * 0.30;
             botZ += (rng.nextInt(3) - 1) * 0.30;
         }
         boolean isLedgeDash = options.drill() == Drill.LEDGE_DASH;
+        int playerHill = options.drill() == Drill.BODY_PEARL && options.largeArena()
+            ? ForgeArena.largeHillOffset((int) Math.floor(playerX), (int) Math.floor(playerZ))
+            : 0;
         int botHill = options.largeArena() && !settings.maceCenterLocked() && !isLedgeDash
             ? ForgeArena.largeHillOffset((int) Math.floor(botX), (int) Math.floor(botZ))
             : 0;
@@ -230,7 +267,7 @@ public final class TrainingArena {
         player.setGameMode(GameType.SURVIVAL);
 
         int playerElevation = isLedgeDash ? options.ledgeHeight() : ArenaRound.elevation(options);
-        if (!ArenaRound.enterRound(player, arena, 0.5, FLOOR + 1 + playerElevation, startZ + 0.5, Set.of(), 0.0F, 0.0F, true, botTarget, settings)) {
+        if (!ArenaRound.enterRound(player, arena, playerX, FLOOR + 1 + playerHill + playerElevation, playerZ, Set.of(), 0.0F, 0.0F, true, botTarget, settings)) {
             throw new IllegalStateException("Der Wechsel in die Arena ist fehlgeschlagen.");
         }
 
@@ -260,6 +297,12 @@ public final class TrainingArena {
             ? options.botElevation()
             : (isLedgeDash ? options.ledgeHeight() : -options.holeDepth());
         return ArenaRound.stageScenario(botTarget.add(0.0, botElevation, 0.0), player, options, settings);
+    }
+
+    private static boolean insideBodyPearlFloor(int x, int z, boolean large) {
+        int maxAxis = Math.max(Math.abs(x), Math.abs(z));
+        int manhattan = Math.abs(x) + Math.abs(z);
+        return large ? (maxAxis <= 42 && manhattan <= 66) : (maxAxis <= 17 && manhattan <= 28);
     }
 
     private static void resetMotion(ServerPlayer player) {
@@ -327,7 +370,7 @@ public final class TrainingArena {
 
         if (options.preparedBase() && options.drill() == Drill.LEDGE_DASH) {
             arena.setBlockAndUpdate(botPos.offset(-2, -1, 0), Blocks.OBSIDIAN.defaultBlockState());
-        } else if (options.preparedBase()) {
+        } else if (options.preparedBase() && !options.drill().needsCornerWalls()) {
             arena.setBlockAndUpdate(botPos.offset(1, -1, 0), Blocks.OBSIDIAN.defaultBlockState());
         }
 

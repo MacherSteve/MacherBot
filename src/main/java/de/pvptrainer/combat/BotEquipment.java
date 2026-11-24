@@ -8,6 +8,8 @@ import de.pvptrainer.kits.TrainingSettings;
 
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -15,6 +17,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 
 public final class BotEquipment {
    private final List<ItemStack> stock = new ArrayList<>();
@@ -59,6 +64,9 @@ public final class BotEquipment {
       var1.setItemSlot(EquipmentSlot.LEGS, MacherItems.name(items.get(37)));
       var1.setItemSlot(EquipmentSlot.CHEST, MacherItems.name(items.get(38)));
       var1.setItemSlot(EquipmentSlot.HEAD, MacherItems.name(items.get(39)));
+      if (requiresProtectionOnlyArmor(var3.drill())) {
+         enforceProtectionOnly(var1, this.stock);
+      }
       var1.setItemInHand(InteractionHand.MAIN_HAND, this.stock.set(0, ItemStack.EMPTY));
       var1.setItemInHand(InteractionHand.OFF_HAND, MacherItems.name(items.get(40)));
       if (replaceStartingTotem && !equipSword(var1)) equipAxe(var1);
@@ -98,6 +106,47 @@ public final class BotEquipment {
       guard(var1);
    }
 
+   public static boolean requiresProtectionOnlyArmor(Drill drill) {
+      return drill == Drill.D_TAP || drill == Drill.TRIPLE_TAP || drill == Drill.SHIELD_TRIPLE_TAP
+         || drill == Drill.CORNER_HIT_CRYSTAL;
+   }
+
+   private static void enforceProtectionOnly(LivingEntity bot, List<ItemStack> stock) {
+      var lookupOpt = bot.registryAccess().lookup(Registries.ENCHANTMENT);
+      if (lookupOpt.isEmpty()) return;
+      var lookup = lookupOpt.get();
+      var protOpt = lookup.get(Enchantments.PROTECTION);
+      if (protOpt.isEmpty()) return;
+      Holder<Enchantment> prot = protOpt.get();
+      List<Holder<Enchantment>> nonProt = new ArrayList<>();
+      for (var key : List.of(Enchantments.BLAST_PROTECTION, Enchantments.FIRE_PROTECTION, Enchantments.PROJECTILE_PROTECTION)) {
+         lookup.get(key).ifPresent(nonProt::add);
+      }
+      if (nonProt.isEmpty()) return;
+      for (EquipmentSlot slot : List.of(EquipmentSlot.FEET, EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD)) {
+         normalizeProtectionStack(bot.getItemBySlot(slot), prot, nonProt);
+      }
+      for (ItemStack spare : stock) {
+         normalizeProtectionStack(spare, prot, nonProt);
+      }
+   }
+
+   private static void normalizeProtectionStack(ItemStack stack, Holder<Enchantment> prot, List<Holder<Enchantment>> nonProt) {
+      if (stack.isEmpty()) return;
+      EnchantmentHelper.updateEnchantments(stack, mutable -> {
+         boolean replaced = false;
+         for (var other : nonProt) {
+            if (mutable.getLevel(other) > 0) {
+               mutable.set(other, 0);
+               replaced = true;
+            }
+         }
+         if (replaced) {
+            mutable.set(prot, Math.max(4, mutable.getLevel(prot)));
+         }
+      });
+   }
+
    public static String missingRequirement(KitLoadout kit, DrillOptions options) {
       var slots = kit.slots();
       if ((options.drill() == Drill.WIND_STUN_SLAM || options.drill() == Drill.MACE_COUNTER_DTAP)
@@ -117,7 +166,7 @@ public final class BotEquipment {
             ? "Für Shield-Triple-Tap braucht dein Bot-Kit einen Schild."
             : "Für dauerhaftes Blocken braucht dein Bot-Kit einen Schild.";
       }
-      if ((options.drill().requiresPopChain() || options.drill() == Drill.TOTEM_POPS)
+      if ((options.drill().requiresPopChain() || options.drill() == Drill.TOTEM_POPS || options.drill() == Drill.CORNER_HIT_CRYSTAL)
             && slots.stream().noneMatch(stack -> TrainingKit.usableTotems(stack) > 0)) {
          return "Für diese Übung braucht dein Bot-Kit mindestens ein Totem.";
       }

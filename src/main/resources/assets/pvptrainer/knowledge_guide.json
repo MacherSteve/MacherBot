@@ -153,6 +153,23 @@
     "drill": "UPPERCUT"
   },
   {
+    "id": "s_tap",
+    "category": "SWORD",
+    "title": "S-Taps (Sprint-Reset & Abstand)",
+    "icon": "diamond_boots",
+    "summary": "Beim S-Tap tippst du direkt nach einem vollen Sprint-KB-Treffer (> 84,8 % Charge) kurz S. Dadurch setzt du deinen Sprint zurück, gewinnst sofort wieder idealen 3-Block-Abstand und hältst den Gegner außerhalb seiner Schlagreichweite.",
+    "timing": "Sprint-KB-Hit (> 84,8 %) → kurz S tippen → wieder mit W ansprinten → nächster Sprint-Hit",
+    "example": "Perfekt gegen aggressive Gegner, die stur nach vorne drücken: statt im W-Tap in ihre Reichweite zu laufen, hältst du sie per S-Tap sauber in der Kombo.",
+    "steps": [
+      "Mit dem Schwert (1) voll ansprinten und einen aufgeladenen Sprint-KB-Treffer (> 84,8 %) landen.",
+      "Direkt nach dem Treffer ganz kurz S tippen, um Sprint zu resetten und minimal Abstand zu halten.",
+      "Sofort wieder mit W ansprinten und den nächsten Sprint-Hit setzen, ohne einen Gegentreffer zu kassieren."
+    ],
+    "mistakes": "S zu lange gedrückt halten (du verlierst die Kombo und das Momentum) oder ohne Sprint-Reset / unter 85 % Charge nachschlagen.",
+    "mode": "SWORD",
+    "drill": "S_TAP"
+  },
+  {
     "id": "shield_timing_insta",
     "category": "UHC",
     "title": "Shield Timing & Insta-Shield",
@@ -163,7 +180,7 @@
     "steps": [
       "Nimm keine Axt – spiele sauber nur mit Schwert (1) und Schild.",
       "Trifft dich der Gegner zwischen deinen Blocks: sofort Schild halten, NICHT zurückschlagen.",
-      "Sobald sein Schlag an deinem Schild abprallt, direkt in seinen Cooldown kontern und wieder Insta-Shielden."
+      "Sobald sein Schlag an deinem Schild abprallt, direkt in seinen Cooldown kontern, wieder Insta-Shielden und bis zum Tod des Bots durchziehen."
     ],
     "mistakes": "Auf Jump-Baits hereinfallen und das Schild zu früh fallen lassen, bevor ein echter Schlag kommt.",
     "mode": "UHC",
@@ -289,6 +306,23 @@
     "drill": "D_TAP"
   },
   {
+    "id": "corner_hit_crystal",
+    "category": "CRYSTAL",
+    "title": "Corner Hit-Crystal (Obsidian auf gleicher Höhe)",
+    "icon": "end_crystal",
+    "summary": "Der Gegner steht in einer 90°-Ecke mit einem Obsidian auf gleicher Fußhöhe direkt vor sich. Am Boden schirmt der Block den Kristall ab – erst dein Nahkampftreffer hebt den Gegner an die Ecke über das Obsidian, sodass jeder anschließende Kristall-Pop direkt als Erfolg zählt.",
+    "timing": "Bot in der Ecke schlagen → sofort Kristall auf dem Obsidian zünden → jeder Crystal-Totem-Pop = Erfolg (Serie läuft weiter)",
+    "example": "Perfekt zum schnellen Einüben von Corner-Hit-Crystal-Ketten, ohne nach jedem Pop auf einen Runden-Neustart warten zu müssen.",
+    "steps": [
+      "Mit Schwert (1) oder Totem-Sprint (3) über das Obsidian schlagen, um den Bot in der Ecke hochzuwerfen.",
+      "Direkt im Anschluss einen End-Kristall (5) auf dem Obsidian auf gleicher Höhe setzen und zünden.",
+      "Jeder Kristall nach einem Schlag, der ein Bot-Totem auslöst, zählt sofort als Erfolg – danach direkt wieder schlagen und weiterpoppen."
+    ],
+    "mistakes": "Kristalle zünden, ohne den Bot vorher anzuschlagen (zählt nicht und macht am Boden hinter dem Obsidian kaum Schaden).",
+    "mode": "CRYSTAL",
+    "drill": "CORNER_HIT_CRYSTAL"
+  },
+  {
     "id": "shield_triple_tap",
     "category": "CRYSTAL",
     "title": "Shield-Triple-Tap",
@@ -389,6 +423,40 @@
     "mistakes": "Ins Kopfnetz zielen (kein Treffer auf die Beine) oder nach dem Smash kurz den Boden streifen.",
     "mode": "MACE",
     "drill": "WIND_STUN_SLAM"
+  },
+  {
+    "id": "body_pearl",
+    "category": "MACE",
+    "title": "Body Pearl (Fallenden Gegner abfangen)",
+    "icon": "ender_pearl",
+    "summary": "Wenn ein Gegner aus der Arenamitte für einen Mace-Smash herabstürzt, wirfst du aus wechselnden Map-Positionen eine Enderperle direkt gegen seinen fallenden Körper in der Luft. Der Teleport zieht dich an ihn heran und öffnet deinen eigenen Konter-Smash.",
+    "timing": "Bot fällt automatisch aus der Mitte → Fallweg lesen → leicht unterhalb vorhalten → Perle trifft Körper über 1,5 m Höhe",
+    "example": "Kontert gegnerische Mace-Sturzflüge aus 16–32 Blöcken aus allen Winkeln der Arena: statt Schaden zu fressen, landest du direkt im eigenen Gegensmash.",
+    "steps": [
+      "Orientier dich direkt nach dem Spawn an deiner zufälligen Position – dein Blick zeigt schon auf den Bot in der Mitte.",
+      "Der Bot startet sofort seinen echten Fall: halte mit der Enderperle (7) leicht unterhalb seines Körpers vor.",
+      "Optional in den Einstellungen „Danach Smash“ aktivieren, um direkt nach dem Luft-Teleport den Mace-Smash zu landen."
+    ],
+    "mistakes": "Direkt auf die aktuelle Position zielen (Perle fliegt über den Kopf des Bots hinweg) oder zu spät werfen, wenn der Bot bereits gelandet ist.",
+    "mode": "MACE",
+    "drill": "BODY_PEARL"
+  },
+  {
+    "id": "pearl_catch_guide",
+    "category": "MACE",
+    "title": "Pearl Catch · Indikator (WindCharge-Vorhalt)",
+    "icon": "ender_eye",
+    "summary": "Lerne das exakte Vorhaltegefühl für WindCharge-Pearl-Catches: Sobald deine Enderperle fliegt, berechnet der Indikator in Echtzeit die Vanilla-Flugbahn und markiert am Horizont/Himmel genau den Punkt, auf den deine Windladung zielen muss.",
+    "timing": "Perle werfen → Fadenkreuz auf den Indikator ziehen (Grün = JETZT) → Windladung werfen → optional Mace-Smash",
+    "example": "Der Indikator passt sich live an Steigflug, Scheitelpunkt, Sinkflug und deine eigene Bewegung an – ideal, bis der Vorhalt im Muskelgedächtnis sitzt.",
+    "steps": [
+      "Wirf eine Enderperle (7) in einem beliebigen Winkel nach oben oder schräg nach vorne.",
+      "Folge dem blauen/grünen Horizont-Indikator – er zeigt live den exakten WindCharge-Vorhaltepunkt (nicht die aktuelle Perlen-Position).",
+      "Sobald der Indikator grün („JETZT“) aufleuchtet, wirf deine Windladung (6) und lande im Modus „Catch + Smash“ direkt den Mace-Smash."
+    ],
+    "mistakes": "Direkt auf die sichtbare Perle werfen (die Perle fällt weiter, während die Windladung fliegt) oder erst werfen, wenn der Indikator rot („Zu tief“) wird.",
+    "mode": "MACE",
+    "drill": "PEARL_CATCH_GUIDE"
   },
   {
     "id": "hugo_mace_counter_dtap",

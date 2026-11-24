@@ -494,14 +494,16 @@ public final class TrainingScreen extends TrainerPanel {
 
    private void buildQuickModifiers(DrillOptions options, int startX, int y, int h, int maxRight, boolean compact) {
       int cx = startX;
-      int chipGap = compact ? 3 : 4;
-      int baseW = compact ? 22 : 24;
+      int avail = maxRight - startX;
+      boolean tight = compact || avail < 305;
+      int chipGap = tight ? 2 : 4;
+      int baseW = tight ? 20 : 24;
 
       // 1. Spieltempo (TPS): Hover opens precision 1–20 TPS slider; click toggles 20 <-> last Slow-Mo
       int tps = options.tickRate();
       boolean slowMo = tps != 20;
-      String tpsLabel = slowMo ? (compact ? Integer.toString(tps) : tps + " TPS") : "";
-      int tpsW = slowMo ? Math.max(baseW + 14, 18 + this.font.width(tpsLabel) + 6) : baseW;
+      String tpsLabel = slowMo ? (tight ? Integer.toString(tps) : tps + " TPS") : "";
+      int tpsW = slowMo ? Math.max(baseW + 12, 18 + this.font.width(tpsLabel) + 6) : baseW;
       this.tpsChipX = cx; this.tpsChipY = y; this.tpsChipW = tpsW; this.tpsChipH = h;
       if (cx + tpsW <= maxRight) {
          IconChip tpsChip = this.iconChip(cx, y, tpsW, h, UiIcons.CLOCK, tpsLabel, slowMo, ACCENT_AMBER,
@@ -519,9 +521,9 @@ public final class TrainingScreen extends TrainerPanel {
 
       // 2. Arena-Größe Toggle-Switch: Links = Kleine Arena (Standard), Rechts = Große Arena
       boolean large = options.largeArena();
-      String leftLbl = compact ? "Kl." : "Klein";
-      String rightLbl = compact ? "Gr." : "Groß";
-      int arenaSwitchW = this.font.width(leftLbl) + this.font.width(rightLbl) + 22 + 18;
+      String leftLbl = tight ? "Kl." : "Klein";
+      String rightLbl = tight ? "Gr." : "Groß";
+      int arenaSwitchW = this.font.width(leftLbl) + this.font.width(rightLbl) + 22 + (tight ? 14 : 18);
       if (cx + arenaSwitchW <= maxRight) {
          this.addRenderableWidget(new ArenaSwitch(cx, y, arenaSwitchW, h, leftLbl, rightLbl, large, () -> {
             TrainerClient.saveOptions(this.mode, TrainerClient.options(this.mode).withIndex(DrillOptions.Field.ARENA_SIZE, large ? 0 : 1));
@@ -534,8 +536,8 @@ public final class TrainingScreen extends TrainerPanel {
       int playerPing = options.playerPing();
       int botPing = options.botPing();
       boolean pingActive = playerPing > 0 || botPing > 0;
-      String pingLabel = formatPingChip(playerPing, botPing, compact);
-      int pingW = pingActive ? Math.max(baseW + 14, 18 + this.font.width(pingLabel) + 6) : baseW;
+      String pingLabel = formatPingChip(playerPing, botPing, tight);
+      int pingW = pingActive ? Math.max(baseW + 12, 18 + this.font.width(pingLabel) + 6) : baseW;
       this.pingChipX = cx; this.pingChipY = y; this.pingChipW = pingW; this.pingChipH = h;
       if (cx + pingW <= maxRight) {
          IconChip pingChip = this.iconChip(cx, y, pingW, h, UiIcons.PING, pingLabel, pingActive, ACCENT_CORAL,
@@ -609,6 +611,25 @@ public final class TrainingScreen extends TrainerPanel {
             }, null, null)
             .tip("Fallschaden: " + (fallDmg ? "An" : "Aus (Standard)")
                + "\nKlicken zum Umschalten (Mace-Fallstrecke bleibt immer erhalten)");
+         cx += baseW + chipGap;
+      }
+
+      // 7. Pearl Ground Hit: Teal when ON (ground/wall pearls teleport), gray when OFF (air windcharge catches only)
+      boolean pearlGroundHit = !options.pearlCatchOnly();
+      boolean forcedBodyPearl = options.drill() == Drill.BODY_PEARL;
+      if (cx + baseW <= maxRight) {
+         IconChip pgChip = this.iconChip(cx, y, baseW, h, UiIcons.PEARL_GROUND, "", pearlGroundHit, ACCENT_CYAN,
+            () -> {
+               if (!forcedBodyPearl) {
+                  TrainerClient.saveOptions(this.mode, options.withIndex(DrillOptions.Field.PEARL_CATCH_ONLY, pearlGroundHit ? 1 : 0));
+                  this.refresh();
+               }
+            }, null, null);
+         pgChip.setMessage(Component.literal("Pearl Ground Hit · " + (pearlGroundHit ? "An" : "Aus")));
+         pgChip.tip(forcedBodyPearl
+            ? "Pearl Ground Hit: An (für Body Pearl automatisch aktiv)"
+            : "Pearl Ground Hit: " + (pearlGroundHit ? "An (Boden-/Wand-Perlen teleportieren dich)" : "Aus (nur Luft-Catches mit Windladung)")
+               + "\nKlicken zum Umschalten");
       }
    }
 

@@ -99,6 +99,12 @@ public final class DrillAttempt {
     private boolean botHealing;
     private int pcritBreakFirst = NEVER;
     private boolean critThisTick;
+    private int bodyPearlAt = NEVER;
+    private double bodyPearlHeight;
+    private boolean bodyPearlLeftGround;
+    private int sTapHits;
+    private boolean sTapResetDone;
+    private int sTapLastHitAt = NEVER;
 
     public DrillAttempt(DrillOptions options, double control, int variant) {
         this.options = options;
@@ -350,9 +356,28 @@ public final class DrillAttempt {
         if (drill == Drill.DOUBLE_HAND) {
             defense.tickDoubleHand(this, tick, owner);
         }
+        if (drill == Drill.BODY_PEARL) {
+            if (bodyPearlAt == NEVER) {
+                if (tick > 2 && bot != null && bot.onGround()) {
+                    finish(false, "Der Bot ist gelandet, bevor deine Perle ihn traf");
+                    return;
+                }
+            } else if (options.bodyPearlSmash() && owner != null) {
+                if (!owner.onGround()) {
+                    bodyPearlLeftGround = true;
+                } else if (bodyPearlLeftGround || tick > bodyPearlAt + 5) {
+                    finish(false, "Ohne Mace-Smash nach Body Pearl gelandet");
+                    return;
+                }
+            }
+        }
 
+        if (drill == Drill.S_TAP && owner != null) {
+            observeBackwardInput(owner.getLastClientInput().backward());
+        }
         if (drill.series() && !drill.centeredMaceDrill() && drill != Drill.PERFECT_WIND_CHARGE
-            && drill != Drill.RETOTEM && drill != Drill.STUN_SLAM && drill != Drill.ELY_STUN_SLAM && tick >= 1200) {
+            && drill != Drill.RETOTEM && drill != Drill.STUN_SLAM && drill != Drill.ELY_STUN_SLAM
+            && drill != Drill.CORNER_HIT_CRYSTAL && tick >= 1200) {
             finish(false, "Zeit abgelaufen");
         }
     }
@@ -585,7 +610,45 @@ public final class DrillAttempt {
 
     public void catchPearl() {
         caught = tick;
+        if (drill == Drill.PEARL_CATCH_GUIDE && !options.catchNeedsSmash()) {
+            finish(true, "Pearl Catch mit Indikator gelungen (" + tick + " Ticks)");
+            return;
+        }
         step("Pearl Catch · Luft-Teleport");
+    }
+
+    public void bodyPearlHit(double heightMeters, boolean botAirborne) {
+        if (done || drill != Drill.BODY_PEARL) return;
+        event("Body Pearl · Bot in " + decimal(Math.max(0.0, heightMeters)) + " m Höhe");
+        if (!botAirborne || heightMeters < 1.5) {
+            finish(false, "Bot war bereits am Boden (" + decimal(Math.max(0.0, heightMeters)) + " m)");
+            return;
+        }
+        bodyPearlAt = tick;
+        bodyPearlHeight = heightMeters;
+        bodyPearlLeftGround = false;
+        hadAir = true;
+        clearTimingFault();
+        if (!options.bodyPearlSmash()) {
+            finish(true, "Body Pearl in " + decimal(heightMeters) + " m Höhe (" + tick + " Ticks)");
+        } else {
+            step("Body Pearl in " + decimal(heightMeters) + " m · jetzt Mace-Smash landen!");
+        }
+    }
+
+    public void pearlMissedBody() {
+        if (!done && drill == Drill.BODY_PEARL && bodyPearlAt == NEVER) {
+            event("Perle verfehlt den fallenden Bot");
+            timingFault("Perle traf nicht den Körper des Bots · Vorhalt prüfen!");
+        }
+    }
+
+    public void observeBackwardInput(boolean backward) {
+        if (done || drill != Drill.S_TAP || sTapHits <= 0 || sTapResetDone || !backward) return;
+        sTapResetDone = true;
+        clearTimingFault();
+        event("S-Tap erkannt (" + (tick - sTapLastHitAt) + " Ticks nach Treffer " + sTapHits + ")");
+        step("S-Tap " + sTapHits + "/" + options.comboLength() + " · jetzt wieder mit W ansprinten!");
     }
 
     public void playerHit(ServerPlayer owner, float damage) {
@@ -597,6 +660,9 @@ public final class DrillAttempt {
         }
         if (drill == Drill.SPACING) {
             finish(false, "Bot landete den Gegentreffer");
+        }
+        if (drill == Drill.S_TAP) {
+            finish(false, "Gegentreffer kassiert (" + sTapHits + "/" + options.comboLength() + " S-Tap Hits) · Abstand mit S halten");
         }
         if (drill == Drill.HIT_SELECT && swordHits > 0) {
             finish(false, "Gegentreffer vor dem Anschluss");
@@ -813,10 +879,13 @@ public final class DrillAttempt {
             return;
         }
         event((withTotem ? "Totem-Sprinttreffer " : "Schwertkontakt ") + Math.round(charge * 100.0F) + " % · " + decimal(damage) + " LP");
-        if (isSwordCrystalSequence()) {
+        if (isSwordCrystalSequence() || drill == Drill.CORNER_HIT_CRYSTAL) {
             clearTimingFault();
         }
         swordAt = tick;
+        if (drill == Drill.CORNER_HIT_CRYSTAL) {
+            step("Bot angeschlagen · jetzt Kristall auf dem Obsidian zünden!");
+        }
         airborneTarget = airborne;
         openingLanded = false;
         crystalHits = 0;
@@ -829,6 +898,35 @@ public final class DrillAttempt {
             String status = swordHits + "/" + targetCombo + " Treffer vor dem ersten Gegentreffer";
             if (swordHits >= targetCombo) finish(true, status);
             else step(status);
+        }
+        if (drill == Drill.S_TAP) {
+            boolean sprintKb = (owner == null || owner.isSprinting()) && charge > 0.848F;
+            int targetCombo = options.comboLength();
+            if (sTapHits == 0) {
+                if (!sprintKb) {
+                    timingFault("Für S-Tap voll ansprinten (>85 % Charge) und zuschlagen");
+                } else {
+                    sTapHits = 1;
+                    sTapLastHitAt = tick;
+                    sTapResetDone = false;
+                    clearTimingFault();
+                    step("Sprint-Hit 1/" + targetCombo + " · jetzt kurz S tippen!");
+                }
+            } else if (!sTapResetDone) {
+                finish(false, "S-Tap zwischen Treffer " + sTapHits + " und " + (sTapHits + 1) + " fehlte · nach jedem Hit kurz S tippen!");
+            } else if (!sprintKb) {
+                finish(false, "Treffer " + (sTapHits + 1) + " ohne vollen Sprint-KB (>85 %) · nach S kurz wieder mit W ansprinten!");
+            } else {
+                sTapHits++;
+                sTapLastHitAt = tick;
+                sTapResetDone = false;
+                clearTimingFault();
+                if (sTapHits >= targetCombo) {
+                    finish(true, "S-Tap Kombo gelungen · " + targetCombo + "/" + targetCombo + " Sprint-Hits ohne Gegentreffer");
+                } else {
+                    step("S-Tap Hit " + sTapHits + "/" + targetCombo + " · wieder kurz S tippen!");
+                }
+            }
         }
         if (drill == Drill.HIT_SELECT) {
             if (lastOwnerHit == NEVER) {
@@ -858,11 +956,7 @@ public final class DrillAttempt {
             } else if (lastPlayerShieldBlock != NEVER && tick - lastPlayerShieldBlock <= 14) {
                 shieldCounters++;
                 lastPlayerShieldBlock = NEVER;
-                if (shieldCounters >= 3) {
-                    finish(true, "Shield Timing gelungen · 3 saubere Schild-Konter");
-                } else {
-                    step("Sauberer Schild-Konter " + shieldCounters + "/3");
-                }
+                step("Sauberer Schild-Konter #" + shieldCounters + " · weiter bis zum Tod des Bots");
             } else {
                 step("Treffer gelandet · jetzt Schild-Timing gegen den Bot halten");
             }
@@ -904,6 +998,19 @@ public final class DrillAttempt {
             } else {
                 finish(false, "Anschluss nach Sprint-KB-Break zu spät");
             }
+        }
+    }
+
+    public void botDefeated() {
+        if (done) return;
+        if (drill == Drill.SHIELD_TIMING) {
+            if (shieldCounters >= 1) {
+                finish(true, "Shield Timing gelungen · Bot besiegt (" + shieldCounters + " Schild-Konter)");
+            } else {
+                finish(false, "Bot ohne sauberen Schild-Konter besiegt");
+            }
+        } else if (drill == Drill.BODY_PEARL && bodyPearlAt == NEVER) {
+            finish(false, "Der Bot ist gelandet, bevor deine Perle ihn traf");
         }
     }
 
@@ -1091,8 +1198,14 @@ public final class DrillAttempt {
             case BACKSTAB -> {
                 if (targetBlocking) finish(true, "Smash am aktiven Schild vorbei");
             }
-            case PEARL_CATCH -> {
-                if (recent(caught)) finish(true, "Smash nach Luft-Teleport");
+            case PEARL_CATCH, PEARL_CATCH_GUIDE -> {
+                if (recent(caught)) finish(true, drill == Drill.PEARL_CATCH_GUIDE
+                    ? "Pearl Catch (Indikator) + Smash gelungen" : "Smash nach Luft-Teleport");
+            }
+            case BODY_PEARL -> {
+                if (bodyPearlAt != NEVER && options.bodyPearlSmash()) {
+                    finish(true, "Body Pearl (" + decimal(bodyPearlHeight) + " m) + Smash gelungen!");
+                }
             }
             case ELYTRA_SMASH -> {
                 if (recent(flightEnded) || wasGliding && !owner.isFallFlying()) finish(true, "Smash nach Gleitflug");
@@ -1193,6 +1306,10 @@ public final class DrillAttempt {
         }
         if (drill == Drill.SELF_WEB_CRYSTAL) {
             handleSelfWebCrystal(bot, origin, botPos, botDamage, hurtWindowOpen, remainingHurtTicks, poppedByThisBlast);
+            return;
+        }
+        if (drill == Drill.CORNER_HIT_CRYSTAL) {
+            handleCornerHitCrystal(botDamage, poppedByThisBlast);
             return;
         }
         if (!isSwordCrystalSequence()) return;
@@ -1365,5 +1482,25 @@ public final class DrillAttempt {
         } else {
             step("Corner-Web D-Tap · 1/2 Pops");
         }
+    }
+
+    private void handleCornerHitCrystal(float botDamage, boolean poppedByThisBlast) {
+        if (swordAt == NEVER) {
+            timingFault("Zuerst den Bot schlagen, dann den Kristall zünden!");
+            return;
+        }
+        int gap = tick - swordAt;
+        int maxGap = Math.max(20, options.windowTicks());
+        if (gap > maxGap) {
+            swordAt = NEVER;
+            timingFault("Schlag liegt zu lange zurück (" + gap + " Ticks) · Bot erst erneut anschlagen!");
+            return;
+        }
+        if (!poppedByThisBlast) {
+            timingFault("Kein Totem-Pop (" + decimal(botDamage) + " LP) · Bot erst richtig hochschlagen!");
+            return;
+        }
+        clearTimingFault();
+        finish(true, "Corner Hit-Crystal · Totem-Pop gelungen (" + gap + " Ticks)");
     }
 }

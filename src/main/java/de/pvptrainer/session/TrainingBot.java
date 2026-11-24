@@ -207,12 +207,14 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
 
     @Override
     public void move(MoverType moverType, Vec3 movement) {
-        super.move(moverType, this.constrainedMotion(movement));
+        Vec3 effective = this.constrainedMotion(movement);
+        super.move(moverType, effective);
         if ((session.waitingForStart && (session.options == null || session.options.drill() != Drill.WIND_STUN_SLAM))
             || session.maceCenter != null
                 && session.options.drill() != Drill.WIND_STUN_SLAM
-                && session.options.slamScene() != DrillOptions.SlamScene.PAIRED_FALL) {
-            // A held or fixed bot never descends into the floor, so ordinary movement resets onGround to false every tick.
+                && session.options.slamScene() != DrillOptions.SlamScene.PAIRED_FALL
+            || (!this.onGround() && Math.abs(effective.y) < 1.0e-6)) {
+            // A held, fixed, or just-released bot with zero vertical motion still rests on solid ground.
             setOnGround(!level().noBlockCollision(this, getBoundingBox().move(0, -0.01, 0)));
         }
     }
@@ -475,7 +477,8 @@ final class TrainingBot extends Mannequin implements MaceDuel.Glider, TrainingTa
         }
         if (TrainingResources.zeroDamageFor(this)) {
             boolean allowPop = session.options != null
-                && (session.options.drill().requiresPopChain() || session.options.drill() == Drill.TOTEM_POPS)
+                && (session.options.drill().requiresPopChain() || session.options.drill() == Drill.TOTEM_POPS
+                    || session.options.drill() == Drill.CORNER_HIT_CRYSTAL)
                 && this.isDeadOrDying()
                 && (getMainHandItem().has(DataComponents.DEATH_PROTECTION) || getOffhandItem().has(DataComponents.DEATH_PROTECTION));
             if (!allowPop) {

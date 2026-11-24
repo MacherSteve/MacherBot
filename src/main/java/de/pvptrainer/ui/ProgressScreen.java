@@ -326,7 +326,7 @@ final class ProgressScreen extends TrainerPanel {
             case MACE -> List.of(
                 new KpiTile("Wind Charges geworfen", TrainingStats.formatInt(m.windChargesUsed()), "Eigenstarts & Catches", TEXT),
                 new KpiTile("Max. Wind-Höhe", TrainingStats.formatMeters(m.maxWindMeters()), "Perfect Wind Charge", TEXT),
-                new KpiTile("Pearl-Catches", TrainingStats.formatInt(m.pearlCatches()), "In der Luft gefangen", TEXT),
+                new KpiTile("Pearl-Catches & Body Pearls", TrainingStats.formatInt(m.pearlCatches()) + " · " + TrainingStats.formatInt(m.bodyPearls()), "Catches · Body Pearls", TEXT),
                 new KpiTile("Schilde gestunnt", TrainingStats.formatInt(m.shieldStuns()) + " (" + m.shieldBreaks() + " Bruch)", "Axt-Stuns & Shield Drain", TEXT),
                 new KpiTile("Längste Serie", o.bestStreak() > 0 ? o.bestStreak() + "×" : "–", "Duell: " + duelText, TEXT),
                 new KpiTile("Trainingszeit", timeAndRounds, o.winRatePct() + " % Drill-Quote", TEXT)
@@ -944,6 +944,7 @@ final class ProgressScreen extends TrainerPanel {
         if (m.anchorsDetonated() > 0) items.add(m.anchorsDetonated() + " Anker (" + m.anchorPops() + " Pops)");
         if (m.windChargesUsed() > 0) items.add(m.windChargesUsed() + " Wind Charges");
         if (m.pearlCatches() > 0) items.add(m.pearlCatches() + " Pearl-Catches");
+        if (m.bodyPearls() > 0) items.add(m.bodyPearls() + " Body Pearls");
         if (m.shieldStuns() > 0) items.add(m.shieldStuns() + " Schild-Stuns");
         if (m.websPlaced() > 0) items.add(m.websPlaced() + " Cobwebs");
         if (m.lavaPlaced() > 0) items.add(m.lavaPlaced() + " Lava");

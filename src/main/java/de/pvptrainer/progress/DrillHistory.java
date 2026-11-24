@@ -83,6 +83,7 @@ public final class DrillHistory {
       }
 
       if (var1.drill() == Drill.HIT_CRYSTAL
+         || var1.drill() == Drill.CORNER_HIT_CRYSTAL
          || var1.drill() == Drill.D_TAP
          || var1.drill() == Drill.TRIPLE_TAP
          || var1.drill() == Drill.SHIELD_TRIPLE_TAP

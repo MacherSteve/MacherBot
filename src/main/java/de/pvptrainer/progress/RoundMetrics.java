@@ -28,6 +28,7 @@ public record RoundMetrics(
     double maxWindMeters,
     int windChargesUsed,
     int pearlCatches,
+    int bodyPearls,
     // UHC & Utility
     int websPlaced,
     int lavaPlaced,
@@ -37,7 +38,7 @@ public record RoundMetrics(
     public static final RoundMetrics EMPTY = new RoundMetrics(
         0, 0, 0, 0, 0.0F, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0.0, 0.0, 0.0, 0.0, 0, 0,
+        0, 0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0,
         0, 0, 0, 0
     );
 
@@ -65,6 +66,7 @@ public record RoundMetrics(
         maxWindMeters = Double.isFinite(maxWindMeters) ? Math.max(0.0, maxWindMeters) : 0.0;
         windChargesUsed = Math.max(0, windChargesUsed);
         pearlCatches = Math.max(0, pearlCatches);
+        bodyPearls = Math.max(0, bodyPearls);
         websPlaced = Math.max(0, websPlaced);
         lavaPlaced = Math.max(0, lavaPlaced);
         waterDrains = Math.max(0, waterDrains);
@@ -75,7 +77,7 @@ public record RoundMetrics(
         return meleeHits > 0 || crits > 0 || damageDealt > 0.0F || shieldStuns > 0 || shieldBreaks > 0 || playerBlocks > 0
             || botPops > 0 || playerPops > 0 || crystalsPlaced > 0 || crystalsDetonated > 0
             || anchorsDetonated > 0 || anchorPops > 0 || obsidianPlaced > 0
-            || maceSmashes > 0 || stunSlams > 0 || maxWindMeters > 0.0 || windChargesUsed > 0 || pearlCatches > 0
+            || maceSmashes > 0 || stunSlams > 0 || maxWindMeters > 0.0 || windChargesUsed > 0 || pearlCatches > 0 || bodyPearls > 0
             || websPlaced > 0 || lavaPlaced > 0 || waterDrains > 0 || healsEaten > 0;
     }
 
@@ -106,6 +108,7 @@ public record RoundMetrics(
             Math.max(maxWindMeters, other.maxWindMeters),
             windChargesUsed + other.windChargesUsed,
             pearlCatches + other.pearlCatches,
+            bodyPearls + other.bodyPearls,
             websPlaced + other.websPlaced,
             lavaPlaced + other.lavaPlaced,
             waterDrains + other.waterDrains,

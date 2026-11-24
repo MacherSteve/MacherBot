@@ -310,10 +310,10 @@ public final class TrainingProgress {
         }
         if (m.maxFallMeters() > 0.0 && (drill == Drill.STUN_SLAM || drill == Drill.WIND_STUN_SLAM
             || drill == Drill.ELY_STUN_SLAM || drill == Drill.ELYTRA_SMASH || drill == Drill.LOW_WEB_SMASH
-            || drill == Drill.PEARL_CATCH || drill == Drill.BACKSTAB)) {
+            || drill == Drill.PEARL_CATCH || drill == Drill.PEARL_CATCH_GUIDE || drill == Drill.BODY_PEARL || drill == Drill.BACKSTAB)) {
             return String.format(Locale.GERMAN, "%.1f m Fall · %.2f s", m.maxFallMeters(), run.seconds());
         }
-        if (m.botPops() > 0 && (drill.requiresPopChain() || drill == Drill.TOTEM_POPS || drill == Drill.HIT_CRYSTAL)) {
+        if (m.botPops() > 0 && (drill.requiresPopChain() || drill == Drill.TOTEM_POPS || drill == Drill.HIT_CRYSTAL || drill == Drill.CORNER_HIT_CRYSTAL)) {
             return m.botPops() + (m.botPops() == 1 ? " Pop" : " Pops") + " · " + TrainingStatus.ObiTimer.format(run.seconds());
         }
         return TrainingStatus.ObiTimer.format(run.seconds());

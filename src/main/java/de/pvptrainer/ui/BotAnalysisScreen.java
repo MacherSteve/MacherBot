@@ -144,7 +144,7 @@ final class BotAnalysisScreen extends TrainerPanel {
             fillRounded(g, x, bodyTop, inner, 72, CARD_BG);
             outlineRounded(g, x, bodyTop, inner, 72, LINE);
             line(g, "Noch keine Bot-Messung", x + 10, bodyTop + 10, inner - 20, TEXT);
-            line(g, "Spiele ein freies Duell mit Gegenangriffen oder eine Runde Manuelles Retotem.", x + 10, bodyTop + 26, inner - 20, MUTED);
+            line(g, "Spiele ein freies Duell mit Gegenangriffen oder eine Runde Totem Refill.", x + 10, bodyTop + 26, inner - 20, MUTED);
             line(g, "Deine persönlichen PvP-Statistiken findest du in den Tabs Übersicht & Übungen.", x + 10, bodyTop + 42, inner - 20, MUTED);
         } else {
             line(g, label, x + 24, bodyTop + 4, inner - 50, TEXT);
@@ -233,7 +233,7 @@ final class BotAnalysisScreen extends TrainerPanel {
             + " in " + stats.timedCount + "/" + stats.rounds + " vollständigen Runden.";
         if (over(body, 25)) tip(g, List.of("Erste tatsächlich ausgeführte Bot-Aktion jeder Runde.", timing,
             "Gleichzeitige Eröffnungen und Folgen über solche Gruppen sind ausgenommen.",
-            "Skriptfolgen im Retotem getrennt vom freien Duell bewerten."));
+            "Skriptfolgen bei Totem Refill getrennt vom freien Duell bewerten."));
         fillRounded(g, x, body + 27, inner, 40, CARD_BG);
         outlineRounded(g, x, body + 27, inner, 40, LINE);
         var p = patterns.isEmpty() ? null : patterns.get(pattern);
